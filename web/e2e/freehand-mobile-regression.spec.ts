@@ -68,6 +68,10 @@ async function dragOperationPaneFrom(page: Page, locator: Locator) {
   const box = await locator.boundingBox();
   if (!box) throw new Error("mobile operation control has no layout box");
   const start = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.5 };
+  await dragUpFrom(page, start);
+}
+
+async function dragUpFrom(page: Page, start: { x: number; y: number }) {
   const session = await page.context().newCDPSession(page);
   const touchPoint = (y: number) => ({
     x: start.x,
@@ -84,12 +88,134 @@ async function dragOperationPaneFrom(page: Page, locator: Locator) {
         type: "touchMove",
         touchPoints: [touchPoint(start.y - offset)],
       });
+      await page.waitForTimeout(20);
     }
+    // Release after the finger stops; an instantaneous synthetic flick can
+    // consume the next tap to cancel its fling instead of clicking Upload.
+    await page.waitForTimeout(80);
     await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   } finally {
     await session.detach();
   }
 }
+
+async function expectGestureScrolls(page: Page, mobile: boolean, timeout = 10_000) {
+  const offset = () => page.evaluate((usePane) => (
+    usePane
+      ? document.querySelector(".workflow-mobile-operation-pane")?.scrollTop ?? 0
+      : document.scrollingElement?.scrollTop ?? 0
+  ), mobile);
+  const before = await offset();
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("scroll test requires a fixed viewport");
+  await dragUpFrom(page, { x: 10, y: viewport.height - 24 });
+  await expect.poll(offset, { timeout, message: "a gesture must move the actual scroll target" })
+    .toBeGreaterThan(before + 5);
+}
+
+async function expectZoomRailContained(page: Page) {
+  const overflow = await page.locator(".workflow-workbench > .stage").evaluate((stage) => {
+    const stageBox = stage.getBoundingClientRect();
+    return Array.from(stage.querySelectorAll<HTMLElement>(".zoom-strip, .zoom-card, .zoom-card canvas"))
+      .filter((element) => element.getBoundingClientRect().height > 0)
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.top < stageBox.top - 1 || box.bottom > stageBox.bottom + 1;
+      })
+      .map((element) => element.className);
+  });
+  expect(overflow, "zoom cards must occupy space inside the stage, not cover the operation rail").toEqual([]);
+}
+
+const scrollLayouts = [
+  { name: "fine393", width: 393, height: 726, touch: false, mobile: false },
+  { name: "fine560", width: 560, height: 844, touch: false, mobile: false },
+  { name: "touch561", width: 561, height: 844, touch: true, mobile: false },
+  { name: "touch393", width: 393, height: 726, touch: true, mobile: true },
+  { name: "touch560", width: 560, height: 844, touch: true, mobile: true },
+  { name: "short-phone", width: 390, height: 480, touch: true, mobile: true },
+  { name: "landscape", width: 844, height: 390, touch: true, mobile: false },
+  { name: "desktop1440", width: 1440, height: 960, touch: false, mobile: false },
+];
+
+for (const layout of scrollLayouts) {
+  test(`workflow scroll and upload remain usable: ${layout.name}`, async ({ browser, baseURL }) => {
+    test.setTimeout(90_000);
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: layout.width, height: layout.height },
+      hasTouch: layout.touch,
+      isMobile: layout.touch,
+      deviceScaleFactor: 1,
+    });
+    const page = await context.newPage();
+    try {
+      await page.goto("/app/workflow?developer=1");
+      await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+      await expect(page.locator(".workflow-mobile-operation-pane")).toHaveCount(layout.mobile ? 1 : 0);
+      if (layout.width <= 1280) {
+        const stageTop = await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top);
+        await expectGestureScrolls(page, layout.mobile);
+        if (layout.mobile) {
+          expect(await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top))
+            .toBeCloseTo(stageTop, 1);
+        }
+      }
+      await expectZoomRailContained(page);
+      const upload = layout.mobile
+        ? page.getByRole("button", { name: "上传照片", exact: true })
+        : page.locator("#uploadBtn");
+      await upload.scrollIntoViewIfNeeded();
+      // Finish the preceding scroll before testing a separate tap; a tap during
+      // a fling can stop the fling instead of activating the control.
+      await expect.poll(async () => page.evaluate(() => new Promise<boolean>((resolve) => {
+        let prior = `${scrollY}:${document.querySelector(".workflow-mobile-operation-pane")?.scrollTop}`;
+        let stableFrames = 0;
+        let frames = 0;
+        const tick = () => {
+          const current = `${scrollY}:${document.querySelector(".workflow-mobile-operation-pane")?.scrollTop}`;
+          stableFrames = current === prior ? stableFrames + 1 : 0;
+          prior = current;
+          if (stableFrames >= 12) resolve(true);
+          else if (++frames >= 120) resolve(false);
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }))).toBe(true);
+      const [chooser] = await Promise.all([
+        page.waitForEvent("filechooser", { timeout: 10_000 }),
+        layout.touch ? upload.tap() : upload.click(),
+      ]);
+      await chooser.setFiles([]);
+      await uploadGeneratedPhoto(page, "single", "#fileInput");
+      await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+      await expect(page.locator(".workflow-marker-toggle")).toBeEnabled({ timeout: 45_000 });
+      await expectZoomRailContained(page);
+      await expectAllVisibleButtonsReachable(page);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("workflow gesture assertion detects a locked existing mobile pane", async ({ page }) => {
+  await page.goto("/app/workflow?developer=1");
+  await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+  await expect(page.locator(".workflow-mobile-operation-pane")).toBeVisible();
+  const lock = await page.addStyleTag({
+    content: ".workflow-mobile-operation-pane { touch-action: none !important; }",
+  });
+  let detected = false;
+  try {
+    await expectGestureScrolls(page, true, 1_500);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("a gesture must move")) throw error;
+    detected = true;
+  }
+  expect(detected, "the same scroll assertion must reject a locked pane even when its DOM exists").toBe(true);
+  await lock.evaluate((element) => element.remove());
+  await expectGestureScrolls(page, true);
+});
 
 async function expectToolbarControlsUnobscured(page: Page) {
   const result = await page.locator(".workflow-canvas-tools").evaluate((toolbar) => {

@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -171,67 +171,79 @@
   },
   "archive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/UI0.1.22-candidate.1-人脸阻断反馈与日志-20261106/manifest.json",
-    "manifestSha256": "a4e8007f1cc3d0fc55958fc7902596b996631ad2dec3b2642e49fd770e905442",
-    "sourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+    "manifestPath": "local_outputs/recovery-packages/照片工作流公开候选-肿物0.100.3-界面0.1.24-20261109/manifest.json",
+    "manifestSha256": "7fc6249b7725e97d18764983a889d0346884ce31bfb51d07843723e5eacfef39",
+    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
     "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1"
   },
   "scopeBoundaryReview": {
-    "status": "confirmed",
-    "basis": "本对话操作者明确授权先修开发者原因显示并完整记录后台日志。新增差额仅工作流反馈/日志观察、CI定向测试及UI身份登记；未改检测模型/参数/单脸门禁、RSTL六项、肿物或切口算法。",
-    "evidence": "../../local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair/scope.json",
-    "confirmedAt": "2026-11-06T11:30:33.508Z",
+    "status": "not_required",
+    "basis": "本次仅同步已确认照片工作流成果并准备公开候选；恢复范围无责任配置外代码变化，未修改RSTL算法或模型。已有范围确认保留于previous。",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
     "previous": {
       "status": "confirmed",
-      "basis": "本轮操作者明确要求核实并保持手机/电脑核心算法及标注细节一致；新增产品差额仅标注共享样式与CSS回退、相关测试和身份说明。识别/切口生成/微调及RSTL算法、模型资产和布局不改。",
-      "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/双端一致性_20261106/scope.json",
-      "confirmedAt": "2026-11-06T02:39:52.444Z",
-      "manifestSha256": "59e386bec4d5536fc9138c968454ac61ecfac2f992d3c1ba71556879b830a28a",
+      "basis": "本对话操作者2026-11-08明确要求对抗式审查建议后继续，对应上一答复第5项四文件本地修复。新增Diff仅工作流CSS、现有手势测试和UI身份记录；保全原未提交基线，不据此扩大既有团队算法、RSTL或远端权限。",
+      "evidence": "../../local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json",
+      "confirmedAt": "2026-11-08",
+      "manifestSha256": "b0aaef6bfbf6d1a50caee1724137107c62d6e6d21f262101aa3d8828832d54d1",
       "previous": {
         "status": "confirmed",
-        "basis": "操作者明确授权照片模式切口线固定屏幕宽度及本地部署；本轮仅修改切口显示线宽与定向测试，不改变肿物识别、切口几何或RSTL受保护功能。恢复包保留已有成果，不扩大其他成员算法的修改权限。",
-        "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/incision-line-width-scope-20261106.json",
-        "confirmedAt": "2026-11-05T12:13:36.126Z",
-        "manifestSha256": "0487f15dec9cf9059f5c691f6b755df65ca1b962d73016b231f43895e0d409b0",
+        "basis": "本对话操作者明确授权先修开发者原因显示并完整记录后台日志。新增差额仅工作流反馈/日志观察、CI定向测试及UI身份登记；未改检测模型/参数/单脸门禁、RSTL六项、肿物或切口算法。",
+        "evidence": "../../local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair/scope.json",
+        "confirmedAt": "2026-11-06T11:30:33.508Z",
         "previous": {
           "status": "confirmed",
-          "basis": "操作者本批明确授权肿物填充/外观候选归属修复；仅新增外观模块及版本登记。ColorV035为原基线既有保留改动，其他恢复项按旧冻结包继承；范围外Diff、14图、资产、HEAD与原填充模块字节保持。未改UI、RSTL或切口。此范围核验不代替效果或专业签认。",
-          "evidence": "local_outputs/reference-method-consolidation-20261105/异步归属批次_20261105/范围与保全核验.json",
-          "confirmedAt": "2026-11-05T09:48:32.075Z",
-          "manifestSha256": "8678aaa6f06a54b063081f9bad81492d3f76d112e3784ed0db0a8942a0779644",
+          "basis": "本轮操作者明确要求核实并保持手机/电脑核心算法及标注细节一致；新增产品差额仅标注共享样式与CSS回退、相关测试和身份说明。识别/切口生成/微调及RSTL算法、模型资产和布局不改。",
+          "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/双端一致性_20261106/scope.json",
+          "confirmedAt": "2026-11-06T02:39:52.444Z",
+          "manifestSha256": "59e386bec4d5536fc9138c968454ac61ecfac2f992d3c1ba71556879b830a28a",
           "previous": {
             "status": "confirmed",
-            "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。 本批仅新增肿物两模块及其版本/说明；其余源码从已有冻结包继承并逐项核字节，不新增共享功能修改。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。",
-            "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/candidate-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json",
-            "confirmedAt": "2026-10-27T14:58:00.000Z",
-            "manifestSha256": "8f856339fdb6b9c4da2470e616c2b8ffb16925bdb1d58387d67a83ae894367d4",
+            "basis": "操作者明确授权照片模式切口线固定屏幕宽度及本地部署；本轮仅修改切口显示线宽与定向测试，不改变肿物识别、切口几何或RSTL受保护功能。恢复包保留已有成果，不扩大其他成员算法的修改权限。",
+            "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/incision-line-width-scope-20261106.json",
+            "confirmedAt": "2026-11-05T12:13:36.126Z",
+            "manifestSha256": "0487f15dec9cf9059f5c691f6b755df65ca1b962d73016b231f43895e0d409b0",
             "previous": {
               "status": "confirmed",
-              "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。",
-              "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json",
-              "confirmedAt": "2026-10-27T14:58:00.000Z",
-              "manifestSha256": "253fb7ca0bbb49107dce6590911985a7196b17e63773c83205758dff55cec46a",
+              "basis": "操作者本批明确授权肿物填充/外观候选归属修复；仅新增外观模块及版本登记。ColorV035为原基线既有保留改动，其他恢复项按旧冻结包继承；范围外Diff、14图、资产、HEAD与原填充模块字节保持。未改UI、RSTL或切口。此范围核验不代替效果或专业签认。",
+              "evidence": "local_outputs/reference-method-consolidation-20261105/异步归属批次_20261105/范围与保全核验.json",
+              "confirmedAt": "2026-11-05T09:48:32.075Z",
+              "manifestSha256": "8678aaa6f06a54b063081f9bad81492d3f76d112e3784ed0db0a8942a0779644",
               "previous": {
                 "status": "confirmed",
-                "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。",
-                "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts",
+                "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。 本批仅新增肿物两模块及其版本/说明；其余源码从已有冻结包继承并逐项核字节，不新增共享功能修改。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。",
+                "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/candidate-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json",
                 "confirmedAt": "2026-10-27T14:58:00.000Z",
-                "manifestSha256": "24dbabe5385b94bb9c81d2e28e051c794438c51b5f10abca01754db7e4fcb35a"
+                "manifestSha256": "8f856339fdb6b9c4da2470e616c2b8ffb16925bdb1d58387d67a83ae894367d4",
+                "previous": {
+                  "status": "confirmed",
+                  "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。",
+                  "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json",
+                  "confirmedAt": "2026-10-27T14:58:00.000Z",
+                  "manifestSha256": "253fb7ca0bbb49107dce6590911985a7196b17e63773c83205758dff55cec46a",
+                  "previous": {
+                    "status": "confirmed",
+                    "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。",
+                    "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts",
+                    "confirmedAt": "2026-10-27T14:58:00.000Z",
+                    "manifestSha256": "24dbabe5385b94bb9c81d2e28e051c794438c51b5f10abca01754db7e4fcb35a"
+                  }
+                }
               }
             }
           }
-        }
+        },
+        "manifestSha256": "a4e8007f1cc3d0fc55958fc7902596b996631ad2dec3b2642e49fd770e905442"
       }
-    },
-    "manifestSha256": "a4e8007f1cc3d0fc55958fc7902596b996631ad2dec3b2642e49fd770e905442"
+    }
   },
   "operatorEvaluation": {
     "status": "pending",
-    "sourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371"
+    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f"
   },
   "editorSaveConfirmation": {
     "status": "pending",
-    "sourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371"
+    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f"
   },
   "history": [
     {
@@ -1688,8 +1700,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.22-candidate.1",
-    "name": "开发者诊断：补全照片人脸阻断原因和后台日志",
+    "version": "0.1.24-candidate.1",
+    "name": "工作流布局：窄屏滚动退路与子图防遮挡",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
@@ -1709,14 +1721,72 @@
       "web/src/services/workflowIncisionController.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "cef4ddf23c421475adce1a030ca9eba50b2def5243a4ef097aedb953ac6a280e",
+    "sourceDigest": "bcb48fe0dfeafeae18320749dd2111a57982b212658851769eaf45bd66a5aff2",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+    "runtimeSourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-    "note": "只读取照片检测状态，向电脑/手机开发者现有状态栏显示多人脸、无人脸与检测失败原因；普通模式继续隐藏诊断。固定失败码、尝试次数、源修订及操作阻断记录进既有本机持久日志，不含照片、文件名或关键点。模型、单脸门禁、肿物/切口算法和RSTL不改；真机及人工评价待验。"
+    "note": "统一手机DOM与固定高度样式的媒体条件，窄屏回退主区按照片和子图占高。UI自动回归通过，正常手机/电脑所选布局指标保持。算法/模型/RSTL实现及操作语义不变；真机与人工评价待验，现有手机5173服务已规范重启并核验，可经原HTTPS18432开发者入口测试。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.23-candidate.1",
+      "name": "工作流布局：窄屏滚动退路与子图防遮挡",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "15379386b47bfb68aaf1941f92d7943fabeee19a1d211b42da157480f7e97009",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "940e1b0eb152d0bb1de04a42912ac1fb35345e1bf2206e74dec98968dc07e9b3",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "统一手机DOM与固定高度样式的媒体条件；窄屏回退主区按照片和子图自然占高，保持正常手机操作区与电脑布局。仅CSS、回归测试和身份记录；算法/模型/RSTL实现及操作语义不变。自动回归进行中，手机真机与人工评价待验。"
+    },
+    {
+      "version": "0.1.22-candidate.1",
+      "name": "开发者诊断：补全照片人脸阻断原因和后台日志",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "cef4ddf23c421475adce1a030ca9eba50b2def5243a4ef097aedb953ac6a280e",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "只读取照片检测状态，向电脑/手机开发者现有状态栏显示多人脸、无人脸与检测失败原因；普通模式继续隐藏诊断。固定失败码、尝试次数、源修订及操作阻断记录进既有本机持久日志，不含照片、文件名或关键点。模型、单脸门禁、肿物/切口算法和RSTL不改；真机及人工评价待验。"
+    },
     {
       "version": "0.1.21-candidate.1",
       "name": "双端标注显示：统一线宽与共享样式",
@@ -2466,10 +2536,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "528ba442b65160f4798ce214dc2bb94a22a72095a2da7c9288da430f6a899b26",
-    "currentSourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
-    "capturedAt": "2026-11-06T11:30:33.508Z",
-    "reason": "UI0.1.22：开发者照片检测失败提示与本机持久日志；算法及资产指纹保持。"
+    "previousSourceDigest": "940e1b0eb152d0bb1de04a42912ac1fb35345e1bf2206e74dec98968dc07e9b3",
+    "currentSourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
+    "capturedAt": "2026-11-08T15:18:38.104Z",
+    "reason": "UI0.1.24：窄屏滚动退路与子图区布局约束；算法及资产保持。"
   },
   "integrationHistory": [
     {
@@ -2576,9 +2646,21 @@
   ],
   "automatedValidation": {
     "status": "verified",
-    "sourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
-    "evidence": "../../local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair/review.json",
-    "note": "本轮照片检测反馈与日志范围通过：电脑/手机代理浏览器的开发与正式四场景、日志导出及刷新持久化、009失败与008恢复、无人脸、模拟检测异常、类型检查、架构套件和构建。人脸误检未修；未覆盖全量算法、手机真机或远端CI，不代签操作者评价及编辑器保存确认。"
+    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
+    "evidence": "../../local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json",
+    "note": "本轮UI范围：最终构建12项回归、原失败3条件各3次、正常双端未上传/上传布局对照、5配置照片比例、类型/静态/架构/主题/构建、规范开发身份及本地资源/上传探针通过。真机、远端CI、全量算法与RSTL效果未验；追加部署核验：原手机HTTPS入口对应5173规范重启后，双入口10项身份/资源、4个上传流程、HTTPS实际入口12项回归和延迟回读通过；不代签手机真机。",
+    "previous": {
+      "status": "pending",
+      "sourceDigest": "940e1b0eb152d0bb1de04a42912ac1fb35345e1bf2206e74dec98968dc07e9b3",
+      "evidence": "../../local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json",
+      "note": "本轮UI范围验证进行中；不继承旧自动结果，不代表算法、真机或远端CI验收。",
+      "previous": {
+        "status": "verified",
+        "sourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+        "evidence": "../../local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair/review.json",
+        "note": "本轮照片检测反馈与日志范围通过：电脑/手机代理浏览器的开发与正式四场景、日志导出及刷新持久化、009失败与008恢复、无人脸、模拟检测异常、类型检查、架构套件和构建。人脸误检未修；未覆盖全量算法、手机真机或远端CI，不代签操作者评价及编辑器保存确认。"
+      }
+    }
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
@@ -2595,19 +2677,28 @@
   },
   "previousArchive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/UI0.1.21-candidate.1-双端标注一致-20261106-r2/manifest.json",
-    "manifestSha256": "59e386bec4d5536fc9138c968454ac61ecfac2f992d3c1ba71556879b830a28a",
-    "sourceDigest": "528ba442b65160f4798ce214dc2bb94a22a72095a2da7c9288da430f6a899b26",
-    "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1",
-    "previous": {
-      "status": "verified",
-      "manifestPath": "local_outputs/recovery-packages/0.100.2-candidate.1-限幅后目标归属保护-20261105/manifest.json",
-      "manifestSha256": "8678aaa6f06a54b063081f9bad81492d3f76d112e3784ed0db0a8942a0779644",
-      "sourceDigest": "5b805f20997b987f426adce8c67ff14f2d7f5bf60fa346fe64b93488f8a1e768",
-      "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1"
-    }
+    "manifestPath": "local_outputs/recovery-packages/UI0.1.24-candidate.1-窄屏滚动兼容与子图防遮挡-20261108/manifest.json",
+    "manifestSha256": "b0aaef6bfbf6d1a50caee1724137107c62d6e6d21f262101aa3d8828832d54d1",
+    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
+    "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1"
   },
   "sourceFingerprintHistory": [
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+      "currentSourceDigest": "940e1b0eb152d0bb1de04a42912ac1fb35345e1bf2206e74dec98968dc07e9b3",
+      "capturedAt": "2026-11-08T14:57:59.547Z",
+      "reason": "UI0.1.23：窄屏滚动退路与子图区布局约束；算法及资产保持。"
+    },
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "528ba442b65160f4798ce214dc2bb94a22a72095a2da7c9288da430f6a899b26",
+      "currentSourceDigest": "989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371",
+      "capturedAt": "2026-11-06T11:30:33.508Z",
+      "reason": "UI0.1.22：开发者照片检测失败提示与本机持久日志；算法及资产指纹保持。"
+    },
     {
       "encoding": "UTF-8",
       "normalization": "CRLF-to-LF-only",

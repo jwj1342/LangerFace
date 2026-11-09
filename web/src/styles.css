@@ -2651,9 +2651,18 @@ body:has(.dark-workbench-page) {
 @media (max-width: 1280px) {
   .workflow-workbench.app {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(520px, 72dvh) auto auto;
+    grid-template-rows: minmax(520px, auto) auto auto;
     height: auto;
     min-height: 100dvh;
+  }
+
+  /* The fallback stage must reserve space for both the photo and zoom cards. */
+  .workflow-workbench .stage-body {
+    flex: 0 0 auto;
+  }
+
+  .workflow-workbench .zoom-strip {
+    max-height: none;
   }
 
   .workflow-workbench > .stage {
@@ -2735,48 +2744,167 @@ body:has(.dark-workbench-page) {
   }
 }
 
+/* Keep the fixed shell paired with WorkflowLayout's mobile operation pane. */
 @media (max-width: 560px) {
+  @media (pointer: coarse) and (hover: none) {
 
-  .workflow-workbench.app {
-    --workflow-mobile-stage-height: max(
-      320px,
-      min(calc(100dvh - 136px), calc(100vw + 134px))
-    );
-    grid-template-rows: var(--workflow-mobile-stage-height) minmax(0, 1fr);
-    height: 100dvh;
-    min-height: 0;
-    width: 100%;
-    max-width: 100vw;
-    overflow: hidden;
+    .workflow-workbench.app {
+      --workflow-mobile-stage-height: max(
+        320px,
+        min(calc(100dvh - 136px), calc(100vw + 134px))
+      );
+      grid-template-rows: var(--workflow-mobile-stage-height) minmax(0, 1fr);
+      height: 100dvh;
+      min-height: 0;
+      width: 100%;
+      max-width: 100vw;
+      overflow: hidden;
+    }
+
+    /* 工具栏已恒定预留标记行，视野不再随标记状态补偿高度。 */
+
+    .workflow-workbench > .workflow-mobile-operation-pane {
+      display: flex;
+      grid-column: 1;
+      grid-row: 2;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      max-height: 100%;
+      padding-block: 10px max(12px, env(safe-area-inset-bottom));
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      scrollbar-width: none;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .workflow-workbench > .workflow-mobile-operation-pane::-webkit-scrollbar {
+      display: none;
+    }
+
+    .workflow-workbench .workflow-mobile-recovery-slot {
+      display: contents;
+    }
+
+    .workflow-workbench .workflow-live-rail,
+    .workflow-workbench #liveWrinkleCard {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .workflow-workbench > .stage {
+      grid-column: 1;
+      grid-row: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .workflow-workbench .stage-top {
+      grid-template-areas:
+        "incision-status"
+        "workflow-actions";
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      height: auto;
+      flex: 0 0 auto;
+      min-height: 0;
+      padding: 4px 10px 2px;
+      gap: 4px 8px;
+      align-items: center;
+    }
+
+    .workflow-workbench .stage-top > #livePill {
+      display: none;
+    }
+
+    .workflow-workbench .workflow-stage-status {
+      grid-area: incision-status;
+      align-self: stretch;
+    }
+
+    .workflow-workbench .workflow-stage-actions {
+      grid-area: workflow-actions;
+      width: 100%;
+      justify-self: stretch;
+      justify-content: flex-start;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+    }
+
+    .workflow-workbench .stage-top > #fps {
+      display: none;
+    }
+
+    .workflow-workbench .stage-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      gap: 8px;
+      padding: 4px 0 8px;
+      overflow: hidden;
+    }
+
+    .workflow-workbench .main-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .workflow-workbench .main-wrap.image-viewer {
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+
+    .workflow-workbench .main-wrap.refining {
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+
+    .workflow-workbench .workflow-draft-recovery {
+      align-items: stretch;
+      flex-direction: column;
+      margin: 0 10px;
+    }
+
+    .workflow-workbench .workflow-draft-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .workflow-workbench .workflow-draft-actions > :only-child {
+      grid-column: 1 / -1;
+    }
+
+    .workflow-workbench .canvas-legend {
+      left: 8px;
+      bottom: 8px;
+      max-width: calc(100% - 16px);
+      padding: 8px 9px;
+      gap: 7px 10px;
+    }
+
+    .workflow-workbench .zoom-strip {
+      /* Phone users zoom the shared canvas directly; retain the card rail for desktop and rollback. */
+      display: none;
+      width: 100%;
+      max-height: none;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 2px 12px 10px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-inline: contain;
+      scroll-padding-inline: 12px;
+      scroll-snap-type: x mandatory;
+    }
+
+    .workflow-workbench .zoom-card {
+      flex: 0 0 clamp(152px, 44vw, 184px);
+      min-width: clamp(152px, 44vw, 184px);
+      max-width: none;
+      scroll-snap-align: start;
+    }
   }
-
-  /* 工具栏已恒定预留标记行，视野不再随标记状态补偿高度。 */
-
-  .workflow-workbench > .workflow-mobile-operation-pane {
-    display: flex;
-    grid-column: 1;
-    grid-row: 2;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-    max-height: 100%;
-    padding-block: 10px max(12px, env(safe-area-inset-bottom));
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    scrollbar-width: none;
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .workflow-workbench > .workflow-mobile-operation-pane::-webkit-scrollbar {
-    display: none;
-  }
-
-  .workflow-workbench .workflow-mobile-recovery-slot {
-    display: contents;
-  }
-
   .incision-workbench.clinical-compat-workbench .candidate-row .candidate-overlay-status {
     border-left-color: #42be65;
     color: #42be65;
@@ -2785,123 +2913,6 @@ body:has(.dark-workbench-page) {
   .incision-workbench.clinical-compat-workbench .candidate-row .candidate-overlay-status.warning {
     border-left-color: #f1c21b;
     color: #f1c21b;
-  }
-
-  .workflow-workbench .workflow-live-rail,
-  .workflow-workbench #liveWrinkleCard {
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .workflow-workbench > .stage {
-    grid-column: 1;
-    grid-row: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .workflow-workbench .stage-top {
-    grid-template-areas:
-      "incision-status"
-      "workflow-actions";
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    height: auto;
-    flex: 0 0 auto;
-    min-height: 0;
-    padding: 4px 10px 2px;
-    gap: 4px 8px;
-    align-items: center;
-  }
-
-  .workflow-workbench .stage-top > #livePill {
-    display: none;
-  }
-
-  .workflow-workbench .workflow-stage-status {
-    grid-area: incision-status;
-    align-self: stretch;
-  }
-
-  .workflow-workbench .workflow-stage-actions {
-    grid-area: workflow-actions;
-    width: 100%;
-    justify-self: stretch;
-    justify-content: flex-start;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-  }
-
-  .workflow-workbench .stage-top > #fps {
-    display: none;
-  }
-
-  .workflow-workbench .stage-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    gap: 8px;
-    padding: 4px 0 8px;
-    overflow: hidden;
-  }
-
-  .workflow-workbench .main-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-
-  .workflow-workbench .main-wrap.image-viewer {
-    touch-action: none;
-    overscroll-behavior: contain;
-  }
-
-  .workflow-workbench .main-wrap.refining {
-    touch-action: none;
-    overscroll-behavior: contain;
-  }
-
-  .workflow-workbench .workflow-draft-recovery {
-    align-items: stretch;
-    flex-direction: column;
-    margin: 0 10px;
-  }
-
-  .workflow-workbench .workflow-draft-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workflow-workbench .workflow-draft-actions > :only-child {
-    grid-column: 1 / -1;
-  }
-
-  .workflow-workbench .canvas-legend {
-    left: 8px;
-    bottom: 8px;
-    max-width: calc(100% - 16px);
-    padding: 8px 9px;
-    gap: 7px 10px;
-  }
-
-  .workflow-workbench .zoom-strip {
-    /* Phone users zoom the shared canvas directly; retain the card rail for desktop and rollback. */
-    display: none;
-    width: 100%;
-    max-height: none;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 2px 12px 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-inline: contain;
-    scroll-padding-inline: 12px;
-    scroll-snap-type: x mandatory;
-  }
-
-  .workflow-workbench .zoom-card {
-    flex: 0 0 clamp(152px, 44vw, 184px);
-    min-width: clamp(152px, 44vw, 184px);
-    max-width: none;
-    scroll-snap-align: start;
   }
 
   .settings-boundary-list p {
