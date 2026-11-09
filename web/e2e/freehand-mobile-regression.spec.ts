@@ -99,16 +99,20 @@ async function dragUpFrom(page: Page, start: { x: number; y: number }) {
   }
 }
 
-async function expectGestureScrolls(page: Page, mobile: boolean, timeout = 10_000) {
-  const offset = () => page.evaluate((usePane) => (
-    usePane
-      ? document.querySelector(".workflow-mobile-operation-pane")?.scrollTop ?? 0
-      : document.scrollingElement?.scrollTop ?? 0
-  ), mobile);
+async function expectGestureScrolls(page: Page, target: "pane" | "root" | "document", timeout = 10_000, touch = true) {
+  const offset = () => page.evaluate((kind) => (
+    kind === "pane" ? document.querySelector(".workflow-mobile-operation-pane")?.scrollTop ?? 0
+      : kind === "root" ? document.querySelector(".workflow-workbench")?.scrollTop ?? 0
+        : document.scrollingElement?.scrollTop ?? 0
+  ), target);
   const before = await offset();
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("scroll test requires a fixed viewport");
-  await dragUpFrom(page, { x: 10, y: viewport.height - 24 });
+  if (touch) await dragUpFrom(page, { x: 10, y: viewport.height - 24 });
+  else {
+    await page.mouse.move(10, viewport.height - 24);
+    await page.mouse.wheel(0, 250);
+  }
   await expect.poll(offset, { timeout, message: "a gesture must move the actual scroll target" })
     .toBeGreaterThan(before + 5);
 }
@@ -152,11 +156,14 @@ for (const layout of scrollLayouts) {
     try {
       await page.goto("/app/workflow?developer=1");
       await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+      const scrollTarget = layout.mobile ? "pane" : layout.width <= 560 ? "root" : "document";
       await expect(page.locator(".workflow-mobile-operation-pane")).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator(".mobile-workflow-dock")).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(layout.mobile ? 1 : 0);
       if (layout.width <= 1280) {
         const stageTop = await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top);
-        await expectGestureScrolls(page, layout.mobile);
-        if (layout.mobile) {
+        await expectGestureScrolls(page, scrollTarget, 10_000, layout.touch);
+        if (layout.width <= 560) {
           expect(await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top))
             .toBeCloseTo(stageTop, 1);
         }
@@ -165,6 +172,9 @@ for (const layout of scrollLayouts) {
       const upload = layout.mobile
         ? page.getByRole("button", { name: "上传照片", exact: true })
         : page.locator("#uploadBtn");
+      if (scrollTarget === "root") {
+        await upload.evaluate(element => element.scrollIntoView({ block: "end", behavior: "instant" }));
+      }
       await upload.scrollIntoViewIfNeeded();
       // Finish the preceding scroll before testing a separate tap; a tap during
       // a fling can stop the fling instead of activating the control.
@@ -207,14 +217,158 @@ test("workflow gesture assertion detects a locked existing mobile pane", async (
   });
   let detected = false;
   try {
-    await expectGestureScrolls(page, true, 1_500);
+    await expectGestureScrolls(page, "pane", 1_500);
   } catch (error) {
     if (!(error instanceof Error) || !error.message.includes("a gesture must move")) throw error;
     detected = true;
   }
   expect(detected, "the same scroll assertion must reject a locked pane even when its DOM exists").toBe(true);
   await lock.evaluate((element) => element.remove());
-  await expectGestureScrolls(page, true);
+  await expectGestureScrolls(page, "pane");
+});
+
+test("workflow wheel assertion detects a locked narrow fallback root", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/app/workflow?developer=1");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    const lock = await page.addStyleTag({
+      content: ".workflow-workbench.app { overflow-y: hidden !important; }",
+    });
+    let detected = false;
+    try {
+      await expectGestureScrolls(page, "root", 1_500, false);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("a gesture must move")) throw error;
+      detected = true;
+    }
+    expect(detected, "the wheel assertion must reject a locked fallback root").toBe(true);
+    await lock.evaluate(element => element.remove());
+    await expectGestureScrolls(page, "root", 10_000, false);
+  } finally {
+    await context.close();
+  }
+});
+
+test("narrow mouse layout preserves the original canvas and real refine quality", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/app/workflow?developer=1");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    const result = await page.evaluate(async () => {
+      const fitPath = "/src/services/liveCanvasFit.ts";
+      const statePath = "/src/services/liveState.ts";
+      const refinePath = "/src/services/liveRefine2d.ts";
+      const domPath = "/src/services/liveDom.ts";
+      const { fitCanvasDisplayToStage } = await import(fitPath);
+      const { renderState } = await import(statePath);
+      const { undoRefine } = await import(refinePath);
+      const { els } = await import(domPath);
+      els.canvas.width = els.canvas.height = 640;
+      els.canvas.classList.add("image-source");
+      renderState.imageView.zoom = 1;
+      renderState.imageView.offsetX = renderState.imageView.offsetY = 0;
+      fitCanvasDisplayToStage();
+      const line = (name: string, y: number) => ({ name, pts: [[100, y, 0], [400, y, 0]] });
+      const state = renderState.refine2d;
+      state.active = true;
+      state.latestAutoLines = [line("a", 100), line("b", 140)];
+      state.undoStack = [{ label: "synthetic-layout-regression",
+        lines: [line("a", 100), line("b", 110.204)] }];
+      undoRefine();
+      const box = els.canvas.getBoundingClientRect();
+      const originalQuality = structuredClone(state.quality);
+      const root = document.querySelector<HTMLElement>(".workflow-workbench")!;
+      root.scrollTop = 200;
+      els.upload.focus();
+      state.undoStack = [{ label: "after-scroll-and-focus",
+        lines: [line("a", 100), line("b", 110.204)] }];
+      undoRefine();
+      return { width: box.width, height: box.height, left: box.left,
+        stageHeight: document.querySelector(".stage")!.getBoundingClientRect().height,
+        quality: state.quality, hidden: els.refine2dQuality.classList.contains("hidden"),
+        originalBox: box.toJSON(), afterScrollAndFocusBox: els.canvas.getBoundingClientRect().toJSON(),
+        originalQuality };
+    });
+    expect(result.width).toBe(393);
+    expect(result.height).toBe(393);
+    expect(result.left).toBe(0);
+    expect(result.stageHeight).toBe(527);
+    expect(result.quality.ok).toBe(true);
+    expect(result.hidden).toBe(true);
+    expect(result.afterScrollAndFocusBox).toEqual(result.originalBox);
+    expect(result.quality).toEqual(result.originalQuality);
+  } finally {
+    await context.close();
+  }
+});
+
+test("width transitions retain desktop controls and layer state on fine pointers", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL, viewport: { width: 900, height: 900 }, hasTouch: false, isMobile: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/app/workflow?developer=1");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    await page.evaluate(async () => {
+      const path = "/src/services/mobileWorkflowVisibility.ts";
+      const visibility = await import(path);
+      visibility.setMobileRstlLayerVisible(false);
+      visibility.setMobileWrinkleLayerVisible(false);
+    });
+    for (const width of [560, 561, 900, 393]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator(".workflow-mobile-operation-pane")).toHaveCount(0);
+      await expect(page.locator(".mobile-workflow-dock")).toHaveCount(0);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(0);
+      const layers = await page.evaluate(async () => {
+        const path = "/src/services/mobileWorkflowVisibility.ts";
+        const { workflowLayerVisibilitySnapshot } = await import(path);
+        const { rstl, wrinkles } = workflowLayerVisibilitySnapshot();
+        return { rstl, wrinkles };
+      });
+      expect(layers).toEqual({ rstl: false, wrinkles: false });
+      const bindings = await page.evaluate(async () => {
+        const path = "/src/services/liveDom.ts";
+        const { els } = await import(path);
+        return [els.canvas, els.upload, els.file].every(node => node.isConnected)
+          && els.canvas === document.querySelector("#canvas")
+          && els.upload === document.querySelector("#uploadBtn")
+          && els.file === document.querySelector("#fileInput");
+      });
+      expect(bindings, "runtime must keep the current canvas and upload nodes after width changes").toBe(true);
+    }
+    const upload = page.locator("#uploadBtn");
+    await upload.evaluate(element => element.scrollIntoView({ block: "end", behavior: "instant" }));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), upload.click()]);
+    await chooser.setFiles([]);
+    await uploadGeneratedPhoto(page, "single", "#fileInput");
+    await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+    await page.getByLabel("肿物边界").selectOption("freehand");
+    await expect(page.locator("#startBoundaryBtn")).toHaveText("结束描绘");
+    const box = await page.locator("#canvas").boundingBox();
+    if (!box) throw new Error("resized workflow canvas is missing");
+    const cx = box.x + box.width * 0.62;
+    const cy = box.y + box.height * 0.48;
+    const radius = Math.min(box.width, box.height) * 0.055;
+    await page.mouse.move(cx + radius, cy);
+    await page.mouse.down();
+    for (let index = 1; index <= 18; index++) {
+      const angle = index * Math.PI * 2 / 18;
+      await page.mouse.move(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    }
+    await page.mouse.up();
+    await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d")).toMatch(/^M /);
+  } finally {
+    await context.close();
+  }
 });
 
 async function expectToolbarControlsUnobscured(page: Page) {
@@ -265,6 +419,15 @@ async function expectAllVisibleButtonsReachable(page: Page) {
   const count = await buttons.count();
   for (let index = 0; index < count; index += 1) {
     const button = buttons.nth(index);
+    await button.evaluate(element => {
+      const root = element.closest(".workflow-workbench");
+      if (root && !root.querySelector(":scope > .workflow-mobile-operation-pane")
+        && root.querySelector(":scope > .stage")
+        && getComputedStyle(root.querySelector(":scope > .stage")!).position === "sticky"
+        && !element.closest(".stage")) {
+        element.scrollIntoView({ block: "end", behavior: "instant" });
+      }
+    });
     await button.scrollIntoViewIfNeeded();
     const result = await button.evaluate((element) => {
       const rect = element.getBoundingClientRect();
