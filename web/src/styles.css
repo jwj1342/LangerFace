@@ -2414,6 +2414,7 @@
 .workflow-workbench .workflow-stage-status[data-developer-details="true"] > .workflow-developer-detail {
   flex: 0 0 auto;
   width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .workflow-workbench .workflow-stage-spinner {

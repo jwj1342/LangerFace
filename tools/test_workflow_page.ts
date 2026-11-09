@@ -571,8 +571,8 @@ assert.match(stageStatus, /workflow-developer-detail/,
   "developer-only details use separate inline rows without replacing the generated status");
 assert.doesNotMatch(stageStatus, /compactStatus|当前切口不可确认|当前操作未完成|请在画布中操作/,
   "the hidden workflow status cannot replace generated diagnostic detail with presentation-only summaries");
-assert.match(stageStatus, /const showFeedback = isDeveloperMode\(\) && \(busy \|\| warning \|\| developerDesktop\);/,
-  "canvas explanatory subtitles require explicit developer mode on desktop and phone");
+assert.match(stageStatus, /const showFeedback = developerDesktop;/,
+  "canvas explanatory subtitles are limited to desktop developer mode; browser regression checks actual visibility");
 assert.match(stageStatus, /id="workflowStageStatus"[\s\S]*?hidden=\{!showFeedback\}[\s\S]*?aria-hidden=\{!showFeedback\}/,
   "workflow keeps visual and accessibility status visibility synchronized");
 assert.match(liveStagePanel, /compactWorkflowChrome\s*=\s*false/,
@@ -592,8 +592,8 @@ assert.match(stageStatus, /workflow-stage-spinner/, "workflow renders an explici
 assert.match(stageStatus, /aria-busy={busy}/, "workflow exposes waiting state to assistive technology");
 assert.doesNotMatch(stageStatus, /setTimeout|setVisible|activeTool/,
   "loading and warning feedback is not timed away or coupled to tool selection");
-assert.match(stageStatus, /mobileViewport/,
-  "developer details are gated by the live phone media query");
+assert.match(stageStatus, /\(pointer: coarse\) and \(hover: none\)/,
+  "developer feedback uses touch-only capabilities independently of the layout width; browser regression covers rotation");
 assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\.is-collapsed\s*{[^}]*visibility:\s*hidden;/,
   "desktop workflow status cannot inherit the phone-only timed presentation style");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-status\s*\{[^}]*white-space:\s*normal;[^}]*overflow:\s*visible;/s,
