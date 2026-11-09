@@ -3,7 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
 import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
-import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, diagnosticSha256, diagnosticPixelBinding, diagnosticReplayMismatches, parseDiagnosticRun, assertDiagnosticJson, classifyDiagnosticEvidence, type RunInput } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
+import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, diagnosticSha256, diagnosticPixelBinding, diagnosticReplayMismatches, parseDiagnosticRun, assertDiagnosticJson, classifyDiagnosticEvidence, captureWorkflowInteractionSnapshot, type RunInput } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
 import { CANVAS_EXPORT_DIAGNOSTIC_EVENT } from "../web/src/services/canvasRecording.ts";
 
 const pixels = new Uint8ClampedArray([10, 20, 30, 255, 20, 30, 40, 255, 50, 60, 70, 255, 80, 90, 100, 255]);
@@ -327,4 +327,136 @@ assert.match(panelSource, /刷新后仍可接续/);
 const mountSource = source.slice(source.indexOf("export function mountWorkflowIncisionController"));
 assert.match(mountSource, /new MarkerRunDiagnostics/);
 assert.doesNotMatch(mountSource, /import\.meta\.env\.DEV/);
+// The logger must capture the actual branch inputs, not infer them from touch support.
+assert.equal(captureWorkflowInteractionSnapshot(), null, "missing workflow DOM is an explicit observation gap");
+const mediaValues = new Map([
+  ["(max-width: 560px)", true], ["(pointer: fine)", true],
+  ["(pointer: coarse)", false], ["(hover: none)", false],
+  ["(hover: hover)", true], ["(any-pointer: coarse)", true],
+]);
+const rect = { x: 0, y: 0, width: 360, height: 596 };
+class WorkflowElement extends EventTarget {
+  dataset: Record<string, string> = {};
+  id = "canvas";
+  scrollTop = 0; clientHeight = 596; scrollHeight = 1400;
+  getBoundingClientRect() { return rect; }
+  closest(selector: string) { return selector === ".workflow-workbench" ? workflowRoot : null; }
+}
+const workflowRoot = new WorkflowElement();
+const contextRoot = new WorkflowElement();
+contextRoot.dataset = { workflowMarkerMode: "true", workflowMarkerBusy: "false" };
+const oldQuery = (doc as any).querySelector;
+Object.assign(doc, { querySelector(selector: string) {
+  if (selector === ".workflow-workbench") return workflowRoot;
+  if (selector === "[data-workflow-marker-mode]") return contextRoot;
+  return null;
+} });
+Object.assign(win, { innerWidth: 360, innerHeight: 596, devicePixelRatio: 3,
+  matchMedia: (query: string) => ({ matches: mediaValues.get(query) ?? false }),
+});
+Object.defineProperties(globalThis, {
+  Element: { configurable: true, value: WorkflowElement },
+  getComputedStyle: { configurable: true, value: () => ({ display: "flex", overflowY: "hidden", touchAction: "auto", gridTemplateRows: "none" }) },
+});
+const originalRestore = (MarkerRunDiagnostics.prototype as any).restore;
+const originalCapture = MarkerRunDiagnostics.prototype.captureClientModule;
+let releaseRestore: () => void = () => {};
+let captureAfterRestore = false;
+(MarkerRunDiagnostics.prototype as any).restore = async function () {
+  await new Promise<void>(resolve => { releaseRestore = resolve; });
+  await originalRestore.call(this);
+};
+MarkerRunDiagnostics.prototype.captureClientModule = async function () { captureAfterRestore = true; };
+const delayedRestoreDiagnostic = new MarkerRunDiagnostics(getFrame);
+assert.equal(captureAfterRestore, false, "source capture must wait for prior session restoration");
+releaseRestore();
+await delayedRestoreDiagnostic.whenReady();
+await Promise.resolve();
+assert.equal(captureAfterRestore, true);
+delayedRestoreDiagnostic.dispose();
+(MarkerRunDiagnostics.prototype as any).restore = originalRestore;
+MarkerRunDiagnostics.prototype.captureClientModule = originalCapture;
+const uiDiagnostic = new MarkerRunDiagnostics(getFrame);
+await uiDiagnostic.whenReady();
+const snapshot = captureWorkflowInteractionSnapshot() as any;
+assert.equal(snapshot.media.mobile_query, false);
+assert.equal(snapshot.media.primary_pointer_fine, true);
+assert.equal(snapshot.layout.mobile_pane_present, false);
+assert.equal(snapshot.layout.root.scroll_height, 1400);
+const touchEvent = new Event("pointerdown", { cancelable: true });
+Object.defineProperties(touchEvent, { target: { value: workflowRoot }, pointerType: { value: "touch" }, pointerId: { value: 2 } });
+doc.dispatchEvent(touchEvent);
+await new Promise(resolve => setTimeout(resolve, 5));
+assert.equal(touchEvent.defaultPrevented, false, "logging must not consume the touch");
+const uiSession = JSON.parse(uiDiagnostic.exportSession());
+const uiEvent = uiSession.page_instances.at(-1).interaction_events.find((event: any) => event.action === "pointerdown");
+assert.equal(uiEvent.details.pointer_type, "touch");
+assert.equal(uiEvent.details.active_pointers, 1);
+assert.equal(uiEvent.details.context.media.mobile_query, false);
+assert.equal(uiEvent.details.after.layout.marker_busy, false);
+assert.equal(uiEvent.details.after_phase, "later_task_sample");
+assert.equal(uiSession.page_instances.at(-1).interaction_context.media.primary_pointer_fine, true);
+assert.equal(auditMarkerDiagnosticExport(uiSession).passed, true);
+assert.equal(uiSession.runs.length, 0, "UI failure evidence must not require a detector run");
+const recordedBefore = uiSession.page_instances.at(-1).interaction_events.length;
+for (let i = 0; i < DIAGNOSTIC_LIMITS.interactionEvents + 5; i++) doc.dispatchEvent(touchEvent);
+await new Promise(resolve => setTimeout(resolve, 5));
+const capped = JSON.parse(uiDiagnostic.exportSession());
+assert.equal(capped.page_instances.at(-1).interaction_events.length, DIAGNOSTIC_LIMITS.interactionEvents);
+const expectedDrops = recordedBefore + DIAGNOSTIC_LIMITS.interactionEvents + 5 + 1 - DIAGNOSTIC_LIMITS.interactionEvents;
+assert.equal(capped.page_instances.at(-1).dropped_interaction_events, expectedDrops);
+(uiDiagnostic as any).mergePrior(structuredClone(capped));
+(uiDiagnostic as any).mergePrior(structuredClone(capped));
+assert.equal((uiDiagnostic as any).persisted().page_instances.at(-1).dropped_interaction_events, expectedDrops,
+  "merging persisted data must not count the same dropped UI sample again");
+assert.equal((uiDiagnostic as any).persisted().action_events.length, 0, "UI samples never occupy the core event buffer");
+const otherPageId = "page-" + "1".repeat(24);
+const stalePage = { page_instance_id: otherPageId, interaction_revision: 1, interaction_events: [] };
+(uiDiagnostic as any).pageInstances.unshift(stalePage);
+const newerPrior = structuredClone(capped);
+newerPrior.page_instances.unshift({ ...stalePage, interaction_revision: 2,
+  interaction_events: [{ action: "pointerdown", observed_at_ms: 1, phase: "capture" }] });
+(uiDiagnostic as any).mergePrior(newerPrior);
+assert.equal((uiDiagnostic as any).pageInstances.find((page: any) => page.page_instance_id === otherPageId).interaction_revision, 2,
+  "a stale cached page must not overwrite another active page's newer persisted observations");
+const historicalPages = Array.from({ length: 8 }, (_, pageIndex) => ({
+  page_instance_id: "page-" + (pageIndex + 2).toString(16).repeat(24),
+  interaction_revision: 1,
+  interaction_events: Array.from({ length: 100 }, (_, index) => ({
+    action: "pointermove", observed_at_ms: index + pageIndex * 100,
+    details: { padding: "x".repeat(4000) },
+  })),
+}));
+(uiDiagnostic as any).pageInstances.unshift(...historicalPages);
+const budgeted = (uiDiagnostic as any).persisted();
+const uiSamples = budgeted.page_instances.flatMap((page: any) => page.interaction_events || []);
+assert.ok(uiSamples.length <= DIAGNOSTIC_LIMITS.interactionEvents, "UI capacity is bounded for the session, not only per page");
+assert.ok(uiSamples.reduce((sum: number, sample: any) => sum + new TextEncoder().encode(JSON.stringify(sample)).byteLength, 0) <= DIAGNOSTIC_LIMITS.interactionBytes);
+assert.ok(budgeted.page_instances.reduce((sum: number, page: any) => sum + (page.session_budget_omitted_interaction_events || 0), 0) > 0);
+win.dispatchEvent(new Event("resize"));
+await new Promise(resolve => setTimeout(resolve, 270));
+assert.equal((uiDiagnostic as any).observedPointers.size, 1, "resize does not mean that fingers were released");
+const productHandler = () => { contextRoot.dataset.workflowMarkerBusy = "true"; };
+doc.addEventListener("pointerdown", productHandler);
+doc.dispatchEvent(touchEvent);
+await new Promise(resolve => setTimeout(resolve, 5));
+assert.equal((uiDiagnostic as any).interactionEvents.at(-1).details.after.layout.marker_busy, true,
+  "later task must observe state changed by a subsequent product handler");
+doc.removeEventListener("pointerdown", productHandler);
+const outsideWorkflow = new WorkflowElement();
+outsideWorkflow.closest = () => null;
+const rawTouchEvent = new Event("touchstart", { cancelable: true });
+Object.defineProperties(rawTouchEvent, { target: { value: workflowRoot }, touches: { value: [
+  { target: workflowRoot, clientX: 20, clientY: 30 }, { target: outsideWorkflow, clientX: 900, clientY: 800 },
+] } });
+doc.dispatchEvent(rawTouchEvent);
+const touchObservation = (uiDiagnostic as any).interactionEvents.at(-1);
+assert.equal(touchObservation.details.touch_count, 1);
+assert.deepEqual(touchObservation.details.touch_positions, [{ client_x: 20, client_y: 30 }],
+  "workflow touches must never include coordinates from outside the workflow");
+assert.equal(rawTouchEvent.defaultPrevented, false);
+Object.assign(win, { matchMedia() { throw new Error("unavailable"); } });
+assert.doesNotThrow(() => doc.dispatchEvent(touchEvent), "observation failures must not escape into product interaction");
+uiDiagnostic.dispose();
+Object.assign(doc, { querySelector: oldQuery });
 console.log("test_controlled_marker_run_diagnostics: transfer, file binding, run isolation, privacy, identity, replay preflight and controller gate passed");

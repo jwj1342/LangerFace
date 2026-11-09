@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
+    "sourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -1746,8 +1746,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.29-candidate.1",
-    "name": "工作流滚动：保留原DOM与画布的窄屏滚动退路",
+    "version": "0.1.30-candidate.1",
+    "name": "交互诊断：记录输入分流与手势现场",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
@@ -1758,6 +1758,7 @@
       "web/src/components/WorkflowCanvasTools.tsx",
       "web/src/components/WorkflowLayout.tsx",
       "web/src/components/WorkflowStageStatus.tsx",
+      "web/src/services/controlledMarkerRunDiagnostics.ts",
       "web/src/services/controlledMarkerUiConfig.ts",
       "web/src/services/incisionClinicalCopy.ts",
       "web/src/services/incisionOverlayStyle.ts",
@@ -1768,14 +1769,44 @@
       "web/src/services/workflowIncisionController.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "0a943163e8671ed493a5e2aff95ffc40a3b08673803e78d5dae9b2b8b833db82",
+    "sourceDigest": "8e4270cbb5c93421714295dd7508706002396a3d4dd576df94fd53be4a59ed10",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
+    "runtimeSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-    "note": "恢复原1280/560布局与WorkflowLayout原字节；仅为窄屏无手机pane的root恢复纵向滚动，原尺寸stage用sticky保持固定。避免重建画布与控件。算法、RSTL阈值及资产不改；561/横屏越界仍单列，未部署。"
+    "note": "仅补现有本机诊断：媒体/视口、被动输入、布局与延后状态、每页128条独立限量记录。设备分流、布局、手势处理及核心算法不变；手机真机原因待新日志确认。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.29-candidate.1",
+      "name": "工作流滚动：保留原DOM与画布的窄屏滚动退路",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowLayout.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "0a943163e8671ed493a5e2aff95ffc40a3b08673803e78d5dae9b2b8b833db82",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "恢复原1280/560布局与WorkflowLayout原字节；仅为窄屏无手机pane的root恢复纵向滚动，原尺寸stage用sticky保持固定。避免重建画布与控件。算法、RSTL阈值及资产不改；561/横屏越界仍单列，未部署。"
+    },
     {
       "version": "0.1.28-candidate.1",
       "name": "工作流滚动：保留原画布布局并补齐窄屏操作容器",
@@ -2729,10 +2760,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "e53f202d1e71e9370acf979ffc4eda90f9fff11cffb71c356e2e82501d725543",
-    "currentSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
-    "capturedAt": "2026-11-09T14:49:32.966Z",
-    "reason": "UI0.1.29：CSS窄屏root滚动与原尺寸sticky舞台；DOM、算法与资产保持。"
+    "previousSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
+    "currentSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
+    "capturedAt": "2026-11-09T16:48:43.763Z",
+    "reason": "UI0.1.30：仅补本机交互诊断；算法及资产不变。"
   },
   "integrationHistory": [
     {
@@ -2882,6 +2913,14 @@
     "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1"
   },
   "sourceFingerprintHistory": [
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "e53f202d1e71e9370acf979ffc4eda90f9fff11cffb71c356e2e82501d725543",
+      "currentSourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
+      "capturedAt": "2026-11-09T14:49:32.966Z",
+      "reason": "UI0.1.29：CSS窄屏root滚动与原尺寸sticky舞台；DOM、算法与资产保持。"
+    },
     {
       "encoding": "UTF-8",
       "normalization": "CRLF-to-LF-only",

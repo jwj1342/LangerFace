@@ -19,6 +19,8 @@ export const DIAGNOSTIC_LIMITS = {
   clientModules: 32,
   exportEvents: 512,
   actionEvents: 8192,
+  interactionEvents: 128,
+  interactionBytes: 512_000,
 } as const;
 const MAX_DIAGNOSTIC_BYTES = DIAGNOSTIC_LIMITS.bytes;
 const MAX_SESSION_EVENTS = DIAGNOSTIC_LIMITS.workflowEvents;
@@ -392,6 +394,92 @@ function browserEngine() {
   return match?.[0] || "unknown";
 }
 
+/** Observe only allowlisted numbers/enums, never DOM text, URLs or image pixels. */
+export function captureWorkflowInteractionSnapshot(): Json | null {
+  try {
+    const root = document.querySelector(".workflow-workbench");
+    if (!root) return null;
+    const number = (value: number) => Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+    const media = (query: string) => {
+      try { return typeof window.matchMedia === "function" ? window.matchMedia(query).matches : null; }
+      catch { return null; }
+    };
+    const box = (element: Element | null): Json => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const enumeration = (value: string) => /^[a-z -]{1,80}$/.test(value) ? value : null;
+      return {
+        x: number(rect.x), y: number(rect.y), width: number(rect.width), height: number(rect.height),
+        client_height: number(element.clientHeight), scroll_height: number(element.scrollHeight),
+        scroll_top: number(element.scrollTop), display: enumeration(style.display),
+        overflow_y: enumeration(style.overflowY), touch_action: enumeration(style.touchAction),
+        grid_rows: /^(?:none|(?:[0-9.]+px\s*){1,12})$/.test(style.gridTemplateRows)
+          ? style.gridTemplateRows.trim() : null,
+      };
+    };
+    const context = document.querySelector<HTMLElement>("[data-workflow-marker-mode]");
+    const pointerMode = document.querySelector<HTMLElement>(".workflow-workbench .main-wrap")?.dataset.workflowPointerMode;
+    const flag = (value: string | undefined) => value === "true" ? true : value === "false" ? false : null;
+    return {
+      schema: "workflow-interaction-context/1",
+      viewport: { width: number(window.innerWidth), height: number(window.innerHeight),
+        device_pixel_ratio: number(window.devicePixelRatio),
+        visual_width: window.visualViewport ? number(window.visualViewport.width) : null,
+        visual_height: window.visualViewport ? number(window.visualViewport.height) : null,
+        visual_scale: window.visualViewport ? number(window.visualViewport.scale) : null },
+      touch_points: typeof navigator === "undefined" ? null : number(navigator.maxTouchPoints),
+      pointer_events_supported: typeof PointerEvent !== "undefined",
+      touch_events_supported: typeof TouchEvent !== "undefined",
+      media: {
+        narrow: media("(max-width: 560px)"),
+        mobile_query: media("(max-width: 560px) and (pointer: coarse) and (hover: none)"),
+        primary_pointer_coarse: media("(pointer: coarse)"), primary_pointer_fine: media("(pointer: fine)"),
+        primary_pointer_none: media("(pointer: none)"), any_pointer_coarse: media("(any-pointer: coarse)"),
+        any_pointer_fine: media("(any-pointer: fine)"),
+        primary_hover_none: media("(hover: none)"), primary_hover: media("(hover: hover)"),
+        any_hover: media("(any-hover: hover)"),
+      },
+      layout: {
+        mobile_pane_present: Boolean(document.querySelector(".workflow-mobile-operation-pane")),
+        root: box(root), operation_pane: box(document.querySelector(".workflow-mobile-operation-pane")),
+        stage: box(document.querySelector(".workflow-workbench .stage")),
+        tools: box(document.querySelector(".workflow-canvas-tools")),
+        canvas: box(document.querySelector(".workflow-workbench #canvas")),
+        pointer_mode: pointerMode === undefined ? null
+          : ["", "marker", "freehand", "refine"].includes(pointerMode) ? pointerMode : "other",
+        marker_mode: flag(context?.dataset.workflowMarkerMode), marker_busy: flag(context?.dataset.workflowMarkerBusy),
+      },
+    };
+  } catch { return null; }
+}
+
+function boundedInteractionPages(pages: Json[]): Json[] {
+  const copy = pages.map(page => page && !Array.isArray(page) && typeof page === "object" ? { ...page } : page);
+  const samples = copy.flatMap(page => page && !Array.isArray(page) && typeof page === "object"
+    && Array.isArray(page.interaction_events) ? page.interaction_events : []);
+  const keep = new Set<Json>();
+  let bytes = 0;
+  const encoder = new TextEncoder();
+  // Keep the most recent observations across the entire session, independent of core events.
+  const time = (value: Json) => value && !Array.isArray(value) && typeof value === "object"
+    && typeof value.observed_at_ms === "number" ? value.observed_at_ms : 0;
+  for (const sample of samples.sort((a, b) => time(b) - time(a))) {
+    const size = encoder.encode(JSON.stringify(sample)).byteLength;
+    if (keep.size >= DIAGNOSTIC_LIMITS.interactionEvents || bytes + size > DIAGNOSTIC_LIMITS.interactionBytes) continue;
+    keep.add(sample); bytes += size;
+  }
+  for (const page of copy) {
+    if (!page || Array.isArray(page) || typeof page !== "object" || !Array.isArray(page.interaction_events)) continue;
+    const retained = page.interaction_events.filter(sample => keep.has(sample));
+    const previous = typeof page.session_budget_omitted_interaction_events === "number"
+      ? page.session_budget_omitted_interaction_events : 0;
+    page.session_budget_omitted_interaction_events = previous + page.interaction_events.length - retained.length;
+    page.interaction_events = retained;
+  }
+  return copy;
+}
+
 type PersistedDiagnosticSession = {
   schema: typeof MARKER_DIAGNOSTIC_SESSION_SCHEMA; session_id: string; event_seq: number;
   page_instances: Json[]; sources: Json[]; runs: DiagnosticRun[];
@@ -486,14 +574,119 @@ export class MarkerRunDiagnostics {
   private initialIdentity = serviceIdentity();
   imported: DiagnosticRun | null = null;
   private getFrame: () => FrameIdentity | null | undefined;
+  private observedPointers = new Set<number>();
+  private lastInteractionSample = 0;
+  private interactionEvents: Array<Record<string, Json>> = [];
+  private droppedInteractionEvents = 0;
+  private interactionRevision = 0;
+  private interactionTimers = new Set<ReturnType<typeof setTimeout>>();
+  private viewportTimer: ReturnType<typeof setTimeout> | null = null;
+  private interactionOptions: AddEventListenerOptions = { capture: true, passive: true };
   constructor(getFrame: () => FrameIdentity | null | undefined) {
     this.getFrame = getFrame;
     document.addEventListener("change", this.onFile, true);
     document.addEventListener("cancel", this.onFile, true);
     window.addEventListener(CANVAS_EXPORT_DIAGNOSTIC_EVENT, this.onExport as EventListener);
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "touchstart", "touchmove", "touchend", "touchcancel", "scroll"]) {
+      document.addEventListener(type, this.onInteraction, this.interactionOptions);
+    }
+    window.addEventListener("resize", this.onViewport, { passive: true });
+    window.addEventListener("blur", this.onInputReset, { passive: true });
     this.ready = this.restore();
+    void this.ready.then(() => this.captureClientModule("workflow_interaction_diagnostics", import.meta.url))
+      .catch(() => { /* Optional source evidence must not block product startup. */ });
   }
   whenReady() { return this.ready; }
+  private syncInteractionPage() {
+    const page = this.pageInstances.find(item => item && !Array.isArray(item)
+      && typeof item === "object" && item.page_instance_id === this.pageInstanceId);
+    if (page && !Array.isArray(page) && typeof page === "object") {
+      page.interaction_events = this.interactionEvents;
+      page.dropped_interaction_events = this.droppedInteractionEvents;
+      page.interaction_revision = ++this.interactionRevision;
+    }
+  }
+  private captureInteraction(action: string, details: Record<string, Json>) {
+    if (!this.alive) return null;
+    const context = captureWorkflowInteractionSnapshot();
+    if (!context) return null;
+    const entry: Record<string, Json> = { action, observed_at_ms: Date.now(), phase: "capture",
+      event_seq: ++this.eventSequence, source_revision: this.getFrame()?.revision ?? null,
+      details: { ...details, context } };
+    this.interactionEvents.push(entry);
+    if (this.interactionEvents.length > DIAGNOSTIC_LIMITS.interactionEvents) {
+      this.interactionEvents.shift();
+      this.droppedInteractionEvents++;
+    }
+    this.syncInteractionPage();
+    this.queuePersist();
+    return entry;
+  }
+  private onViewport = () => {
+    if (!this.alive || this.viewportTimer !== null) return;
+    this.viewportTimer = setTimeout(() => {
+      this.viewportTimer = null;
+      try { this.captureInteraction("viewport_changed", {}); } catch { /* Optional observation. */ }
+    }, 250);
+  };
+  private onInputReset = () => {
+    const priorCount = this.observedPointers.size;
+    this.observedPointers.clear();
+    try { this.captureInteraction("window_blurred", { prior_active_pointers: priorCount,
+      pointer_count_reset: true }); } catch { /* Optional observation. */ }
+  };
+  private onInteraction = (event: Event) => {
+    try {
+      if (!this.alive || typeof Element === "undefined" || !(event.target instanceof Element)) return;
+      const root = event.target.closest(".workflow-workbench");
+      const pointer = event as PointerEvent;
+      const tracked = this.observedPointers.has(pointer.pointerId);
+      if (!root && !tracked) return;
+      if (event.type === "pointerdown" && this.observedPointers.size < 10) this.observedPointers.add(pointer.pointerId);
+      if (event.type === "pointerup" || event.type === "pointercancel") this.observedPointers.delete(pointer.pointerId);
+      const now = Date.now();
+      const sampledMove = ["pointermove", "touchmove", "scroll"].includes(event.type);
+      if (sampledMove && now - this.lastInteractionSample < 250) return;
+      if (event.type === "pointermove" && !this.observedPointers.size) return;
+      this.lastInteractionSample = now;
+      const allowedIds = new Set(["canvas", "mainWrap", "fileInput"]);
+      const target = allowedIds.has(event.target.id) ? event.target.id
+        : event.target.closest(".workflow-marker-toggle") ? "marker_toggle"
+        : event.target.closest(".workflow-mobile-marker-confirm") ? "marker_confirm"
+        : event.target.closest(".workflow-mobile-operation-pane") ? "operation_pane" : "workflow";
+      const coordinate = (value: number) => Number.isFinite(value) ? Math.round(value) : null;
+      const touches = event.type.startsWith("touch") ? Array.from((event as TouchEvent).touches).filter(touch =>
+        touch.target instanceof Element && touch.target.closest(".workflow-workbench") === root) : null;
+      const entry = this.captureInteraction(event.type, {
+        target, pointer_type: ["touch", "mouse", "pen"].includes(pointer.pointerType) ? pointer.pointerType : "unknown",
+        active_pointers: this.observedPointers.size, trusted: event.isTrusted,
+        pointer_id: coordinate(pointer.pointerId), client_x: coordinate(pointer.clientX), client_y: coordinate(pointer.clientY),
+        touch_count: touches ? touches.length : null,
+        touch_positions: touches ? touches.slice(0, 2).map(touch => ({
+          client_x: coordinate(touch.clientX), client_y: coordinate(touch.clientY),
+        })) : null,
+      });
+      // A later task is outside native event dispatch; a microtask can run between listeners.
+      if (entry && !sampledMove && this.interactionTimers.size < 16) {
+        const timer = setTimeout(() => {
+          this.interactionTimers.delete(timer);
+          if (!this.alive || !this.interactionEvents.includes(entry)) return;
+          try {
+            const details = entry.details as Record<string, Json>;
+            details.after_phase = "later_task_sample";
+            details.after_observed_at_ms = Date.now();
+            details.after_source_revision = this.getFrame()?.revision ?? null;
+            details.after = entry.source_revision === details.after_source_revision
+              ? captureWorkflowInteractionSnapshot() : null;
+            details.default_prevented_after = event.defaultPrevented;
+            this.syncInteractionPage();
+            this.queuePersist();
+          } catch { /* Optional observation. */ }
+        }, 0);
+        this.interactionTimers.add(timer);
+      }
+    } catch { /* Diagnostics must never block a product input handler. */ }
+  };
   async captureClientModule(moduleRole: string, moduleUrl: string) {
     if (!/^[a-z0-9_-]{1,64}$/.test(moduleRole) || !this.alive) return;
     try {
@@ -540,6 +733,8 @@ export class MarkerRunDiagnostics {
       viewport: { width: window.innerWidth || 0, height: window.innerHeight || 0, device_pixel_ratio: window.devicePixelRatio || 1 },
       touch_points: typeof navigator === "undefined" ? 0 : navigator.maxTouchPoints || 0,
       browser_engine: browserEngine(), navigation_type: navigation?.type || "unknown",
+      interaction_context: captureWorkflowInteractionSnapshot(),
+      interaction_events: this.interactionEvents, dropped_interaction_events: this.droppedInteractionEvents,
     });
     if (this.pageInstances.length > DIAGNOSTIC_LIMITS.pageInstances) {
       this.droppedPageInstances += this.pageInstances.length - DIAGNOSTIC_LIMITS.pageInstances;
@@ -557,7 +752,7 @@ export class MarkerRunDiagnostics {
   private persisted(): PersistedDiagnosticSession {
     return {
       schema: MARKER_DIAGNOSTIC_SESSION_SCHEMA, session_id: this.sessionId, event_seq: this.eventSequence,
-      page_instances: this.pageInstances, sources: this.sources, runs: this.runs,
+      page_instances: boundedInteractionPages(this.pageInstances), sources: this.sources, runs: this.runs,
       controller_events: this.controllerEvents, workflow_events: this.workflowEvents,
       action_events: this.actionEvents,
       client_modules: this.clientModules, dropped_preview_events: this.droppedPreviewEvents,
@@ -579,10 +774,18 @@ export class MarkerRunDiagnostics {
       return items.slice(-limit);
     };
     this.eventSequence = Math.max(this.eventSequence, prior.event_seq || 0);
-    this.pageInstances = trimMerged(mergeUnique(prior.page_instances || [], this.pageInstances, item => {
-      if (item && !Array.isArray(item) && typeof item === "object") return String(item.page_instance_id || stableDiagnosticJson(item));
-      return stableDiagnosticJson(item);
-    }), DIAGNOSTIC_LIMITS.pageInstances, count => { this.droppedPageInstances += count; });
+    const pageMap = new Map<string, Json>();
+    for (const item of [...(prior.page_instances || []), ...this.pageInstances]) {
+      if (!item || Array.isArray(item) || typeof item !== "object") continue;
+      const key = String(item.page_instance_id || stableDiagnosticJson(item));
+      const saved = pageMap.get(key);
+      const previous = saved && !Array.isArray(saved) && typeof saved === "object" ? saved : null;
+      const revision = typeof item.interaction_revision === "number" ? item.interaction_revision : 0;
+      const savedRevision = previous && typeof previous.interaction_revision === "number" ? previous.interaction_revision : 0;
+      if (!previous || key === this.pageInstanceId || revision > savedRevision) pageMap.set(key, item);
+    }
+    this.pageInstances = trimMerged([...pageMap.values()], DIAGNOSTIC_LIMITS.pageInstances,
+      count => { this.droppedPageInstances += count; });
     this.sources = trimMerged(mergeUnique(prior.sources || [], this.sources, item => {
       if (item && !Array.isArray(item) && typeof item === "object") return String(item.source_id || stableDiagnosticJson(item));
       return stableDiagnosticJson(item);
@@ -847,7 +1050,9 @@ export class MarkerRunDiagnostics {
     return text;
   }
   exportSession(): string {
-    if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length) throw new Error("请先完成一次诊断动作");
+    try { this.captureInteraction("export_snapshot", {}); } catch { /* Optional observation. */ }
+    if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length
+      && !this.interactionEvents.length) throw new Error("请先完成一次诊断动作");
     if (this.runs.some(run => run.status === "pending")) throw new Error("诊断记录尚在生成，请稍后导出");
     const payload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
       raw_image_embedded: false, uploaded: false };
@@ -869,5 +1074,15 @@ export class MarkerRunDiagnostics {
     this.alive = false; this.generation++; this.selection = null; this.runs = []; this.controllerEvents = []; this.workflowEvents = []; this.actionEvents = []; this.exportEvents = []; this.imported = null;
     document.removeEventListener("change", this.onFile, true); document.removeEventListener("cancel", this.onFile, true);
     window.removeEventListener(CANVAS_EXPORT_DIAGNOSTIC_EVENT, this.onExport as EventListener);
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "touchstart", "touchmove", "touchend", "touchcancel", "scroll"]) {
+      document.removeEventListener(type, this.onInteraction, true);
+    }
+    window.removeEventListener("resize", this.onViewport);
+    window.removeEventListener("blur", this.onInputReset);
+    this.observedPointers.clear();
+    if (this.viewportTimer !== null) clearTimeout(this.viewportTimer);
+    for (const timer of this.interactionTimers) clearTimeout(timer);
+    this.interactionTimers.clear();
+    this.interactionEvents = [];
   }
 }
