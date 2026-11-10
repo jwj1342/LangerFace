@@ -17,6 +17,26 @@ assert.equal(assigned.length, 9, 'repeated peaks cannot consume the supplemental
 assert.ok(!assigned.some(p => p.x === 0 && p.y === 0), 'the click itself is not a fabricated foreground feature');
 assert.deepEqual(geometry.pigmentAnchors([], { x: 0, y: 0 }), []);
 const a = square(10, 20, 20);
+const compactProposal = (boundary: MarkerPoint[], anchorX: number, context: number, rankScore: number) => ({
+    candidate: {
+        boundary, center: geometry.polygonCentroid(boundary), major: 10, ratio: 1, angle: 0,
+        score: rankScore, rankScore, anchor: { x: anchorX, y: 20 }, context,
+    },
+    evidence: { interiorSupport: 1, outerContinuation: 0, sectorContinuation: Array(8).fill(0) },
+});
+const compactPrimary = compactProposal(a, 10, 24, 10);
+const compactRepeated = compactProposal(a, 20, 32, 9);
+const compactUnpairedNeighbor = compactProposal(square(40, 20, 10), 40, 24, 8);
+assert.ok(geometry.selectCompactPigmentProposal([compactPrimary, compactRepeated]),
+    'the same object supported at separate anchors remains eligible');
+assert.equal(geometry.selectCompactPigmentProposal([compactPrimary]), null,
+    'one unsupported object cannot become a recovery');
+assert.equal(geometry.selectCompactPigmentProposal([
+    compactPrimary, compactRepeated, compactUnpairedNeighbor,
+]), null, 'a distinct object without its own repeated support still vetoes recovery');
+assert.ok(geometry.selectCompactPigmentProposal([
+    compactPrimary, compactRepeated, compactProposal(square(11, 20, 20), 30, 24, 8),
+]), 'near-overlapping estimates of one object are not separate objects');
 near(geometry.convexIntersectionArea(a, a), 400);
 near(geometry.convexIntersectionArea(a, a.slice().reverse()), 400);
 near(geometry.convexIntersectionArea(a, [...a.slice(2), ...a.slice(0, 2)]), 400);

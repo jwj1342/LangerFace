@@ -1275,7 +1275,7 @@ async function refineAppearanceCandidateBaseline(image: MarkerImageData, seed: M
 export const __appearanceGeometryForTests = {
     polygonArea, polygonCentroid, convexIntersectionArea, selectCompleteBodyCandidate,
     constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
-    regularizeAppearanceBoundary,
+    regularizeAppearanceBoundary, selectCompactPigmentProposal,
 };
 
 type CompactPigmentProposal = {
@@ -1365,16 +1365,22 @@ function compactPigmentRecovery(
                 context: c.context, rankScore: c.rankScore,
             } });
         }
+    return selectCompactPigmentProposal(bank);
+}
+function selectCompactPigmentProposal(
+    bank: CompactPigmentProposal[],
+): { proposal: CompactPigmentProposal; support: CompactPigmentSupport } | null {
     const eligible = bank.map(proposal => ({ proposal, support: compactPigmentSupport(proposal, bank) }))
         .filter((item): item is { proposal: CompactPigmentProposal; support: CompactPigmentSupport } => !!item.support)
         .sort((a, b) => (b.proposal.candidate.rankScore ?? -Infinity) - (a.proposal.candidate.rankScore ?? -Infinity));
     const selected = eligible[0];
     if (!selected) return null;
-    // Several stable objects in one scan remain ambiguous.
+    // An unpaired object is still conflicting evidence; it cannot be discarded
+    // merely because only the selected object has repeated support.
     const selectedArea = polygonArea(selected.proposal.candidate.boundary);
-    if (eligible.some(peer => convexIntersectionArea(selected.proposal.candidate.boundary,
-        peer.proposal.candidate.boundary) / Math.max(1, Math.min(selectedArea,
-        polygonArea(peer.proposal.candidate.boundary))) < .5)) return null;
+    if (bank.some(peer => convexIntersectionArea(selected.proposal.candidate.boundary,
+        peer.candidate.boundary) / Math.max(1, Math.min(selectedArea,
+        polygonArea(peer.candidate.boundary))) < .5)) return null;
     return selected;
 }
 /** Supplemental recovery cannot replace an accepted result or a coverage veto. */

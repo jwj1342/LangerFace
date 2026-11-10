@@ -3,127 +3,140 @@
   "policy": "docs/quality/ALGORITHM_VERSIONING.md",
   "current": {
     "profile": "small-lesion-boundary-candidate",
-    "version": "0.101.0-candidate.1",
-    "releaseName": "肿物边界识别：孤立小目标漏检补救",
-    "featureSummary": "仅原流程最终unstable_enclosure时尝试小型孤立颜色补救；保留原接受输出、明确扫描覆盖拒绝和运行不可用。完整背景与逐候选跨锚点/背景尺度配对。原23次及36控制已测，历史/扰动与补救分支反例在验；九项未销项，非医学通过。",
+    "version": "0.101.1-candidate.1",
+    "releaseName": "肿物边界识别：小目标补救排除未配对邻物",
+    "featureSummary": "仅收紧孤立小目标补救的多对象拒识：全部通过原严格像素门槛的候选都可触发冲突，不因缺少自身重复支持被忽略。原0.100.3接受输出及明确拒识路径保持。0.101.0发现双目标新增误接受，保留原失败和存档；当前安全复核与九项返工未结束，非医学通过。",
     "nameKeywords": [
-      "孤立小目标",
-      "漏检补救"
+      "未配对邻物"
     ],
     "status": "candidate",
-    "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
-    "algorithmDigest": "bd2421f0ca3eb2257e56fd872dc0cce1c4f20284272c0c8860a065afabd26d41",
-    "changeSlug": "guarded-compact-color-recovery",
+    "sourceDigest": "2e97b6016f69052ccfac399ebcde4a225ff7e59006ddaf247795e0a3d58aa37c",
+    "algorithmDigest": "4b324ae34b9cc2df977d3a9c3cb1278f3db0c296270b7f5fa9450ee83fcef352",
+    "changeSlug": "compact-recovery-unpaired-conflict-veto",
     "previous": {
       "profile": "small-lesion-boundary-candidate",
-      "version": "0.100.3-candidate.1",
-      "releaseName": "肿物边界识别：孤立色素候选纠偏",
-      "featureSummary": "无外观主体且原复核保持接受时，以同对象独立色素候选纠正凹陷像素恢复。④原10/15mm及轻微偏移改善，20mm保持；①②试验因002代理指标回退否决，③可选未修。正式旧138输出保持，旧2误选/11拒识与792未测保留；非整组或医学通过。",
+      "version": "0.101.0-candidate.1",
+      "releaseName": "肿物边界识别：孤立小目标漏检补救",
+      "featureSummary": "仅原流程最终unstable_enclosure时尝试小型孤立颜色补救；保留原接受输出、明确扫描覆盖拒绝和运行不可用。完整背景与逐候选跨锚点/背景尺度配对。原23次及36控制已测，历史/扰动与补救分支反例在验；九项未销项，非医学通过。",
       "nameKeywords": [
-        "孤立色素候选纠偏"
+        "孤立小目标",
+        "漏检补救"
       ],
       "status": "candidate",
-      "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
-      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-      "changeSlug": "isolated-pigment-after-validation",
+      "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
+      "algorithmDigest": "bd2421f0ca3eb2257e56fd872dc0cce1c4f20284272c0c8860a065afabd26d41",
+      "changeSlug": "guarded-compact-color-recovery",
       "previous": {
         "profile": "small-lesion-boundary-candidate",
-        "version": "0.100.2-candidate.1",
-        "releaseName": "肿物边界识别：限幅后目标归属保护",
-        "featureSummary": "完整主体经过既有全部复核后，如限幅输出丢失已接受局部目标中心则保留局部结果；保留所有拒识。正式异步138同条件对照4处改善、134输出保持，未发现已测退化；仍有2个零重叠及11拒识、792条件未测，不代表整组、真机或医学验收。",
+        "version": "0.100.3-candidate.1",
+        "releaseName": "肿物边界识别：孤立色素候选纠偏",
+        "featureSummary": "无外观主体且原复核保持接受时，以同对象独立色素候选纠正凹陷像素恢复。④原10/15mm及轻微偏移改善，20mm保持；①②试验因002代理指标回退否决，③可选未修。正式旧138输出保持，旧2误选/11拒识与792未测保留；非整组或医学通过。",
         "nameKeywords": [
-          "限幅后目标归属保护"
+          "孤立色素候选纠偏"
         ],
         "status": "candidate",
-        "sourceDigest": "5b805f20997b987f426adce8c67ff14f2d7f5bf60fa346fe64b93488f8a1e768",
-        "algorithmDigest": "bee2d7af786ebef9f0df9bcbfad30358b16a2889984dc6f95fb9a65dc26725f1",
-        "changeSlug": "supported-object-after-cap",
+        "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
+        "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+        "changeSlug": "isolated-pigment-after-validation",
         "previous": {
           "profile": "small-lesion-boundary-candidate",
-          "version": "0.100.1-candidate.1",
-          "releaseName": "肿物边界识别：同对象候选保留",
-          "featureSummary": "仅保留已有共同门禁支持的同对象候选，避免被无关面积或闭环优先级替换。独立小目标复核尝试造成历史不完整扫描被接受，已逐字节撤回；不修改扫描完整性门禁。仍存在已知目标偏离与完整覆盖拒识，未通过整组验收。",
+          "version": "0.100.2-candidate.1",
+          "releaseName": "肿物边界识别：限幅后目标归属保护",
+          "featureSummary": "完整主体经过既有全部复核后，如限幅输出丢失已接受局部目标中心则保留局部结果；保留所有拒识。正式异步138同条件对照4处改善、134输出保持，未发现已测退化；仍有2个零重叠及11拒识、792条件未测，不代表整组、真机或医学验收。",
           "nameKeywords": [
-            "同对象候选保留"
+            "限幅后目标归属保护"
           ],
           "status": "candidate",
-          "sourceDigest": "dc21eae55ee692e3813a15b8d7713070ee3bbe54e87eead597a16b6bc5168b41",
-          "algorithmDigest": "7c5e77da4ccf70dd363ea202ba5a60119633d81dd8a96933eeeb5520bd0a6dfa",
-          "changeSlug": "supported-object-selection",
+          "sourceDigest": "5b805f20997b987f426adce8c67ff14f2d7f5bf60fa346fe64b93488f8a1e768",
+          "algorithmDigest": "bee2d7af786ebef9f0df9bcbfad30358b16a2889984dc6f95fb9a65dc26725f1",
+          "changeSlug": "supported-object-after-cap",
           "previous": {
             "profile": "small-lesion-boundary-candidate",
-            "version": "0.100.0-candidate.2",
+            "version": "0.100.1-candidate.1",
             "releaseName": "肿物边界识别：同对象候选保留",
             "featureSummary": "仅保留已有共同门禁支持的同对象候选，避免被无关面积或闭环优先级替换。独立小目标复核尝试造成历史不完整扫描被接受，已逐字节撤回；不修改扫描完整性门禁。仍存在已知目标偏离与完整覆盖拒识，未通过整组验收。",
             "nameKeywords": [
               "同对象候选保留"
             ],
             "status": "candidate",
-            "sourceDigest": "396f341046c02729fb002fd428eba6399f9320013551bee537be178b8117cbc8",
-            "algorithmDigest": "20f58400d2155ca45e3b1bba0a70d2aaae3a3408266f669b798a42d9bdc201a3",
+            "sourceDigest": "dc21eae55ee692e3813a15b8d7713070ee3bbe54e87eead597a16b6bc5168b41",
+            "algorithmDigest": "7c5e77da4ccf70dd363ea202ba5a60119633d81dd8a96933eeeb5520bd0a6dfa",
             "changeSlug": "supported-object-selection",
             "previous": {
               "profile": "small-lesion-boundary-candidate",
-              "version": "0.100.0-candidate.1",
-              "releaseName": "肿物边界识别：同对象候选保留与独立小目标复核",
-              "featureSummary": "同步候选按已通过门禁的同对象证据保留，防止不相交的大暗区或闭环替换；外观复核仅在局部色素候选八方向均无延续且大区域中心位于其外时保留已接受目标。扫描覆盖、尺寸、笔圈及质量门槛保持；尚有既有失败，未完成整组验收。",
+              "version": "0.100.0-candidate.2",
+              "releaseName": "肿物边界识别：同对象候选保留",
+              "featureSummary": "仅保留已有共同门禁支持的同对象候选，避免被无关面积或闭环优先级替换。独立小目标复核尝试造成历史不完整扫描被接受，已逐字节撤回；不修改扫描完整性门禁。仍存在已知目标偏离与完整覆盖拒识，未通过整组验收。",
               "nameKeywords": [
-                "同对象候选保留",
-                "独立小目标复核"
+                "同对象候选保留"
               ],
               "status": "candidate",
-              "sourceDigest": "4221a3e21bbdbd418772de6b61171cdf8c74101f473d167df7a497f85f63704a",
-              "algorithmDigest": "ecd129d306d2b9418d917f0e54cdcf6edd4f337a0a1c2c5262fd2e773f1c631f",
-              "changeSlug": "supported-object-selection-and-isolated-pigment",
+              "sourceDigest": "396f341046c02729fb002fd428eba6399f9320013551bee537be178b8117cbc8",
+              "algorithmDigest": "20f58400d2155ca45e3b1bba0a70d2aaae3a3408266f669b798a42d9bdc201a3",
+              "changeSlug": "supported-object-selection",
               "previous": {
                 "profile": "small-lesion-boundary-candidate",
-                "version": "0.99.5-candidate.1",
-                "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
-                "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
+                "version": "0.100.0-candidate.1",
+                "releaseName": "肿物边界识别：同对象候选保留与独立小目标复核",
+                "featureSummary": "同步候选按已通过门禁的同对象证据保留，防止不相交的大暗区或闭环替换；外观复核仅在局部色素候选八方向均无延续且大区域中心位于其外时保留已接受目标。扫描覆盖、尺寸、笔圈及质量门槛保持；尚有既有失败，未完成整组验收。",
                 "nameKeywords": [
-                  "局部凹陷修复"
+                  "同对象候选保留",
+                  "独立小目标复核"
                 ],
                 "status": "candidate",
-                "sourceDigest": "216f3597d32e35da102638ed16bbed1b556d6c5ee3446d9a3a815e5265e9f85d",
-                "algorithmDigest": "88cb535ba73a1e649f9e3810b3b269fd71060e37a6f824a553b1a06174ede6d1",
-                "changeSlug": "bounded-local-concavity-repair",
+                "sourceDigest": "4221a3e21bbdbd418772de6b61171cdf8c74101f473d167df7a497f85f63704a",
+                "algorithmDigest": "ecd129d306d2b9418d917f0e54cdcf6edd4f337a0a1c2c5262fd2e773f1c631f",
+                "changeSlug": "supported-object-selection-and-isolated-pigment",
                 "previous": {
                   "profile": "small-lesion-boundary-candidate",
-                  "version": "0.99.4-candidate.2",
+                  "version": "0.99.5-candidate.1",
                   "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
                   "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
                   "nameKeywords": [
                     "局部凹陷修复"
                   ],
                   "status": "candidate",
-                  "sourceDigest": "65da1dc8edc6868f15b14d2a52f7a9f9e88e7859f974641537c6236d1e094a16",
-                  "algorithmDigest": "a53c3145ce0a0a8d18b2db1cbcf129b46f29b09e23680d4189e82e983f0c1b1c",
+                  "sourceDigest": "216f3597d32e35da102638ed16bbed1b556d6c5ee3446d9a3a815e5265e9f85d",
+                  "algorithmDigest": "88cb535ba73a1e649f9e3810b3b269fd71060e37a6f824a553b1a06174ede6d1",
                   "changeSlug": "bounded-local-concavity-repair",
                   "previous": {
                     "profile": "small-lesion-boundary-candidate",
-                    "version": "0.99.4-candidate.1",
+                    "version": "0.99.4-candidate.2",
                     "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
                     "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
                     "nameKeywords": [
                       "局部凹陷修复"
                     ],
                     "status": "candidate",
-                    "sourceDigest": "d6014f5b826826f6348a504e2e8354e07dc839cb794ab14e7286cc9acbca7e30",
-                    "algorithmDigest": "57ee9cffe869743fcfd3a1fc38169c3da98cdacdb98d2ed14f7a274658ec920a",
+                    "sourceDigest": "65da1dc8edc6868f15b14d2a52f7a9f9e88e7859f974641537c6236d1e094a16",
+                    "algorithmDigest": "a53c3145ce0a0a8d18b2db1cbcf129b46f29b09e23680d4189e82e983f0c1b1c",
                     "changeSlug": "bounded-local-concavity-repair",
                     "previous": {
                       "profile": "small-lesion-boundary-candidate",
-                      "version": "0.99.3-candidate.1",
-                      "releaseName": "肿物边界识别：多落点浅色反光外缘共识",
-                      "featureSummary": "在既有候选和扫描门禁内，针对材质主体边界被浅色高光截断的情况，增加多落点一致的混合明暗外缘候选；至少需要不同落点重复支持、较高内部支持、低外环延续和原边界重叠，才允许扩大轮廓。001弱证据不扩张；002离线样例外缘覆盖改善。局部几何凹陷实验未接入产品。当前仍是本地候选，人工边界、真机、独立留出和医学确认未完成。",
+                      "version": "0.99.4-candidate.1",
+                      "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
+                      "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
                       "nameKeywords": [
-                        "多落点",
-                        "浅色反光"
+                        "局部凹陷修复"
                       ],
                       "status": "candidate",
-                      "sourceDigest": "ec3043aa7b4f14ea7573a55952d18c5546a9047e65e6c68b43f89a604b7375ec",
-                      "algorithmDigest": "e2df363191ef67cf78d505a2e9184efb0a6fd1543ff43ad2963d0a3c1c8409b7",
-                      "changeSlug": "supported-mixed-light-boundary-consensus"
+                      "sourceDigest": "d6014f5b826826f6348a504e2e8354e07dc839cb794ab14e7286cc9acbca7e30",
+                      "algorithmDigest": "57ee9cffe869743fcfd3a1fc38169c3da98cdacdb98d2ed14f7a274658ec920a",
+                      "changeSlug": "bounded-local-concavity-repair",
+                      "previous": {
+                        "profile": "small-lesion-boundary-candidate",
+                        "version": "0.99.3-candidate.1",
+                        "releaseName": "肿物边界识别：多落点浅色反光外缘共识",
+                        "featureSummary": "在既有候选和扫描门禁内，针对材质主体边界被浅色高光截断的情况，增加多落点一致的混合明暗外缘候选；至少需要不同落点重复支持、较高内部支持、低外环延续和原边界重叠，才允许扩大轮廓。001弱证据不扩张；002离线样例外缘覆盖改善。局部几何凹陷实验未接入产品。当前仍是本地候选，人工边界、真机、独立留出和医学确认未完成。",
+                        "nameKeywords": [
+                          "多落点",
+                          "浅色反光"
+                        ],
+                        "status": "candidate",
+                        "sourceDigest": "ec3043aa7b4f14ea7573a55952d18c5546a9047e65e6c68b43f89a604b7375ec",
+                        "algorithmDigest": "e2df363191ef67cf78d505a2e9184efb0a6fd1543ff43ad2963d0a3c1c8409b7",
+                        "changeSlug": "supported-mixed-light-boundary-consensus"
+                      }
                     }
                   }
                 }
@@ -184,29 +197,157 @@
     }
   },
   "archive": {
-    "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/肿物孤立小目标补救-0.101.0-阶段候选-20261110/manifest.json",
-    "manifestSha256": "42fc3c3a4f2ae207182d42b8a9c0f703a422f6c91fbbd652c1e7b3f7ea6f5f56",
-    "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
-    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
-    "note": "阶段候选源码逐文件回读；非整组/真机/医学验收。外部模型/依赖仅原位指纹。"
+    "status": "pending",
+    "note": "0.101.1同指纹本地研究候选待生成；0.101.0原包保留且已有双目标反例，不作当前安全证明。"
   },
   "scopeBoundaryReview": {
-    "status": "not_required",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
-    "note": "真实Diff仅本人肿物识别及必要身份/履历；changedOutsideScope为空。本轮未修改RSTL受保护功能、UI、切口或资产。"
+    "status": "pending",
+    "note": "仅本人肿物外观补救和必要测试/身份，待同指纹存档回读。"
   },
   "operatorEvaluation": {
     "status": "pending",
-    "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
-    "note": "本轮源码未获同指纹操作者评价/保存确认；不继承旧版授权或验收。"
+    "note": "本轮新源码尚无操作者评价；九项严重不合格反馈保持。",
+    "sourceDigest": "2e97b6016f69052ccfac399ebcde4a225ff7e59006ddaf247795e0a3d58aa37c"
   },
   "editorSaveConfirmation": {
     "status": "pending",
-    "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
-    "note": "本轮源码未获同指纹操作者评价/保存确认；不继承旧版授权或验收。"
+    "note": "新源码未获本轮编辑器全部保存确认。",
+    "sourceDigest": "2e97b6016f69052ccfac399ebcde4a225ff7e59006ddaf247795e0a3d58aa37c"
   },
   "history": [
+    {
+      "profile": "small-lesion-boundary-candidate",
+      "version": "0.101.0-candidate.1",
+      "releaseName": "肿物边界识别：孤立小目标漏检补救",
+      "featureSummary": "仅原流程最终unstable_enclosure时尝试小型孤立颜色补救；保留原接受输出、明确扫描覆盖拒绝和运行不可用。完整背景与逐候选跨锚点/背景尺度配对。原23次及36控制已测，历史/扰动与补救分支反例在验；九项未销项，非医学通过。",
+      "nameKeywords": [
+        "孤立小目标",
+        "漏检补救"
+      ],
+      "status": "candidate",
+      "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
+      "algorithmDigest": "bd2421f0ca3eb2257e56fd872dc0cce1c4f20284272c0c8860a065afabd26d41",
+      "changeSlug": "guarded-compact-color-recovery",
+      "previous": {
+        "profile": "small-lesion-boundary-candidate",
+        "version": "0.100.3-candidate.1",
+        "releaseName": "肿物边界识别：孤立色素候选纠偏",
+        "featureSummary": "无外观主体且原复核保持接受时，以同对象独立色素候选纠正凹陷像素恢复。④原10/15mm及轻微偏移改善，20mm保持；①②试验因002代理指标回退否决，③可选未修。正式旧138输出保持，旧2误选/11拒识与792未测保留；非整组或医学通过。",
+        "nameKeywords": [
+          "孤立色素候选纠偏"
+        ],
+        "status": "candidate",
+        "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
+        "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+        "changeSlug": "isolated-pigment-after-validation",
+        "previous": {
+          "profile": "small-lesion-boundary-candidate",
+          "version": "0.100.2-candidate.1",
+          "releaseName": "肿物边界识别：限幅后目标归属保护",
+          "featureSummary": "完整主体经过既有全部复核后，如限幅输出丢失已接受局部目标中心则保留局部结果；保留所有拒识。正式异步138同条件对照4处改善、134输出保持，未发现已测退化；仍有2个零重叠及11拒识、792条件未测，不代表整组、真机或医学验收。",
+          "nameKeywords": [
+            "限幅后目标归属保护"
+          ],
+          "status": "candidate",
+          "sourceDigest": "5b805f20997b987f426adce8c67ff14f2d7f5bf60fa346fe64b93488f8a1e768",
+          "algorithmDigest": "bee2d7af786ebef9f0df9bcbfad30358b16a2889984dc6f95fb9a65dc26725f1",
+          "changeSlug": "supported-object-after-cap",
+          "previous": {
+            "profile": "small-lesion-boundary-candidate",
+            "version": "0.100.1-candidate.1",
+            "releaseName": "肿物边界识别：同对象候选保留",
+            "featureSummary": "仅保留已有共同门禁支持的同对象候选，避免被无关面积或闭环优先级替换。独立小目标复核尝试造成历史不完整扫描被接受，已逐字节撤回；不修改扫描完整性门禁。仍存在已知目标偏离与完整覆盖拒识，未通过整组验收。",
+            "nameKeywords": [
+              "同对象候选保留"
+            ],
+            "status": "candidate",
+            "sourceDigest": "dc21eae55ee692e3813a15b8d7713070ee3bbe54e87eead597a16b6bc5168b41",
+            "algorithmDigest": "7c5e77da4ccf70dd363ea202ba5a60119633d81dd8a96933eeeb5520bd0a6dfa",
+            "changeSlug": "supported-object-selection",
+            "previous": {
+              "profile": "small-lesion-boundary-candidate",
+              "version": "0.100.0-candidate.2",
+              "releaseName": "肿物边界识别：同对象候选保留",
+              "featureSummary": "仅保留已有共同门禁支持的同对象候选，避免被无关面积或闭环优先级替换。独立小目标复核尝试造成历史不完整扫描被接受，已逐字节撤回；不修改扫描完整性门禁。仍存在已知目标偏离与完整覆盖拒识，未通过整组验收。",
+              "nameKeywords": [
+                "同对象候选保留"
+              ],
+              "status": "candidate",
+              "sourceDigest": "396f341046c02729fb002fd428eba6399f9320013551bee537be178b8117cbc8",
+              "algorithmDigest": "20f58400d2155ca45e3b1bba0a70d2aaae3a3408266f669b798a42d9bdc201a3",
+              "changeSlug": "supported-object-selection",
+              "previous": {
+                "profile": "small-lesion-boundary-candidate",
+                "version": "0.100.0-candidate.1",
+                "releaseName": "肿物边界识别：同对象候选保留与独立小目标复核",
+                "featureSummary": "同步候选按已通过门禁的同对象证据保留，防止不相交的大暗区或闭环替换；外观复核仅在局部色素候选八方向均无延续且大区域中心位于其外时保留已接受目标。扫描覆盖、尺寸、笔圈及质量门槛保持；尚有既有失败，未完成整组验收。",
+                "nameKeywords": [
+                  "同对象候选保留",
+                  "独立小目标复核"
+                ],
+                "status": "candidate",
+                "sourceDigest": "4221a3e21bbdbd418772de6b61171cdf8c74101f473d167df7a497f85f63704a",
+                "algorithmDigest": "ecd129d306d2b9418d917f0e54cdcf6edd4f337a0a1c2c5262fd2e773f1c631f",
+                "changeSlug": "supported-object-selection-and-isolated-pigment",
+                "previous": {
+                  "profile": "small-lesion-boundary-candidate",
+                  "version": "0.99.5-candidate.1",
+                  "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
+                  "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
+                  "nameKeywords": [
+                    "局部凹陷修复"
+                  ],
+                  "status": "candidate",
+                  "sourceDigest": "216f3597d32e35da102638ed16bbed1b556d6c5ee3446d9a3a815e5265e9f85d",
+                  "algorithmDigest": "88cb535ba73a1e649f9e3810b3b269fd71060e37a6f824a553b1a06174ede6d1",
+                  "changeSlug": "bounded-local-concavity-repair",
+                  "previous": {
+                    "profile": "small-lesion-boundary-candidate",
+                    "version": "0.99.4-candidate.2",
+                    "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
+                    "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
+                    "nameKeywords": [
+                      "局部凹陷修复"
+                    ],
+                    "status": "candidate",
+                    "sourceDigest": "65da1dc8edc6868f15b14d2a52f7a9f9e88e7859f974641537c6236d1e094a16",
+                    "algorithmDigest": "a53c3145ce0a0a8d18b2db1cbcf129b46f29b09e23680d4189e82e983f0c1b1c",
+                    "changeSlug": "bounded-local-concavity-repair",
+                    "previous": {
+                      "profile": "small-lesion-boundary-candidate",
+                      "version": "0.99.4-candidate.1",
+                      "releaseName": "肿物边界识别：候选轮廓局部凹陷修复",
+                      "featureSummary": "在已通过颜色、扫描覆盖和多落点门禁的最终候选轮廓上，仅对小而窄的局部内凹做有界几何修复；最大位移不超过2像素、面积变化不超过8%，不参与候选选择、不补出没有证据的缺失区域。001/002旧粗参考离线复核方向性改善，当前仍是候选。",
+                      "nameKeywords": [
+                        "局部凹陷修复"
+                      ],
+                      "status": "candidate",
+                      "sourceDigest": "d6014f5b826826f6348a504e2e8354e07dc839cb794ab14e7286cc9acbca7e30",
+                      "algorithmDigest": "57ee9cffe869743fcfd3a1fc38169c3da98cdacdb98d2ed14f7a274658ec920a",
+                      "changeSlug": "bounded-local-concavity-repair",
+                      "previous": {
+                        "profile": "small-lesion-boundary-candidate",
+                        "version": "0.99.3-candidate.1",
+                        "releaseName": "肿物边界识别：多落点浅色反光外缘共识",
+                        "featureSummary": "在既有候选和扫描门禁内，针对材质主体边界被浅色高光截断的情况，增加多落点一致的混合明暗外缘候选；至少需要不同落点重复支持、较高内部支持、低外环延续和原边界重叠，才允许扩大轮廓。001弱证据不扩张；002离线样例外缘覆盖改善。局部几何凹陷实验未接入产品。当前仍是本地候选，人工边界、真机、独立留出和医学确认未完成。",
+                        "nameKeywords": [
+                          "多落点",
+                          "浅色反光"
+                        ],
+                        "status": "candidate",
+                        "sourceDigest": "ec3043aa7b4f14ea7573a55952d18c5546a9047e65e6c68b43f89a604b7375ec",
+                        "algorithmDigest": "e2df363191ef67cf78d505a2e9184efb0a6fd1543ff43ad2963d0a3c1c8409b7",
+                        "changeSlug": "supported-mixed-light-boundary-consensus"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     {
       "profile": "small-lesion-boundary-candidate",
       "version": "0.100.3-candidate.1",
@@ -3059,10 +3200,11 @@
   },
   "previousArchive": {
     "status": "verified",
-    "manifestPath": "local_outputs/recovery-packages/UI0.1.24-candidate.1-窄屏滚动兼容与子图防遮挡-20261108/manifest.json",
-    "manifestSha256": "b0aaef6bfbf6d1a50caee1724137107c62d6e6d21f262101aa3d8828832d54d1",
-    "sourceDigest": "3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f",
-    "scopeConfigSha256": "dde1ce1defadf40925d8722e0058503d09cf5da679f60976e913d5472bcbf0e1"
+    "manifestPath": "local_outputs/recovery-packages/肿物孤立小目标补救-0.101.0-阶段候选-20261110/manifest.json",
+    "manifestSha256": "42fc3c3a4f2ae207182d42b8a9c0f703a422f6c91fbbd652c1e7b3f7ea6f5f56",
+    "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
+    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+    "note": "阶段候选源码逐文件回读；非整组/真机/医学验收。外部模型/依赖仅原位指纹。"
   },
   "sourceFingerprintHistory": [
     {
