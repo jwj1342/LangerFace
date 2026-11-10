@@ -96,6 +96,41 @@ assert.equal(geometry.findNormalizedFragmentConflict([
 assert.equal(geometry.findNormalizedFragmentConflict([
     repeatedBodyA, repeatedSmallBody(square(13.2, 13, 14), 20),
 ], normalizedFragment), null, 'a source-window gap below twelve pixels cannot certify a conflict');
+const fragmentReference = { ...normalizedFragment, boundary: square(93, 93, 14),
+    center: { x: 100, y: 100 }, area_px: 196 };
+const evidenceImage = { width: 240, height: 240, data: new Uint8ClampedArray(0) };
+const completeFragmentBody = (size: number, context: number, anchorX: number, dx = 0) => ({
+    boundary: square(100 - size / 2 + dx, 100 - size / 2, size), score: 6,
+    scanComplete: true, evidence: { diameter: size, context, anchor: { x: anchorX, y: 96 } },
+});
+const supportedBodyA = completeFragmentBody(30, 24, 92);
+const supportedBodyB = completeFragmentBody(30, 32, 108);
+const supportedBank = [supportedBodyA, supportedBodyB, completeFragmentBody(24, 24, 100)];
+const bankBefore = structuredClone(supportedBank);
+const recoveredBody = geometry.selectCompleteFragmentBody(supportedBank, fragmentReference, evidenceImage);
+assert.ok(recoveredBody, 'a complete corroborated body may replace a known conflicting fragment');
+near(geometry.polygonArea(recoveredBody.boundary), 900);
+assert.equal((recoveredBody.evidence.fragmentBodySupport as any).kind, 'cross_context_and_distinct_anchor');
+assert.deepEqual(supportedBank, bankBefore, 'selection does not mutate the proposal bank');
+assert.equal(geometry.selectCompleteFragmentBody([], fragmentReference, evidenceImage), null);
+for (const counterexample of [
+    [...supportedBank, { ...supportedBodyB, scanComplete: false }],
+    supportedBank.map(body => ({ ...body, evidence: { ...body.evidence, context: 24 } })),
+    supportedBank.map(body => ({ ...body, evidence: { ...body.evidence, anchor: { x: 100, y: 96 } } })),
+    [...supportedBank, completeFragmentBody(30, 24, 137, 45)],
+    [...supportedBank, completeFragmentBody(30, 24, 97, 5)],
+    [...supportedBank, completeFragmentBody(30, 24, 97, 5), completeFragmentBody(30, 32, 113, 5)],
+    [...supportedBank, completeFragmentBody(30, 24, 97, 2)],
+    [...supportedBank, completeFragmentBody(30, 24, 92, 2), completeFragmentBody(30, 32, 108, 2)],
+    [...supportedBank, completeFragmentBody(34, 24, 100)],
+    [...supportedBank, completeFragmentBody(45, 24, 100)],
+]) assert.equal(geometry.selectCompleteFragmentBody(counterexample, fragmentReference, evidenceImage), null,
+    'incomplete, contradictory, unpaired outer extent and insufficient support cannot be filtered away');
+assert.ok(geometry.selectCompleteFragmentBody(
+    [...supportedBank, completeFragmentBody(30, 24, 97, 1)], fragmentReference, evidenceImage),
+    'a minor unpaired edge drift within five percent does not veto a corroborated body');
+assert.equal(geometry.selectCompleteFragmentBody(supportedBank, fragmentReference,
+    { ...evidenceImage, width: 120 }), null, 'a clipped background cannot certify a new accepted body');
 const extensionCore = Array.from({ length: 100 }, (_, i) => ({
     u: i < 40 ? 0 : 2, v: 0, c: [0, 0, 0] as [number, number, number],
 }));

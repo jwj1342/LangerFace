@@ -1,6 +1,6 @@
 export const CONTROLLED_MARKER_RELEASE = Object.freeze({
-  "version": "0.101.2-candidate.1",
-  "name": "肿物边界识别：亮度补救小片的主体冲突拒识",
-  "changeSlug": "normalized-fragment-body-conflict-veto",
+  "version": "0.102.0-candidate.1",
+  "name": "肿物边界识别：小片的跨尺度主体补救",
+  "changeSlug": "normalized-fragment-complete-body-recovery",
   "status": "candidate"
 });

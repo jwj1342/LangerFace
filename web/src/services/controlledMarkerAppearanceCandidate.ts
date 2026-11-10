@@ -1319,6 +1319,61 @@ function findNormalizedFragmentConflict(bank: BodyCandidate[], reference: Contro
     return null;
 }
 
+function selectCompleteFragmentBody(
+    bank: BodyCandidate[], reference: ControlledMarkerDetection, image: Image,
+): BodyCandidate | null {
+    const oldArea = polygonArea(reference.boundary);
+    if (!reference.center || !(oldArea > 0) || !bank.length) return null;
+    // The fragment locates the search; its biased centre cannot certify the
+    // whole body. Retain every proposal, including incomplete counterevidence.
+    if (bank.some(candidate => {
+        const area = polygonArea(candidate.boundary);
+        const reach = Math.ceil(Number(candidate.evidence.diameter) * .45);
+        return !candidate.scanComplete || area < 2 * oldArea || area > 6 * oldArea
+            || convexIntersectionArea(reference.boundary, candidate.boundary) / oldArea < .9
+            || !Number.isFinite(reach) || candidate.boundary.some(point =>
+                point.x - reach < 0 || point.y - reach < 0
+                || point.x + reach >= image.width || point.y + reach >= image.height);
+    })) return null;
+    const overlap = (a: BodyCandidate, b: BodyCandidate) => {
+        const intersection = convexIntersectionArea(a.boundary, b.boundary);
+        return intersection / Math.max(1, polygonArea(a.boundary) + polygonArea(b.boundary) - intersection);
+    };
+    const supportedPeer = (candidate: BodyCandidate) => bank.find(peer => {
+        if (peer === candidate || candidate.evidence.context === peer.evidence.context) return false;
+        const a = candidate.evidence.anchor as Point, b = peer.evidence.anchor as Point;
+        return a && b && Math.hypot(a.x - b.x, a.y - b.y) >= 12 && overlap(candidate, peer) >= .9;
+    });
+    const eligible = bank.filter(candidate => bank.every(peer =>
+        convexIntersectionArea(candidate.boundary, peer.boundary)
+            / Math.max(1, Math.min(polygonArea(candidate.boundary), polygonArea(peer.boundary))) >= .9)
+        && supportedPeer(candidate));
+    if (!eligible.length || eligible.some(candidate =>
+        eligible.some(peer => overlap(candidate, peer) < .9))) return null;
+    const consensus = (candidate: BodyCandidate) =>
+        bank.reduce((sum, peer) => sum + overlap(candidate, peer), 0);
+    eligible.sort((a, b) => consensus(b) - consensus(a) || b.score - a.score);
+    const selected = eligible[0], selectedArea = polygonArea(selected.boundary);
+    // Unpaired outer evidence cannot disappear through voting. Also test
+    // actual outside area: equal-size shifted outlines can still disagree.
+    // Five percent tolerates a minor edge drift, not a competing extent.
+    if (bank.some(candidate => {
+        if (eligible.includes(candidate)) return false;
+        const area = polygonArea(candidate.boundary);
+        const outside = Math.max(0, area - convexIntersectionArea(candidate.boundary, selected.boundary));
+        return area > selectedArea + 1e-6 || outside / Math.max(1, Math.min(area, selectedArea)) > .05;
+    })) return null;
+    const peer = supportedPeer(selected)!;
+    return { ...selected, evidence: { ...selected.evidence,
+        fragmentBodySupport: {
+            kind: 'cross_context_and_distinct_anchor',
+            anchor: selected.evidence.anchor, context: selected.evidence.context,
+            peerAnchor: peer.evidence.anchor, peerContext: peer.evidence.context,
+            overlapIou: overlap(selected, peer), candidateCount: bank.length,
+            previousFragmentArea: oldArea,
+        } } };
+}
+
 async function rejectNormalizedFragmentConflict(image: MarkerImageData, seed: MarkerPoint,
     options: ControlledMarkerOptions, existing: ControlledMarkerDetection): Promise<ControlledMarkerDetection> {
     const radius = Number(existing.scan?.radius_px || options.roiRadius || 36);
@@ -1337,8 +1392,8 @@ async function rejectNormalizedFragmentConflict(image: MarkerImageData, seed: Ma
                 const boundary = complete(radial.boundary);
                 if (!boundary || boundary.some(p => p.x < 0 || p.y < 0
                     || p.x >= image.width || p.y >= image.height)) continue;
-                // Small-scale evidence can veto a fragment, never emit a new outline.
-                // Its added region must pass the original colour-strength checks too.
+                // Added regions must pass the original colour-strength checks.
+                // Recovery separately requires complete, unambiguous proposals.
                 const evidence = bodyEvidence(patch, image, boundary, false, false, false, existing.boundary);
                 if (!evidence) continue;
                 bank.push({ boundary, evidence: { ...evidence, anchor, context },
@@ -1350,6 +1405,9 @@ async function rejectNormalizedFragmentConflict(image: MarkerImageData, seed: Ma
         // successful small fragment, not proof of physical scan truncation.
         const conflict = findNormalizedFragmentConflict(bank, existing);
         if (!conflict) return existing;
+        const recovered = selectCompleteFragmentBody(bank, existing, image);
+        if (recovered) return appearanceResult(existing, recovered.boundary, seed,
+            'normalized_fragment_body_recovery', recovered.evidence);
         return { ...existing, ok: false, failure_code: 'unstable_enclosure', center: null, boundary: [],
             area_px: 0, bbox: null, geometry_mode: null, seed_relation: null,
             marker_area_px: 0, marker_bbox: null, confidence: 0,
@@ -1373,7 +1431,7 @@ export const __appearanceGeometryForTests = {
     polygonArea, polygonCentroid, convexIntersectionArea, selectCompleteBodyCandidate,
     constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
     regularizeAppearanceBoundary, selectCompactPigmentProposal, findNormalizedFragmentConflict,
-    rejectNormalizedFragmentConflict, fragmentExtensionEvidence,
+    rejectNormalizedFragmentConflict, fragmentExtensionEvidence, selectCompleteFragmentBody,
 };
 
 type CompactPigmentProposal = {
