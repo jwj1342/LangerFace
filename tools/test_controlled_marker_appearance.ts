@@ -241,6 +241,18 @@ for (const kind of ['small-solid', 'blank', 'hair', 'hollow']) {
     assert.equal(result, normalizedSmall, `${kind}: no repeated filled-body evidence cannot veto a local result`);
 }
 const blank = image('blank');
+const alternateSmall = { ...normalizedSmall,
+    warnings: ['color_difference_fragment_neighborhood_consensus_recovered'] };
+for (const kind of ['small-solid', 'blank', 'hair', 'hollow']) {
+    assert.equal(await geometry.rejectNormalizedFragmentConflict(image(kind), seed,
+        { ...options, roiRadius: 36 }, alternateSmall, false), alternateSmall,
+        `${kind}: conflict-only recheck preserves an isolated local result`);
+}
+const alternateUnavailable = { ...alternateSmall,
+    warnings: [...alternateSmall.warnings, 'appearance_refinement_unavailable'] };
+assert.equal(await refineAppearanceCandidate(blank, seed,
+    { ...options, roiRadius: 36 }, alternateUnavailable), alternateUnavailable,
+    'unavailable alternate recovery cannot enter the conflict-only recheck');
 const unavailableFragment = { ...normalizedSmall, warnings: [
     'brightness_normalized_recovery', 'appearance_refinement_unavailable',
 ] };

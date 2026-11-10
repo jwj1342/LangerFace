@@ -1375,7 +1375,7 @@ function selectCompleteFragmentBody(
 }
 
 async function rejectNormalizedFragmentConflict(image: MarkerImageData, seed: MarkerPoint,
-    options: ControlledMarkerOptions, existing: ControlledMarkerDetection): Promise<ControlledMarkerDetection> {
+    options: ControlledMarkerOptions, existing: ControlledMarkerDetection, allowBodyRecovery = true): Promise<ControlledMarkerDetection> {
     const radius = Number(existing.scan?.radius_px || options.roiRadius || 36);
     if (!validAppearanceInput(image, seed, radius) || !existing.center) return existing;
     try {
@@ -1405,17 +1405,18 @@ async function rejectNormalizedFragmentConflict(image: MarkerImageData, seed: Ma
         // successful small fragment, not proof of physical scan truncation.
         const conflict = findNormalizedFragmentConflict(bank, existing);
         if (!conflict) return existing;
-        const recovered = selectCompleteFragmentBody(bank, existing, image);
+        const recovered = allowBodyRecovery ? selectCompleteFragmentBody(bank, existing, image) : null;
         if (recovered) return appearanceResult(existing, recovered.boundary, seed,
             'normalized_fragment_body_recovery', recovered.evidence);
+        const conflictCode = allowBodyRecovery ? 'normalized_fragment_body_conflict' : 'recovered_fragment_body_conflict';
         return { ...existing, ok: false, failure_code: 'unstable_enclosure', center: null, boundary: [],
             area_px: 0, bbox: null, geometry_mode: null, seed_relation: null,
             marker_area_px: 0, marker_bbox: null, confidence: 0,
             rejected_boundary: existing.boundary, rejected_geometry_mode: existing.geometry_mode,
-            rejected_reasons: ['normalized_fragment_body_conflict'],
-            warnings: [...existing.warnings, 'normalized_fragment_body_conflict'],
+            rejected_reasons: [conflictCode],
+            warnings: [...existing.warnings, conflictCode],
             diagnostics: { ...existing.diagnostics,
-                filled_candidate_route: 'rejected_normalized_fragment_body_conflict',
+                filled_candidate_route: `rejected_${conflictCode}`,
                 appearance_evidence: { decision: 'reject_only', oldArea: polygonArea(existing.boundary),
                     overlapIou: conflict.overlapIou, anchorDistance: conflict.anchorDistance,
                     candidateCount: bank.length,
@@ -1539,7 +1540,7 @@ function selectCompactPigmentProposal(
         polygonArea(peer.candidate.boundary))) < .5)) return null;
     return selected;
 }
-/** Supplemental recovery cannot replace an accepted result or a coverage veto. */
+/** Recheck accepted recovery fragments without weakening coverage vetoes. */
 export async function refineAppearanceCandidate(
     image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions,
     baseline: ControlledMarkerDetection,
@@ -1547,12 +1548,14 @@ export async function refineAppearanceCandidate(
     const existing = await refineAppearanceCandidateBaseline(image, seed, options, baseline);
     if (existing.ok && existing.geometry_mode === 'dark_component'
         && existing.area_px >= 64 && existing.area_px <= 400
-        && existing.warnings.includes('brightness_normalized_recovery')
+        && (existing.warnings.includes('brightness_normalized_recovery')
+            || existing.warnings.includes('color_difference_fragment_neighborhood_consensus_recovered'))
         && !existing.warnings.some(warning => warning.includes('unavailable'))
         && baseline.ok && existing.area_px === baseline.area_px
         && existing.boundary.length === baseline.boundary.length
         && existing.boundary.every((p, i) => p.x === baseline.boundary[i].x && p.y === baseline.boundary[i].y)) {
-        return rejectNormalizedFragmentConflict(image, seed, options, existing);
+        return rejectNormalizedFragmentConflict(image, seed, options, existing,
+            existing.warnings.includes('brightness_normalized_recovery'));
     }
     const coverageReasons = new Set([
         'not_enclosed_within_scan', 'candidate_outside_scan_roi',
