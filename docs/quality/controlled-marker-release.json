@@ -5,7 +5,7 @@
     "profile": "small-lesion-boundary-candidate",
     "version": "0.102.1-candidate.1",
     "releaseName": "肿物边界识别：另一片段补救路径的冲突拒识",
-    "featureSummary": "仅为另一已登记的邻域片段补救来源增加冲突拒识，禁止该来源输出新主体；亮度及双来源原0.102补救保持。原69次、固定297次、历史138及私有36条件已同源核对；5个已知错片条件转拒识，其他保持。Worker/UI待本版验证，九项精度仍开放。",
+    "featureSummary": "另一已登记的片段补救来源仅可保持或冲突拒识，禁止输出新主体；亮度及双来源原补救保持。同源69原次、297固定扰动、138历史及36私有条件已核；5个错片条件转拒识，其他保持。正式34Worker及两视口接受/拒识下游契约通过，九项精度仍开放。",
     "nameKeywords": [
       "片段补救路径",
       "冲突拒识"
@@ -3400,9 +3400,11 @@
     }
   ],
   "automatedValidation": {
-    "status": "pending",
+    "status": "passed",
     "sourceDigest": "a057174ba1d81bdb3e5081141cacd8f420a11b02031be8dbbc4f001a6b040d2a",
-    "note": "同指纹原23条件各3次共69完整保持；243固定条件含F03重复共297次，5条件15次拒识，其余282次完整保持；138历史及36私有控制以0.102.0实际同像素配对完整保持。filled/scan-owned/81扫描覆盖/隐私/切口尺度契约/类型/构建通过；本版Worker及下游待验，不继承旧版。N02旧误接受、九项人工精度仍开放。"
+    "note": "仅工程通过：69原次完整保持；297扰动中5条件15次拒识、282完整保持；138历史+36私有实际旧新配对完整保持。filled/scan-owned/扫描覆盖81/隐私/切口尺度/类型/构建通过。34Worker同实际像素Node几何一致；两视口阳性13项、拒识10项均通过。27/34Worker同冻结，其余及4UI冻结SHA差异保留。九项人工精度、真机/医学、旧成功后再拒识清理及历史余792未签；N02旧误接受未修。",
+    "evidence": "../../local_outputs/volunteer-validation-20261016/evidence/54号反馈-Vh1-20261110/eight-hour-A1021-runtime-validation-summary.json",
+    "testedHead": "9509198ac1ecf9ce4e73c84aa0625ec2f1b5a3ba"
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
