@@ -239,9 +239,12 @@
     }
   },
   "archive": {
-    "status": "pending",
+    "status": "verified",
     "sourceDigest": "a057174ba1d81bdb3e5081141cacd8f420a11b02031be8dbbc4f001a6b040d2a",
-    "note": "本轮候选验证后建立独立恢复包，不覆盖0.102.0。"
+    "manifestPath": "local_outputs/recovery-packages/肿物另一片段冲突拒识-0.102.1-研究候选-20261111/manifest.json",
+    "manifestSha256": "521138d216feb4457618864325d8372e1bd7a0fa35fb04e325d8b6e8092aa407",
+    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+    "note": "独立回读5新副本/258继承及1原位指纹，依赖0.101.0完整基础包；仅磁盘研究点，九项人工/医学未通过，编辑器未保存缓冲未确认。"
   },
   "scopeBoundaryReview": {
     "status": "not_required",
