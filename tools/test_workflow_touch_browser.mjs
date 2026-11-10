@@ -129,13 +129,15 @@ try {
         input.setSelectionRange(2, 7);
         window.__workflowBindingBaseline = {
           els: { ...els }, photo: sourceState.imageFile, planning: sourceState.planning2d,
+          listElements: Object.fromEntries(Object.entries(els).filter(([, value]) => value && !(value instanceof Node))
+            .map(([key, value]) => [key, Array.from(value)])),
           revision: sourceState.planning2d.getFrameState().revision,
           refine: JSON.stringify(renderState.refine2d), input,
           visibility: JSON.stringify(visibility.workflowLayerVisibilitySnapshot()),
         };
         return {
           disconnected: Object.entries(els).filter(([, node]) => node
-            && !(Array.isArray(node) ? node.every(item => item.isConnected) : node.isConnected)).map(([key]) => key),
+            && !(node instanceof Node ? node.isConnected : Array.from(node).every(item => item.isConnected))).map(([key]) => key),
           focus: document.activeElement?.id, inputRects: input.getClientRects().length,
           inputDisabled: input.disabled,
         };
@@ -152,7 +154,8 @@ try {
           const before = window.__workflowBindingBaseline;
           const root = document.querySelector(".workflow-workbench");
           const retainedBinding = (key, node) => !node || (els[key] === node
-            && (Array.isArray(node) ? node.every(item => item.isConnected) : node.isConnected));
+            && (node instanceof Node ? node.isConnected : node.length === before.listElements[key].length
+              && Array.from(node).every((item, index) => item === before.listElements[key][index] && item.isConnected)));
           return {
             width: innerWidth,
             retainedBindings: Object.entries(before.els).every(([key, node]) => retainedBinding(key, node)),
