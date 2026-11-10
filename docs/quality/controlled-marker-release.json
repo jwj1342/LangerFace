@@ -184,13 +184,17 @@
     }
   },
   "archive": {
-    "status": "pending",
+    "status": "verified",
+    "manifestPath": "local_outputs/recovery-packages/肿物孤立小目标补救-0.101.0-阶段候选-20261110/manifest.json",
+    "manifestSha256": "42fc3c3a4f2ae207182d42b8a9c0f703a422f6c91fbbd652c1e7b3f7ea6f5f56",
     "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
-    "note": "本轮新源码尚在验证；冻结P恢复包只作修复前基线，不代签当前候选。"
+    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+    "note": "阶段候选源码逐文件回读；非整组/真机/医学验收。外部模型/依赖仅原位指纹。"
   },
   "scopeBoundaryReview": {
-    "status": "pending",
-    "note": "仅肿物识别补救和必要身份/测试；本轮未修改RSTL受保护功能、UI或切口。"
+    "status": "not_required",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
+    "note": "真实Diff仅本人肿物识别及必要身份/履历；changedOutsideScope为空。本轮未修改RSTL受保护功能、UI、切口或资产。"
   },
   "operatorEvaluation": {
     "status": "pending",
