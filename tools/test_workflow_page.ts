@@ -419,9 +419,22 @@ const loadLayout = (source: string, phone: boolean, shared?: unknown) => {
   const compiled = ts.transpileModule(source, { compilerOptions: {
     jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS,
   } }).outputText;
-  runInNewContext(compiled, { exports, require: (name: string) => {
+  runInNewContext(compiled, { exports, document: {
+    createElement: () => ({ className: "", attributes: {} as Record<string, string>,
+      setAttribute(name: string, value: string) { this.attributes[name] = value; } }),
+  }, require: (name: string) => {
     if (name === "react/jsx-runtime") return requireWeb(name);
-    if (name === "react") return { ...react, useState: () => [phone], useEffect: () => {} };
+    if (name === "react") return { ...react, useEffect: () => {}, useLayoutEffect: () => {} };
+    if (name === "react-dom") return {
+      // Static shell coverage only; real portal placement and node retention are
+      // exercised by the browser lifecycle regression, not by this renderer.
+      createPortal: (children: unknown, target: { className: string; attributes: Record<string, string> }) => (
+        h("aside", { className: target.className, ...target.attributes }, children)
+      ),
+    };
+    if (name === "../services/workflowViewport") return {
+      narrowTouchWorkflowViewportActive: () => phone, subscribeWorkflowViewport: () => () => {},
+    };
     if (name === "../lib/cn") return { cn: (...values: unknown[]) => twMerge(clsx(values)) };
     if (name === "./WorkbenchLayout") return shared;
     throw new Error(`Unexpected layout dependency: ${name}`);
@@ -454,17 +467,13 @@ for (const phone of [false, true]) {
   for (const operations of [null, h("button", { id: "operations-fixture" }, "operations")]) {
     const { WorkflowLayout } = loadLayout(layout, phone, layoutExports) as Record<string, typeof react.Component>;
     const actual = h(WorkflowLayout, { stage: stageFixture, liveRail: liveFixture, incisionRail: incisionFixture, mobileOperations: operations });
-    const expected = phone
-      ? h("div", { className: "app clinical-compat-workbench workflow-workbench" }, stageFixture,
+    const expected = h("div", { className: "app clinical-compat-workbench workflow-workbench",
+      "data-workflow-mobile": String(phone) }, stageFixture,
         h("div", { className: "workflow-mobile-operation-pane", "aria-label": "移动端操作台" },
-          h("div", { className: "workflow-mobile-recovery-slot" }), operations,
-          h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
-          h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture)))
-      : h(layoutExports.WorkbenchLayout, { workspace: "workflow", stage: stageFixture,
-        sidebarLabel: "实时 RSTL 操作台", sidebarClassName: "workflow-live-rail live-workbench",
-        secondarySidebarLabel: "切口规划操作台", secondarySidebarClassName: "workflow-incision-rail incision-workbench",
-        secondarySidebar: incisionFixture }, liveFixture);
-    assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `phone=${phone}: workflow DOM stays unchanged`);
+          h("div", { className: "workflow-mobile-recovery-slot" }), phone ? operations : null),
+        h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
+        h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture));
+    assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `phone=${phone}: stable workflow shell and portal payloads`);
   }
 }
 
@@ -477,11 +486,13 @@ assert.doesNotMatch(liveStagePanel, /workflow-mobile-scroll-zone|从这里向上
   "the fixed mobile stage no longer renders the obsolete page-scroll prompt");
 assert.doesNotMatch(sharedLayout, /mobileOperations|workflow-mobile-operation-pane/,
   "the shared desktop workbench keeps its original source order and has no workflow-only mobile branch");
-assert.match(layout, /MOBILE_WORKFLOW_LAYOUT_QUERY[\s\S]*?if \(mobileViewport\)[\s\S]*?stage[\s\S]*?workflow-mobile-operation-pane[\s\S]*?mobileOperations[\s\S]*?workflow-live-rail[\s\S]*?workflow-incision-rail/,
-  "the workflow-only phone branch keeps the fixed stage before its ordered independent operation pane");
-assert.match(layout, /if \(mobileViewport\)[\s\S]*?return \([\s\S]*?<WorkbenchLayout/,
-  "non-phone viewports continue through the unchanged shared desktop workbench");
-assert.match(styles, /\.workflow-workbench > \.workflow-mobile-operation-pane\s*{[^}]*display:\s*flex;[^}]*overflow-y:\s*auto;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-y;/s,
+assert.match(layout, /useState\(narrowTouchWorkflowViewportActive\)[\s\S]*?data-workflow-mobile[\s\S]*?stage[\s\S]*?workflow-mobile-operation-pane[\s\S]*?mobileViewport \? mobileOperations : null/,
+  "one stable stage and pane use the shared touch capability gate; phone controls remain phone-only");
+assert.match(layout, /root\.insertBefore\(rails\.live, stageNode\)[\s\S]*?root\.append\(rails\.incision\)/,
+  "desktop rail placement preserves the original DOM and keyboard order");
+assert.match(layout, /createPortal\(liveRail, rails\.live, "workflow-live"\)[\s\S]*?createPortal\(incisionRail, rails\.incision, "workflow-incision"\)/,
+  "stable portal targets retain sidebars and their controller bindings across layouts");
+assert.match(styles, /\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) > \.workflow-mobile-operation-pane\s*{[^}]*display:\s*flex;[^}]*overflow-y:\s*auto;[^}]*scrollbar-width:\s*none;[^}]*touch-action:\s*pan-y;/s,
   "the phone operation pane owns vertical touch scrolling without a visible scrollbar");
 assert.match(controller, /dataset\.workflowMarkerMode = String\(state\.markerMode\)/,
   "the workflow root exposes controlled-marker mode for mobile layout containment");
@@ -594,7 +605,7 @@ assert.doesNotMatch(stageStatus, /setTimeout|setVisible|activeTool/,
   "loading and warning feedback is not timed away or coupled to tool selection");
 assert.match(stageStatus, /\(pointer: coarse\) and \(hover: none\)/,
   "developer feedback uses touch-only capabilities independently of the layout width; browser regression covers rotation");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\.is-collapsed\s*{[^}]*visibility:\s*hidden;/,
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.workflow-stage-status\.is-collapsed\s*{[^}]*visibility:\s*hidden;/,
   "desktop workflow status cannot inherit the phone-only timed presentation style");
 assert.match(styles, /\.workflow-workbench \.workflow-stage-status\s*\{[^}]*white-space:\s*normal;[^}]*overflow:\s*visible;/s,
   "workflow canvas status wraps instead of truncating operator guidance");
@@ -631,8 +642,8 @@ assert.match(scanDiameterCommand, /当前识别结果未更新[\s\S]*?点击“�
   "mobile scan-size guidance requires an explicit confirmation before recognition");
 assert.match(styles, /\.workflow-canvas-tools \.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*none;/s,
   "the controlled-marker confirmation action stays hidden from the desktop toolbar");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*inline-flex;/s,
-  "the controlled-marker confirmation action is exposed only on narrow coarse-pointer devices");
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.workflow-canvas-tools \.workflow-mobile-marker-confirm\s*\{[^}]*display:\s*inline-flex;/s,
+  "the controlled-marker confirmation action is exposed only in the shared narrow-touch layout");
 assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.main-wrap\.image-viewer\s*\{[^}]*touch-action:\s*none;/s,
   "only the mobile workflow image owns browser touch gestures");
 assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.main-wrap\.refining\s*\{[^}]*touch-action:\s*none;[^}]*overscroll-behavior:\s*contain;/s,
@@ -854,7 +865,7 @@ assert.match(controller, /case "cancel_controlled_marker":[\s\S]*?cancelControll
   "the typed cancellation command owns marker cancellation");
 assert.match(styles, /workflow-marker-busy="true"[\s\S]*?\.workflow-incision-rail,[\s\S]*?\.zoom-strip\s*\{[^}]*pointer-events:\s*none;/,
   "non-cancel planning controls and focus cards cannot receive accidental pointer input while recognition runs");
-assert.match(liveRuntime, /isMobileTouchImageGestureEnabled:[\s\S]*?\.workflow-workbench[\s\S]*?max-width: 560px[\s\S]*?pointer: coarse[\s\S]*?hover: none[\s\S]*?pointerMode === "marker"/,
+assert.match(liveRuntime, /isMobileTouchImageGestureEnabled:[\s\S]*?\.workflow-workbench[\s\S]*?narrowTouchWorkflowViewportActive\(\)[\s\S]*?pointerMode === "marker"/,
   "pinch gestures are gated to the mobile workflow and do not alter desktop or standalone Live input");
 assert.match(liveRuntime, /pointerMode === "marker" \|\| pointerMode === "freehand"/,
   "the mobile workflow keeps two-finger image gestures available while freehand drawing owns one finger");
@@ -862,7 +873,7 @@ assert.match(liveRuntime, /transformImageViewGesture/,
   "the mobile workflow uses one atomic pinch transform so combined pan and zoom stay aligned");
 assert.match(liveCanvasInteraction, /callbacks\.transformImageViewGesture[\s\S]*?pinch\.centerX[\s\S]*?nextPinch\.centerX[\s\S]*?ratio/,
   "the mobile gesture bridge preserves both pinch centres and the exact scale ratio");
-assert.match(controller, /MOBILE_WORKFLOW_MEDIA_QUERY\s*=\s*"\(max-width: 560px\) and \(pointer: coarse\) and \(hover: none\)"/,
+assert.match(controller, /function mobileWorkflowViewportActive\(\): boolean \{\s*return narrowTouchWorkflowViewportActive\(\)/,
   "mobile marker placement and confirmation share the same narrow touch-device gate");
 assert.match(liveCanvasInteraction, /event\.pointerType === "touch"[\s\S]*?touchPoints\.size >= 2/,
   "shared image interaction requires two touch pointers before entering pinch mode");
@@ -942,7 +953,7 @@ assert.match(mobileControls, /WorkflowLayerVisibilityButtons className="mobile-l
   "the phone dock explicitly preserves the established mobile layer-button presentation");
 assert.match(mobileControls, /mobile \? "mobile-layer-toggle" : "workflow-layer-toggle"/,
   "shared layer behavior keeps phone and desktop visual classes separate");
-assert.match(styles, /\.workflow-workbench \.mobile-layer-toggle\[aria-pressed="true"\]\s*\{[^}]*color:\s*#e0f2fe;[^}]*background:\s*rgb\(8 145 178 \/ 18%\);[^}]*border-color:\s*#67e8f9;/s,
+assert.match(styles, /\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.mobile-layer-toggle\[aria-pressed="true"\]\s*\{[^}]*color:\s*#e0f2fe;[^}]*background:\s*rgb\(8 145 178 \/ 18%\);[^}]*border-color:\s*#67e8f9;/s,
   "the established phone selected-state colors remain unchanged");
 assert.doesNotMatch(liveIncisionOverlayPanel, /setMobileIncisionCandidateVisible|workflow-layer-toggle/,
   "the incision overlay panel does not keep a second independent visibility switch");
@@ -1041,7 +1052,7 @@ assert.match(controller, /sourceState\.planning2d\?\.getFrameState\(\)/, "workfl
 assert.match(controller, /assessReviewReadiness/, "workflow keeps the established clinician review gate");
 assert.match(controller, /renderState\.incisionOverlay = overlay/, "approved candidates activate directly on the current live renderer");
 assert.match(controller, /renderState\.incisionOverlay = null/, "candidate invalidation clears the active overlay");
-assert.match(layout, /<WorkbenchLayout/, "workflow reuses the shared workbench shell");
+assert.match(layout, /<WorkbenchFrame/, "workflow reuses the shared stable workbench frame");
 assert.match(layout, /workflow-live-rail/, "workflow exposes a dedicated RSTL rail");
 assert.match(layout, /workflow-incision-rail/, "workflow exposes a dedicated incision rail");
 assert.match(layout, /workflow-live-rail live-workbench/, "workflow RSTL rail reuses the protected legacy Live presentation scope");
@@ -1090,13 +1101,13 @@ assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workb
   "the two-row phone toolbar contributes its full height instead of overlapping the camera viewport");
 assert.match(styles, /@media \(max-width:\s*560px\)\s*\{[\s\S]*?\.workflow-workbench \.zoom-strip\s*\{[^}]*display:\s*none;/,
   "phone workflow hides the redundant focus-preview rail while direct canvas zoom is available");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.workflow-tumor-transfer-actions,[\s\S]*?\.workflow-recalculate-action\s*\{[^}]*display:\s*none;/,
   "phone workflow hides tumor transfer and manual recalculation without removing their desktop actions");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.workflow-stage-status\s*\{[^}]*min-block-size:\s*34px;[^}]*max-block-size:\s*96px;[^}]*overflow-y:\s*auto;/,
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.workflow-stage-status\s*\{[^}]*min-block-size:\s*34px;[^}]*max-block-size:\s*96px;[^}]*overflow-y:\s*auto;/,
   "phone workflow bounds persistent recognition guidance above the face canvas");
 assert.match(render2d, /const zoomItems:[\s\S]*?\{ label: "全脸", region: null \}[\s\S]*?\.\.\.ZOOM_REGIONS/,
   "focus-preview generation remains available for desktop and future rollback");
-assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
+assert.match(styles, /--workflow-mobile-zoom-card-size:\s*calc\(\(100vw - 44px\) \/ 3\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.zoom-card\s*\{[^}]*flex:\s*0 0 var\(--workflow-mobile-zoom-card-size\);[^}]*min-width:\s*var\(--workflow-mobile-zoom-card-size\);[^}]*max-width:\s*var\(--workflow-mobile-zoom-card-size\);/,
   "hidden phone focus-card sizing remains intact instead of deleting the reversible implementation");
 assert.doesNotMatch(liveQualityPanel, /MOBILE_WORKFLOW_MEDIA_QUERY|mobilePortalSelector|createPortal/,
   "the hidden quality runtime no longer carries responsive presentation logic");
@@ -1104,7 +1115,7 @@ assert.doesNotMatch(liveStagePanel, /workflow-mobile-quality-slot/,
   "the removed phone quality card leaves no empty stage-header slot");
 assert.match(styles, /\.workflow-workbench \.stage-top > #livePill\s*\{[^}]*display:\s*none;[\s\S]*?\.workflow-workbench \.stage-top > #fps\s*\{[^}]*display:\s*none;/s,
   "redundant phone source and FPS labels are hidden while their underlying runtime data remains intact");
-assert.match(styles, /@media \(max-width:\s*560px\) and \(pointer:\s*coarse\) and \(hover:\s*none\)[\s\S]*?\.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
+assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
   "the compact input and layer dock is exposed only on phone-class coarse pointers");
 assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle[\s\S]*?image_export/,
   "the mobile dock retains photo, rear-camera, pause, video export, and image export command paths");

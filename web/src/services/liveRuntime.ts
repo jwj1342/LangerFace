@@ -29,6 +29,7 @@ import type { RecordingExtraCanvas } from "./canvasRecording";
 import { createLiveRecordingActions } from "./liveRecordingActions";
 import { modelState, recordingState, renderState, sourceState } from "./liveState";
 import { resetMobileWorkflowVisibility } from "./mobileWorkflowVisibility";
+import { narrowTouchWorkflowViewportActive } from "./workflowViewport";
 import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
@@ -462,7 +463,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
       const pointerMode = els.mainWrap.dataset.workflowPointerMode || "";
       return Boolean(
         els.mainWrap.closest(".workflow-workbench")
-        && window.matchMedia("(max-width: 560px) and (pointer: coarse) and (hover: none)").matches
+        && narrowTouchWorkflowViewportActive()
         && (!pointerMode || pointerMode === "marker" || pointerMode === "freehand")
       );
     },

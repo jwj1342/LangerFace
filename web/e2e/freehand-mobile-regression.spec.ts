@@ -157,7 +157,7 @@ for (const layout of scrollLayouts) {
       await page.goto("/app/workflow?developer=1");
       await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
       const scrollTarget = layout.mobile ? "pane" : layout.width <= 560 ? "root" : "document";
-      await expect(page.locator(".workflow-mobile-operation-pane")).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator('[data-workflow-mobile="true"] > .workflow-mobile-operation-pane')).toHaveCount(layout.mobile ? 1 : 0);
       await expect(page.locator(".mobile-workflow-dock")).toHaveCount(layout.mobile ? 1 : 0);
       await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(layout.mobile ? 1 : 0);
       if (layout.width <= 1280) {
@@ -325,9 +325,9 @@ test("width transitions retain desktop controls and layer state on fine pointers
     });
     for (const width of [560, 561, 900, 393]) {
       await page.setViewportSize({ width, height: 900 });
-      await expect(page.locator(".workflow-mobile-operation-pane")).toHaveCount(0);
+      await expect(page.locator(".workflow-mobile-operation-pane")).toBeHidden();
       await expect(page.locator(".mobile-workflow-dock")).toHaveCount(0);
-      await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(0);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toBeHidden();
       const layers = await page.evaluate(async () => {
         const path = "/src/services/mobileWorkflowVisibility.ts";
         const { workflowLayerVisibilitySnapshot } = await import(path);
@@ -421,7 +421,7 @@ async function expectAllVisibleButtonsReachable(page: Page) {
     const button = buttons.nth(index);
     await button.evaluate(element => {
       const root = element.closest(".workflow-workbench");
-      if (root && !root.querySelector(":scope > .workflow-mobile-operation-pane")
+      if (root && root.getAttribute("data-workflow-mobile") !== "true"
         && root.querySelector(":scope > .stage")
         && getComputedStyle(root.querySelector(":scope > .stage")!).position === "sticky"
         && !element.closest(".stage")) {

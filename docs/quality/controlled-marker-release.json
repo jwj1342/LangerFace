@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
+    "sourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -1746,8 +1746,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.31-candidate.1",
-    "name": "交互诊断：识别进行中也可保存故障快照",
+    "version": "0.1.32-candidate.1",
+    "name": "工作流触控：兼容悬停报告并保留跨布局绑定",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
@@ -1756,6 +1756,7 @@
       "web/src/components/StandaloneReviewControlsPanel.tsx",
       "web/src/components/TumorInputPanel.tsx",
       "web/src/components/WorkflowCanvasTools.tsx",
+      "web/src/components/WorkflowDraftRecovery.tsx",
       "web/src/components/WorkflowLayout.tsx",
       "web/src/components/WorkflowStageStatus.tsx",
       "web/src/services/controlledMarkerRunDiagnostics.ts",
@@ -1764,19 +1765,53 @@
       "web/src/services/incisionOverlayStyle.ts",
       "web/src/services/incisionPhotoRuntime.ts",
       "web/src/services/liveCanvasFit.ts",
+      "web/src/services/liveRuntime.ts",
       "web/src/services/liveState.ts",
+      "web/src/services/mobileWorkflowVisibility.ts",
       "web/src/services/workflowControllerUtils.ts",
       "web/src/services/workflowIncisionController.ts",
+      "web/src/services/workflowViewport.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "9f02b30642bd161c6b3b085b356c5eedfaff90523be98a6de222fcd35ff8a18c",
+    "sourceDigest": "61da6a6c14eede365b270bbf0026e157cde83e6c651f83d2f1df6ec8361b4e1c",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
+    "runtimeSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-    "note": "仅放开会话故障快照导出，未完成识别仍为pending并单列计数；复放门禁、业务手势、布局与算法不变。"
+    "note": "窄屏触控能力统一门禁，真实触摸仍按pointerType分流；既有手机两行工具栏/确认与双指恢复。稳定portal容器保持画布、控件及桌面顺序；不更改算法、模型、RSTL规则及原布局尺寸。真机人工待验，历史首次故障版本仍待确认。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.31-candidate.1",
+      "name": "交互诊断：识别进行中也可保存故障快照",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowLayout.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerRunDiagnostics.ts",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "9f02b30642bd161c6b3b085b356c5eedfaff90523be98a6de222fcd35ff8a18c",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "仅放开会话故障快照导出，未完成识别仍为pending并单列计数；复放门禁、业务手势、布局与算法不变。"
+    },
     {
       "version": "0.1.30-candidate.1",
       "name": "交互诊断：记录输入分流与手势现场",
@@ -2791,10 +2826,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376",
-    "currentSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
-    "capturedAt": "2026-11-09T16:55:29.868Z",
-    "reason": "UI0.1.31：识别进行中保留真实pending状态导出现场，复放门禁不变。"
+    "previousSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
+    "currentSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
+    "capturedAt": "2026-11-10T05:34:39.100Z",
+    "reason": "UI0.1.32窄屏触控门禁及稳定布局容器；算法/资产指纹保持。"
   },
   "integrationHistory": [
     {

@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { narrowTouchWorkflowViewportActive } from "./workflowViewport";
 import { MarkerRunDiagnostics, auditMarkerDiagnosticExport, diagnosticReplayMismatches, type RunInput, type DiagnosticRun, type WorkflowDiagnosticSnapshot } from "./controlledMarkerRunDiagnostics";
 
 import {
@@ -171,11 +172,8 @@ import {
 } from "./controlledMarkerUiConfig";
 
 type DynamicRecord = Record<string, any>;
-const MOBILE_WORKFLOW_MEDIA_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
-
 function mobileWorkflowViewportActive(): boolean {
-  return typeof window.matchMedia === "function"
-    && window.matchMedia(MOBILE_WORKFLOW_MEDIA_QUERY).matches;
+  return narrowTouchWorkflowViewportActive();
 }
 
 function isMobileWorkflowTouch(event: PointerEvent): boolean {
