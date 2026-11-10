@@ -187,86 +187,100 @@
     }
   },
   "scopeBoundaryReview": {
-    "status": "pending",
+    "status": "confirmed",
     "manifestSha256": "59fa9605ae568eca14de88222ce7ce897ba5a01f43b758208bcdfc0401ff06f7",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
-    "reviewedAt": "2026-11-10T23:43:37.205187+08:00",
-    "basis": "已有UI33触控/跨布局和UI34字幕的当轮实施记录及定点独立回读，保留其真实已测范围；原confirmed仅绑定较早滚动阶段，尚不足以直接签认当前包的全部共享责任边界。",
-    "pendingReasons": [
-      "需将当前UI33/34共享布局与输入入口的原始授权逐项对应到当前manifest及受保护功能隔离证据；不凭changedOutsideScope为空标not_required。"
+    "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
+    "confirmedAt": "2026-11-11T00:23:59.651910+08:00",
+    "confirmedAtMeaning": "本专项记录操作者明确选择的时间，不冒充原消息发生时间",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#checkpoint-pr-acceptance-20261111",
+    "basis": "操作者已获知：在手势分流启用且拖线尚未松手时，第二指会取消本次未完成拖动并缩放，保留已完成微调；此机制基准已存在，本候选扩大coarse+hover/fine+touch等触屏条件可达性。操作者明确选择保留既有手势，记录覆盖变化，不改医生微调代码。结合已有UI33/34实施范围及定点对照，确认本次固定候选的具体共享操作影响，不代签完整RSTL效果或医学验收。",
+    "operatorChoice": "保留既有手势（推荐）：保持原来的双指缩放规则，记录触屏覆盖变化，不改医生微调代码。",
+    "limitations": [
+      "不授权新改RSTL生成/检测/几何/微调规则、密度透明度、追踪质量或其他受保护功能",
+      "事件模块与取消函数片段验证不等于各型号真机、完整RSTL或专业效果验收"
     ],
     "previous": {
-      "status": "confirmed",
-      "confirmedAt": "2026-11-09T14:49:32.967Z",
-      "basis": "操作者本轮明确要求经独立子agent预审后实施滚动最小修复并自动测试、通过后本地开发者部署。Pascal改后审查发现UI28的React分支存在DOM引用失联，UI28退出当前实现并保全Diff。修订预审允许CSS-only root滚动+sticky、恢复原组件字节；仍未放行舞台裁切。该确认不是效果验收。",
+      "status": "pending",
+      "manifestSha256": "59fa9605ae568eca14de88222ce7ce897ba5a01f43b758208bcdfc0401ff06f7",
       "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
+      "reviewedAt": "2026-11-10T23:43:37.205187+08:00",
+      "basis": "已有UI33触控/跨布局和UI34字幕的当轮实施记录及定点独立回读，保留其真实已测范围；原confirmed仅绑定较早滚动阶段，尚不足以直接签认当前包的全部共享责任边界。",
+      "pendingReasons": [
+        "需将当前UI33/34共享布局与输入入口的原始授权逐项对应到当前manifest及受保护功能隔离证据；不凭changedOutsideScope为空标not_required。"
+      ],
       "previous": {
         "status": "confirmed",
-        "confirmedAt": "2026-11-09T14:33:28.621Z",
-        "basis": "操作者本轮明确要求经独立子agent预审后实施滚动最小修复并自动测试、通过后本地开发者部署。Pascal预审允许恢复原布局并补窄屏pane，未放行舞台裁切；该确认是实施范围授权，不是效果验收。",
-        "evidence": "docs/quality/ALGORITHM_VERSIONING.md#2026-11-09ui-0128-candidate1窄屏滚动隔离修复",
+        "confirmedAt": "2026-11-09T14:49:32.967Z",
+        "basis": "操作者本轮明确要求经独立子agent预审后实施滚动最小修复并自动测试、通过后本地开发者部署。Pascal改后审查发现UI28的React分支存在DOM引用失联，UI28退出当前实现并保全Diff。修订预审允许CSS-only root滚动+sticky、恢复原组件字节；仍未放行舞台裁切。该确认不是效果验收。",
+        "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
         "previous": {
-          "status": "pending",
-          "basis": "核心RSTL/皱纹源码与Base相同；同页CSSOM定点对照确认共享舞台布局会改变显示尺寸及医生微调过密提示。未满足完整保护隔离条件，未获对应当轮修改授权，发布暂停。",
-          "evidence": "docs/quality/ALGORITHM_VERSIONING.md#2026-11-09发布候选核验",
+          "status": "confirmed",
+          "confirmedAt": "2026-11-09T14:33:28.621Z",
+          "basis": "操作者本轮明确要求经独立子agent预审后实施滚动最小修复并自动测试、通过后本地开发者部署。Pascal预审允许恢复原布局并补窄屏pane，未放行舞台裁切；该确认是实施范围授权，不是效果验收。",
+          "evidence": "docs/quality/ALGORITHM_VERSIONING.md#2026-11-09ui-0128-candidate1窄屏滚动隔离修复",
           "previous": {
-            "status": "not_required",
-            "basis": "本次仅同步已确认照片工作流成果并准备公开候选；恢复范围无责任配置外代码变化，未修改RSTL算法或模型。已有范围确认保留于previous。",
-            "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
+            "status": "pending",
+            "basis": "核心RSTL/皱纹源码与Base相同；同页CSSOM定点对照确认共享舞台布局会改变显示尺寸及医生微调过密提示。未满足完整保护隔离条件，未获对应当轮修改授权，发布暂停。",
+            "evidence": "docs/quality/ALGORITHM_VERSIONING.md#2026-11-09发布候选核验",
             "previous": {
-              "status": "confirmed",
-              "basis": "本对话操作者2026-11-08明确要求对抗式审查建议后继续，对应上一答复第5项四文件本地修复。新增Diff仅工作流CSS、现有手势测试和UI身份记录；保全原未提交基线，不据此扩大既有团队算法、RSTL或远端权限。",
-              "evidence": "../../local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json",
-              "confirmedAt": "2026-11-08",
-              "manifestSha256": "b0aaef6bfbf6d1a50caee1724137107c62d6e6d21f262101aa3d8828832d54d1",
+              "status": "not_required",
+              "basis": "本次仅同步已确认照片工作流成果并准备公开候选；恢复范围无责任配置外代码变化，未修改RSTL算法或模型。已有范围确认保留于previous。",
+              "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
               "previous": {
                 "status": "confirmed",
-                "basis": "本对话操作者明确授权先修开发者原因显示并完整记录后台日志。新增差额仅工作流反馈/日志观察、CI定向测试及UI身份登记；未改检测模型/参数/单脸门禁、RSTL六项、肿物或切口算法。",
-                "evidence": "../../local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair/scope.json",
-                "confirmedAt": "2026-11-06T11:30:33.508Z",
+                "basis": "本对话操作者2026-11-08明确要求对抗式审查建议后继续，对应上一答复第5项四文件本地修复。新增Diff仅工作流CSS、现有手势测试和UI身份记录；保全原未提交基线，不据此扩大既有团队算法、RSTL或远端权限。",
+                "evidence": "../../local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json",
+                "confirmedAt": "2026-11-08",
+                "manifestSha256": "b0aaef6bfbf6d1a50caee1724137107c62d6e6d21f262101aa3d8828832d54d1",
                 "previous": {
                   "status": "confirmed",
-                  "basis": "本轮操作者明确要求核实并保持手机/电脑核心算法及标注细节一致；新增产品差额仅标注共享样式与CSS回退、相关测试和身份说明。识别/切口生成/微调及RSTL算法、模型资产和布局不改。",
-                  "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/双端一致性_20261106/scope.json",
-                  "confirmedAt": "2026-11-06T02:39:52.444Z",
-                  "manifestSha256": "59e386bec4d5536fc9138c968454ac61ecfac2f992d3c1ba71556879b830a28a",
+                  "basis": "本对话操作者明确授权先修开发者原因显示并完整记录后台日志。新增差额仅工作流反馈/日志观察、CI定向测试及UI身份登记；未改检测模型/参数/单脸门禁、RSTL六项、肿物或切口算法。",
+                  "evidence": "../../local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair/scope.json",
+                  "confirmedAt": "2026-11-06T11:30:33.508Z",
                   "previous": {
                     "status": "confirmed",
-                    "basis": "操作者明确授权照片模式切口线固定屏幕宽度及本地部署；本轮仅修改切口显示线宽与定向测试，不改变肿物识别、切口几何或RSTL受保护功能。恢复包保留已有成果，不扩大其他成员算法的修改权限。",
-                    "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/incision-line-width-scope-20261106.json",
-                    "confirmedAt": "2026-11-05T12:13:36.126Z",
-                    "manifestSha256": "0487f15dec9cf9059f5c691f6b755df65ca1b962d73016b231f43895e0d409b0",
+                    "basis": "本轮操作者明确要求核实并保持手机/电脑核心算法及标注细节一致；新增产品差额仅标注共享样式与CSS回退、相关测试和身份说明。识别/切口生成/微调及RSTL算法、模型资产和布局不改。",
+                    "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/双端一致性_20261106/scope.json",
+                    "confirmedAt": "2026-11-06T02:39:52.444Z",
+                    "manifestSha256": "59e386bec4d5536fc9138c968454ac61ecfac2f992d3c1ba71556879b830a28a",
                     "previous": {
                       "status": "confirmed",
-                      "basis": "操作者本批明确授权肿物填充/外观候选归属修复；仅新增外观模块及版本登记。ColorV035为原基线既有保留改动，其他恢复项按旧冻结包继承；范围外Diff、14图、资产、HEAD与原填充模块字节保持。未改UI、RSTL或切口。此范围核验不代替效果或专业签认。",
-                      "evidence": "local_outputs/reference-method-consolidation-20261105/异步归属批次_20261105/范围与保全核验.json",
-                      "confirmedAt": "2026-11-05T09:48:32.075Z",
-                      "manifestSha256": "8678aaa6f06a54b063081f9bad81492d3f76d112e3784ed0db0a8942a0779644",
+                      "basis": "操作者明确授权照片模式切口线固定屏幕宽度及本地部署；本轮仅修改切口显示线宽与定向测试，不改变肿物识别、切口几何或RSTL受保护功能。恢复包保留已有成果，不扩大其他成员算法的修改权限。",
+                      "evidence": "local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/incision-line-width-scope-20261106.json",
+                      "confirmedAt": "2026-11-05T12:13:36.126Z",
+                      "manifestSha256": "0487f15dec9cf9059f5c691f6b755df65ca1b962d73016b231f43895e0d409b0",
                       "previous": {
                         "status": "confirmed",
-                        "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。 本批仅新增肿物两模块及其版本/说明；其余源码从已有冻结包继承并逐项核字节，不新增共享功能修改。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。",
-                        "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/candidate-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json",
-                        "confirmedAt": "2026-10-27T14:58:00.000Z",
-                        "manifestSha256": "8f856339fdb6b9c4da2470e616c2b8ffb16925bdb1d58387d67a83ae894367d4",
+                        "basis": "操作者本批明确授权肿物填充/外观候选归属修复；仅新增外观模块及版本登记。ColorV035为原基线既有保留改动，其他恢复项按旧冻结包继承；范围外Diff、14图、资产、HEAD与原填充模块字节保持。未改UI、RSTL或切口。此范围核验不代替效果或专业签认。",
+                        "evidence": "local_outputs/reference-method-consolidation-20261105/异步归属批次_20261105/范围与保全核验.json",
+                        "confirmedAt": "2026-11-05T09:48:32.075Z",
+                        "manifestSha256": "8678aaa6f06a54b063081f9bad81492d3f76d112e3784ed0db0a8942a0779644",
                         "previous": {
                           "status": "confirmed",
-                          "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。",
-                          "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json",
+                          "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。 本批仅新增肿物两模块及其版本/说明；其余源码从已有冻结包继承并逐项核字节，不新增共享功能修改。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。 第二项外观复核已撤回至修复前字节；本候选仅保留同对象选择与版本说明，其余268份继承原冻结包。",
+                          "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/candidate-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json;local_outputs/reference-method-consolidation-20261105/修复批次_20261105/final-archive.json",
                           "confirmedAt": "2026-10-27T14:58:00.000Z",
-                          "manifestSha256": "253fb7ca0bbb49107dce6590911985a7196b17e63773c83205758dff55cec46a",
+                          "manifestSha256": "8f856339fdb6b9c4da2470e616c2b8ffb16925bdb1d58387d67a83ae894367d4",
                           "previous": {
                             "status": "confirmed",
-                            "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。",
-                            "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts",
+                            "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。 本次仅肿物源码及相关测试/版本登记增量；原范围外liveCanvasFit字节未变，当前操作者明确授权肿物优化。AI核字节保留旧边界决定，不虚构新跨团队授权。 追加轮仅肿物填充候选及其测试，范围外既有改动字节未变；未新增跨团队行为。 本轮仅修改肿物识别候选最终轮廓的局部几何整理，未修改 RSTL、切口、UI 或远端。",
+                            "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-scope-review.json;local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback10/appearance-boundary-regularization-results.json",
                             "confirmedAt": "2026-10-27T14:58:00.000Z",
-                            "manifestSha256": "24dbabe5385b94bb9c81d2e28e051c794438c51b5f10abca01754db7e4fcb35a"
+                            "manifestSha256": "253fb7ca0bbb49107dce6590911985a7196b17e63773c83205758dff55cec46a",
+                            "previous": {
+                              "status": "confirmed",
+                              "basis": "操作者已明确要求优化电脑端与手机端图片缩放上限；web/src/services/liveCanvasFit.ts仅承担图片视口缩放与拟合，不改变肿物识别、切口生成/微调、RSTL六项、模型或资产。 本次按操作者明确要求修复CI并重新提交，仅补独立审阅UI状态同步及测试调度，不改任何算法。",
+                              "evidence": "web/src/services/liveCanvasFit.ts; web/e2e/zoom-cap-current.spec.ts; tools/test_incision_photo_zoom.ts; tools/test_canvas_fit.ts; web/src/components/StandaloneReviewControlsPanel.tsx; web/e2e/incision-photo-planning.spec.ts; web/playwright.config.ts",
+                              "confirmedAt": "2026-10-27T14:58:00.000Z",
+                              "manifestSha256": "24dbabe5385b94bb9c81d2e28e051c794438c51b5f10abca01754db7e4fcb35a"
+                            }
                           }
                         }
                       }
                     }
-                  }
-                },
-                "manifestSha256": "a4e8007f1cc3d0fc55958fc7902596b996631ad2dec3b2642e49fd770e905442"
+                  },
+                  "manifestSha256": "a4e8007f1cc3d0fc55958fc7902596b996631ad2dec3b2642e49fd770e905442"
+                }
               }
             }
           }
@@ -275,34 +289,51 @@
     }
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
-    "recordedAt": "2026-11-10T23:43:37.205187+08:00",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#checkpoint-pr-acceptance-20261111",
+    "recordedAt": "2026-11-11T00:23:59.651910+08:00",
+    "evaluationKind": "research_checkpoint_with_known_failures",
+    "operatorChoice": "保留存档点，如实列明问题（推荐）：符合并行推进的目标，后续算法修复另交 PR。",
     "acceptedScope": [
       "当前版本双指放大缩小操作恢复正常",
       "当前版本页面滚动恢复正常",
-      "当前版本受控标记识别操作恢复正常"
+      "当前版本受控标记识别操作恢复正常",
+      "固定存档作为保留九项已知识别失败的研发候选提交，问题如实列明，后续算法修复另交PR"
     ],
-    "limitations": "操作者三项操作反馈有效；固定候选的九项漏检、位置偏移、错选皮肤或边界不准反馈仍未销项，不代表算法精度整组accepted。",
+    "limitations": "本字段accepted仅表示操作者知情接受同源码研发候选及其已知限制；九项漏检、位置偏移、错选皮肤和边界误差仍开放，不代表这些问题已修复、整组算法精度通过、全机型/专业/医学认可。",
     "knownFailureCount": 9,
+    "knownFailuresRemainOpen": true,
     "previous": {
       "status": "pending",
-      "sourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
-      "note": "本轮源码已变更，保留旧版原始确认；当前同版人工验收尚未完成，不把此字段写成操作者存在未保存文件。",
+      "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
+      "recordedAt": "2026-11-10T23:43:37.205187+08:00",
+      "acceptedScope": [
+        "当前版本双指放大缩小操作恢复正常",
+        "当前版本页面滚动恢复正常",
+        "当前版本受控标记识别操作恢复正常"
+      ],
+      "limitations": "操作者三项操作反馈有效；固定候选的九项漏检、位置偏移、错选皮肤或边界不准反馈仍未销项，不代表算法精度整组accepted。",
+      "knownFailureCount": 9,
       "previous": {
         "status": "pending",
-        "sourceDigest": "e53f202d1e71e9370acf979ffc4eda90f9fff11cffb71c356e2e82501d725543",
+        "sourceDigest": "22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab",
         "note": "本轮源码已变更，保留旧版原始确认；当前同版人工验收尚未完成，不把此字段写成操作者存在未保存文件。",
         "previous": {
           "status": "pending",
-          "sourceDigest": "c5a87de5783a1d7b822f70dab09eea92175173a51cf4ac50cab3816e75a01c55",
-          "evidence": "docs/quality/ALGORITHM_VERSIONING.md#2026-11-09发布候选核验",
-          "acceptedScope": [
-            "正常图片上传",
-            "开发者模式文件名显示"
-          ],
-          "limitations": "上传和文件名人工认可；不代签算法整组、RSTL效果、真机或医学验收。"
+          "sourceDigest": "e53f202d1e71e9370acf979ffc4eda90f9fff11cffb71c356e2e82501d725543",
+          "note": "本轮源码已变更，保留旧版原始确认；当前同版人工验收尚未完成，不把此字段写成操作者存在未保存文件。",
+          "previous": {
+            "status": "pending",
+            "sourceDigest": "c5a87de5783a1d7b822f70dab09eea92175173a51cf4ac50cab3816e75a01c55",
+            "evidence": "docs/quality/ALGORITHM_VERSIONING.md#2026-11-09发布候选核验",
+            "acceptedScope": [
+              "正常图片上传",
+              "开发者模式文件名显示"
+            ],
+            "limitations": "上传和文件名人工认可；不代签算法整组、RSTL效果、真机或医学验收。"
+          }
         }
       }
     }
