@@ -1184,7 +1184,7 @@ function shouldPreserveSupportedBaselineOnIncompleteBody(
         && incompleteArea > baselineArea * 1.25;
 }
 /** 仅候选肿物链路调用：不读取参考标注，不改扫描圈、笔圈、大目标或 RSTL。 */
-export async function refineAppearanceCandidate(image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions, baseline: ControlledMarkerDetection): Promise<ControlledMarkerDetection> {
+async function refineAppearanceCandidateBaseline(image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions, baseline: ControlledMarkerDetection): Promise<ControlledMarkerDetection> {
     const radius = Number(baseline.scan?.radius_px || options.roiRadius || 36);
     if (!validAppearanceInput(image, seed, radius)
         || baseline.ok && (baseline.geometry_mode !== 'dark_component' || baseline.area_px >= 3000))
@@ -1277,3 +1277,133 @@ export const __appearanceGeometryForTests = {
     constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
     regularizeAppearanceBoundary,
 };
+
+type CompactPigmentProposal = {
+    candidate: Ellipse;
+    evidence: Record<string, unknown>;
+};
+type CompactPigmentSupport = {
+    kind: 'separate_anchors' | 'two_background_contexts';
+    anchor: Point;
+    context: number;
+    peerAnchor: Point;
+    peerContext: number;
+    overlapIou: number;
+};
+function compactPigmentSupport(
+    proposal: CompactPigmentProposal, bank: CompactPigmentProposal[],
+): CompactPigmentSupport | null {
+    const isolated = (item: CompactPigmentProposal) => Number(item.evidence.interiorSupport) >= .95
+        && item.evidence.outerContinuation === 0 && Array.isArray(item.evidence.sectorContinuation)
+        && item.evidence.sectorContinuation.length === 8
+        && item.evidence.sectorContinuation.every(value => value === 0);
+    for (const peer of bank) {
+        if (peer === proposal) continue;
+        const a = proposal.candidate, b = peer.candidate;
+        const intersection = convexIntersectionArea(a.boundary, b.boundary);
+        const overlapIou = intersection / Math.max(1e-8,
+            polygonArea(a.boundary) + polygonArea(b.boundary) - intersection);
+        const separate = Math.hypot(a.anchor.x - b.anchor.x, a.anchor.y - b.anchor.y) >= 8
+            && overlapIou >= .7;
+        const stableBackground = [a.context, b.context].sort((x, y) => x - y).join(',') === '64,96'
+            && isolated(proposal) && isolated(peer) && overlapIou >= .9;
+        if (separate || stableBackground) return {
+            kind: separate ? 'separate_anchors' : 'two_background_contexts',
+            anchor: a.anchor, context: a.context, peerAnchor: b.anchor,
+            peerContext: b.context, overlapIou,
+        };
+    }
+    return null;
+}
+function compactPigmentRecovery(
+    cv: CV, image: MarkerImageData, seed: MarkerPoint, radius: number,
+): { proposal: CompactPigmentProposal; support: CompactPigmentSupport } | null {
+    const patch = new Patch(cv, image, seed, radius, false);
+    const bank: CompactPigmentProposal[] = [];
+    for (const anchor of pigmentAnchors(patch.anchors, seed))
+        for (const context of [24, 32, 48, 64, 96]) {
+            // A clipped background cannot certify an isolated object.
+            if (anchor.x - .95 * context < 0 || anchor.y - .95 * context < 0
+                || anchor.x + .95 * context >= image.width
+                || anchor.y + .95 * context >= image.height) continue;
+            const c = ellipse(patch, image, anchor, context, false);
+            if (!c || c.boundary.some(point => Math.hypot(point.x - seed.x, point.y - seed.y) > .95 * radius))
+                continue;
+            const backgroundReach = 2.05 * c.major;
+            if (c.center.x - backgroundReach < 0 || c.center.y - backgroundReach < 0
+                || c.center.x + backgroundReach >= image.width
+                || c.center.y + backgroundReach >= image.height) continue;
+            c.rankScore = rank(patch, image, c);
+            if (!(c.rankScore > 0) || 2 * c.major > 60
+                || Math.PI * c.major * c.major * c.ratio < 64) continue;
+            const field = fit(patch.samples(image, c.center, c.major, c.ratio, c.angle, 1.15, 1.65, 2), 4);
+            if (!field) continue;
+            const core = patch.samples(image, c.center, c.major, c.ratio, c.angle, 0, .8, 1);
+            const outer = patch.samples(image, c.center, c.major, c.ratio, c.angle, 1.55, 2.05, 1);
+            if (core.length < 20 || outer.length < 20) continue;
+            const residuals = core.map(point => residual(field, point));
+            const delta = [0, 1, 2].map(k => quantile(residuals.map(value => value[k]))) as Vec;
+            const standardized = delta.map((value, k) => value / field.noise[k]);
+            const strength = norm(standardized), unit = standardized.map(value => value / Math.max(1e-8, strength));
+            const projection = (value: Vec) => value.reduce((sum, item, k) => sum + item / field.noise[k] * unit[k], 0);
+            const interiorSupport = residuals.filter(value =>
+                projection(value) >= Math.max(.75, .4 * strength)).length / core.length;
+            const continued = outer.map(point => projection(residual(field, point)) >= Math.max(1.5, .5 * strength));
+            const outerContinuation = continued.filter(Boolean).length / outer.length;
+            const sectors = Array.from({ length: 8 }, () => [] as boolean[]);
+            outer.forEach((point, index) =>
+                sectors[Math.floor((Math.atan2(point.v, point.u) + Math.PI) * 4 / Math.PI) % 8].push(continued[index]));
+            const sectorContinuation = sectors.map(values =>
+                values.length ? values.filter(Boolean).length / values.length : 1);
+            if (delta[0] > -1.5 || Math.hypot(delta[1], delta[2]) < 2.5 || strength < 4
+                || interiorSupport < .7 || outerContinuation > .2 || Math.max(...sectorContinuation) > .25)
+                continue;
+            bank.push({ candidate: c, evidence: {
+                deltaLab: delta, noiseLab: field.noise, whitenedDistance: strength,
+                interiorSupport, outerContinuation, sectorContinuation,
+                diameter: 2 * c.major, axisRatio: c.ratio, anchor: c.anchor,
+                context: c.context, rankScore: c.rankScore,
+            } });
+        }
+    const eligible = bank.map(proposal => ({ proposal, support: compactPigmentSupport(proposal, bank) }))
+        .filter((item): item is { proposal: CompactPigmentProposal; support: CompactPigmentSupport } => !!item.support)
+        .sort((a, b) => (b.proposal.candidate.rankScore ?? -Infinity) - (a.proposal.candidate.rankScore ?? -Infinity));
+    const selected = eligible[0];
+    if (!selected) return null;
+    // Several stable objects in one scan remain ambiguous.
+    const selectedArea = polygonArea(selected.proposal.candidate.boundary);
+    if (eligible.some(peer => convexIntersectionArea(selected.proposal.candidate.boundary,
+        peer.proposal.candidate.boundary) / Math.max(1, Math.min(selectedArea,
+        polygonArea(peer.proposal.candidate.boundary))) < .5)) return null;
+    return selected;
+}
+/** Supplemental recovery cannot replace an accepted result or a coverage veto. */
+export async function refineAppearanceCandidate(
+    image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions,
+    baseline: ControlledMarkerDetection,
+): Promise<ControlledMarkerDetection> {
+    const existing = await refineAppearanceCandidateBaseline(image, seed, options, baseline);
+    const coverageReasons = new Set([
+        'not_enclosed_within_scan', 'candidate_outside_scan_roi',
+        'appearance_candidate_outside_scan_roi', 'scan_range_too_small',
+    ]);
+    if (existing.ok || existing.failure_code !== 'unstable_enclosure'
+        || (existing.warnings || []).some(warning => warning.includes('unavailable'))
+        || (existing.rejected_reasons || []).some(reason => coverageReasons.has(reason))
+        || String(existing.diagnostics?.filled_candidate_route || '').startsWith('rejected_incomplete_'))
+        return existing;
+    const radius = Number(baseline.scan?.radius_px || options.roiRadius || 36);
+    if (!validAppearanceInput(image, seed, radius)) return existing;
+    try {
+        const recovered = compactPigmentRecovery(await loadMarkerOpenCv(), image, seed, radius);
+        if (!recovered) return existing;
+        return appearanceResult(existing, recovered.proposal.candidate.boundary, seed, 'compact_color_recovery', {
+            ...recovered.proposal.evidence,
+            recoverySupport: recovered.support,
+            previousRejection: { failureCode: existing.failure_code, reasons: existing.rejected_reasons || [],
+                route: existing.diagnostics?.filled_candidate_route || null },
+        });
+    } catch {
+        return existing;
+    }
+}
