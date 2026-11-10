@@ -67,6 +67,50 @@ assert.equal(geometry.selectCompleteBodyCandidate([sameAnchorSmall, sameAnchorLa
     'same-anchor scale changes must not become a new body');
 const localReference = { ok: true, geometry_mode: 'dark_component', boundary: square(10, 10, 8),
     center: { x: 14, y: 14 }, area_px: 64 } as any;
+const normalizedFragment = { ...localReference, boundary: square(16, 16, 8),
+    center: { x: 20, y: 20 }, warnings: ['brightness_normalized_recovery'] };
+const repeatedSmallBody = (boundary: MarkerPoint[], anchorX: number, complete = true) => ({
+    boundary, score: 100, scanComplete: complete, evidence: { anchor: { x: anchorX, y: 20 }, context: 24 },
+});
+const repeatedBodyA = repeatedSmallBody(square(13, 13, 14), 12);
+const repeatedBodyB = repeatedSmallBody(square(13.2, 13, 14), 28);
+assert.ok(geometry.findNormalizedFragmentConflict([repeatedBodyA, repeatedBodyB], normalizedFragment),
+    'separate windows can expose a larger body around an accepted normalized fragment');
+assert.equal(geometry.findNormalizedFragmentConflict([repeatedBodyA], normalizedFragment), null,
+    'one proposal cannot establish a repeated body conflict');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, { ...repeatedBodyB, evidence: repeatedBodyA.evidence },
+], normalizedFragment), null, 'same-anchor scale repeats are not independent source windows');
+assert.ok(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, { ...repeatedBodyB, scanComplete: false },
+], normalizedFragment), 'incomplete larger bodies remain counterevidence; they never certify a new outline');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, repeatedSmallBody(square(14.5, 13, 14), 28),
+], normalizedFragment), null, 'unstable body outlines cannot broaden the fragment');
+assert.ok(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, repeatedBodyB, repeatedSmallBody(square(40, 40, 14), 40),
+], normalizedFragment), 'an unrelated object cannot erase an already evidenced local conflict');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedSmallBody(square(40, 40, 14), 12), repeatedSmallBody(square(40.2, 40, 14), 28),
+], normalizedFragment), null, 'an unrelated repeated body cannot reject the local target');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, repeatedSmallBody(square(13.2, 13, 14), 20),
+], normalizedFragment), null, 'a source-window gap below twelve pixels cannot certify a conflict');
+const extensionCore = Array.from({ length: 100 }, (_, i) => ({
+    u: i < 40 ? 0 : 2, v: 0, c: [0, 0, 0] as [number, number, number],
+}));
+const extensionResiduals = extensionCore.map((_, i) =>
+    [i < 76 ? 5 : 0, 0, 0] as [number, number, number]);
+assert.ok(extensionResiduals.filter(v => v[0] >= 2).length / 100 >= .7,
+    'the whole core can pass even when the newly added region is weak');
+assert.equal(geometry.fragmentExtensionEvidence(extensionCore, extensionResiduals,
+    v => v[0], 5, { x: 0, y: 0 }, 1, square(-1, -1, 2)), null,
+    'old dark pixels must not supply the added region support');
+const supportedExtension = extensionResiduals.map((v, i) =>
+    [i < 82 ? 5 : 0, v[1], v[2]] as [number, number, number]);
+assert.equal(geometry.fragmentExtensionEvidence(extensionCore, supportedExtension,
+    v => v[0], 5, { x: 0, y: 0 }, 1, square(-1, -1, 2))?.addedCoreSupport, .7,
+    'support uses the added region denominator and the same field projection');
 const remoteShadow = bodyCandidate(square(100, 100, 40), 1000);
 const enclosingIncomplete = { ...bodyCandidate(square(5, 5, 30), 200), scanComplete: false };
 assert.deepEqual(geometry.associateBodyCandidates([remoteShadow, fullBodyA], localReference), [fullBodyA],
@@ -138,6 +182,7 @@ function image(kind: string) {
         const noise = ((state >>> 24) / 255 - .5) * 3, dx = x - 160, dy = y - 160, r = Math.hypot(dx, dy);
         let color = [205, 175, 149];
         if (kind === 'solid' && r <= 18 || kind === 'hollow' && r >= 14 && r <= 18) color = [110, 70, 50];
+        if (kind === 'small-solid' && r <= 8) color = [110, 70, 50];
         if (kind === 'body' && r <= 36) color = r <= 5 ? [110, 70, 50] : [185, 144, 121];
         if (kind === 'hair' && Math.abs(dx + .4 * dy) < 2) color = [35, 30, 27];
         if (kind === 'arc' && r >= 32 && r <= 36 && Math.atan2(dy, dx) > -.3 && Math.atan2(dy, dx) < 2.7) color = [110, 70, 50];
@@ -150,7 +195,23 @@ function image(kind: string) {
 }
 
 const seed = { x: 160, y: 160 }, options = { roiRadius: 100, analysisRoiRadius: 36, scanDiameterMm: 20 };
+const smallOutline = Array.from({ length: 64 }, (_, i) => ({
+    x: 160 + 8 * Math.cos(i * Math.PI / 32), y: 160 + 8 * Math.sin(i * Math.PI / 32),
+}));
+const normalizedSmall = { ...normalizedFragment, boundary: smallOutline, center: seed,
+    area_px: geometry.polygonArea(smallOutline), scan: { radius_px: 36 } } as any;
+for (const kind of ['small-solid', 'blank', 'hair', 'hollow']) {
+    const result = await geometry.rejectNormalizedFragmentConflict(image(kind), seed,
+        { ...options, roiRadius: 36 }, normalizedSmall);
+    assert.equal(result, normalizedSmall, `${kind}: no repeated filled-body evidence cannot veto a local result`);
+}
 const blank = image('blank');
+const unavailableFragment = { ...normalizedSmall, warnings: [
+    'brightness_normalized_recovery', 'appearance_refinement_unavailable',
+] };
+assert.equal(await refineAppearanceCandidate(blank, seed,
+    { ...options, roiRadius: 36 }, unavailableFragment), unavailableFragment,
+    'a prior unavailable result must be preserved by the new wrapper');
 const baseline = detectControlledMarkerWithProfile('small-lesion-boundary-candidate', blank, seed, options);
 for (const invalid of [{ ...blank, data: new Uint8ClampedArray(0) }, { ...blank, width: 0 }])
     assert.equal(await refineAppearanceCandidate(invalid, seed, options, baseline), baseline);

@@ -636,6 +636,17 @@ function complete(starBoundary: Point[]): Point[] | null {
     const displacement = Math.max(...ellipseBoundary.map(p => Math.min(...b.map((q, i) => segmentDistance(p, q, b[(i + 1) % b.length]))))) / Math.sqrt(area / Math.PI);
     return displacement <= .30 ? ellipseBoundary : null;
 }
+function fragmentExtensionEvidence(core: Sample[], residuals: Vec[], projection: (v: Vec) => number,
+    strength: number, center: Point, radius: number, reference: Point[]): Record<string, unknown> | null {
+    const added = core.map((p, i) => ({ p, i })).filter(({ p }) => !contains({
+        x: center.x + p.u * radius, y: center.y + p.v * radius,
+    }, reference));
+    const support = added.filter(({ i }) =>
+        projection(residuals[i]) >= Math.max(.75, .4 * strength)).length / Math.max(1, added.length);
+    if (added.length < Math.max(40, core.length * .5) || support < .7) return null;
+    return { addedCorePixels: added.length, addedCoreSupport: support, totalCorePixels: core.length };
+}
+
 function bodyEvidence(
     patch: Patch,
     image: Image,
@@ -643,12 +654,14 @@ function bodyEvidence(
     compactLab = false,
     mixedLight = false,
     supportedCompact = false,
+    fragmentReference?: Point[],
 ): Record<string, unknown> | null {
     const xs = b.map(p => p.x), ys = b.map(p => p.y), diameter = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
     const localLab = compactLab || mixedLight;
     // The 48px proposal context is not a bounding-box limit. Mixed-light peers
     // may be slightly wider; the full background ring must still fit the patch.
-    if (diameter < (localLab ? 24 : 40) || diameter > (mixedLight ? 64 : localLab ? 48 : 160))
+    if (diameter < (localLab || fragmentReference ? 24 : 40)
+        || diameter > (fragmentReference ? 48 : mixedLight ? 64 : localLab ? 48 : 160))
         return null;
     const reach = Math.ceil(diameter * .45), x0 = Math.max(0, Math.floor(Math.min(...xs)) - reach), y0 = Math.max(0, Math.floor(Math.min(...ys)) - reach);
     const x1 = Math.min(image.width, Math.ceil(Math.max(...xs)) + reach + 1), y1 = Math.min(image.height, Math.ceil(Math.max(...ys)) + reach + 1);
@@ -717,11 +730,19 @@ function bodyEvidence(
     if (mixedLight && (strength < 4 || support < .7 || weak.filter(v => !v).length < 7
         || longest > 1 || highlightFraction < (supportedCompact ? .02 : .1) || darkFraction < .35))
         return null;
+    let extensionEvidence: Record<string, unknown> = {};
+    if (fragmentReference) {
+        const extension = fragmentExtensionEvidence(core, residuals, projection,
+            strength, center, radius, fragmentReference);
+        if (!extension) return null;
+        extensionEvidence = extension;
+    }
     return { diameter, area: count, ...(localLab ? { deltaLab: delta, highlightFraction, darkFraction }
         : { deltaLAndLogRatios: delta }), noise: field.noise,
         ...(mixedLight ? { normalizedResidualMedian: strength, backgroundQuantile: .9,
             backgroundCutoff: outerCutoff, calibratedInteriorSupport: support } : { materialDistance: strength }),
-        interiorSupport: support, outerContinuation: continuation, sectorMedianProjection: medians };
+        interiorSupport: support, outerContinuation: continuation, sectorMedianProjection: medians,
+        ...extensionEvidence };
 }
 type BodyCandidate = {
     boundary: Point[];
@@ -1272,10 +1293,87 @@ async function refineAppearanceCandidateBaseline(image: MarkerImageData, seed: M
         return { ...baseline, warnings: [...baseline.warnings, 'appearance_refinement_unavailable'] };
     }
 }
+function findNormalizedFragmentConflict(bank: BodyCandidate[], reference: ControlledMarkerDetection): {
+    body: BodyCandidate; peer: BodyCandidate; overlapIou: number; anchorDistance: number;
+} | null {
+    if (!reference.center || reference.boundary.length < 3) return null;
+    const oldArea = polygonArea(reference.boundary);
+    if (!(oldArea > 0)) return null;
+    const related = bank.filter(candidate => {
+        const area = polygonArea(candidate.boundary), center = polygonCentroid(candidate.boundary);
+        return Number.isFinite(area) && area >= oldArea * 2
+            && convexIntersectionArea(reference.boundary, candidate.boundary) / oldArea >= .9
+            && Math.hypot(reference.center!.x - center.x, reference.center!.y - center.y)
+                <= .4 * Math.sqrt(area / Math.PI);
+    });
+    for (let i = 0; i < related.length; i++) for (let j = i + 1; j < related.length; j++) {
+        const body = related[i], peer = related[j];
+        const a = body.evidence.anchor as Point | undefined, b = peer.evidence.anchor as Point | undefined;
+        if (!a || !b) continue;
+        const anchorDistance = Math.hypot(a.x - b.x, a.y - b.y);
+        const intersection = convexIntersectionArea(body.boundary, peer.boundary);
+        const overlapIou = intersection / Math.max(1, polygonArea(body.boundary)
+            + polygonArea(peer.boundary) - intersection);
+        if (anchorDistance >= 12 && overlapIou >= .9) return { body, peer, overlapIou, anchorDistance };
+    }
+    return null;
+}
+
+async function rejectNormalizedFragmentConflict(image: MarkerImageData, seed: MarkerPoint,
+    options: ControlledMarkerOptions, existing: ControlledMarkerDetection): Promise<ControlledMarkerDetection> {
+    const radius = Number(existing.scan?.radius_px || options.roiRadius || 36);
+    if (!validAppearanceInput(image, seed, radius) || !existing.center) return existing;
+    try {
+        const patch = new Patch(await loadMarkerOpenCv(), image, seed, radius, true);
+        const bank: BodyCandidate[] = [];
+        for (const dy of [-8, 0, 8]) for (const dx of [-8, 0, 8]) {
+            const anchor = { x: Math.round(existing.center.x / 8) * 8 + dx,
+                y: Math.round(existing.center.y / 8) * 8 + dy };
+            for (const context of [24, 32]) {
+                const proposal = ellipse(patch, image, anchor, context);
+                if (!proposal) continue;
+                const radial = star(patch, image, proposal);
+                if (!radial || radial.atMaximum > .05) continue;
+                const boundary = complete(radial.boundary);
+                if (!boundary || boundary.some(p => p.x < 0 || p.y < 0
+                    || p.x >= image.width || p.y >= image.height)) continue;
+                // Small-scale evidence can veto a fragment, never emit a new outline.
+                // Its added region must pass the original colour-strength checks too.
+                const evidence = bodyEvidence(patch, image, boundary, false, false, false, existing.boundary);
+                if (!evidence) continue;
+                bank.push({ boundary, evidence: { ...evidence, anchor, context },
+                    score: Number(evidence.materialDistance),
+                    scanComplete: boundary.every(p => Math.hypot(p.x - seed.x, p.y - seed.y) <= .95 * radius) });
+            }
+        }
+        // Keep incomplete proposals: their agreement is counterevidence to a
+        // successful small fragment, not proof of physical scan truncation.
+        const conflict = findNormalizedFragmentConflict(bank, existing);
+        if (!conflict) return existing;
+        return { ...existing, ok: false, failure_code: 'unstable_enclosure', center: null, boundary: [],
+            area_px: 0, bbox: null, geometry_mode: null, seed_relation: null,
+            marker_area_px: 0, marker_bbox: null, confidence: 0,
+            rejected_boundary: existing.boundary, rejected_geometry_mode: existing.geometry_mode,
+            rejected_reasons: ['normalized_fragment_body_conflict'],
+            warnings: [...existing.warnings, 'normalized_fragment_body_conflict'],
+            diagnostics: { ...existing.diagnostics,
+                filled_candidate_route: 'rejected_normalized_fragment_body_conflict',
+                appearance_evidence: { decision: 'reject_only', oldArea: polygonArea(existing.boundary),
+                    overlapIou: conflict.overlapIou, anchorDistance: conflict.anchorDistance,
+                    candidateCount: bank.length,
+                    bodies: [conflict.body, conflict.peer].map(body => ({
+                        ...body.evidence, boundary: body.boundary, scanComplete: body.scanComplete,
+                    })) } } as ControlledMarkerDetection['diagnostics'] };
+    } catch {
+        return existing;
+    }
+}
+
 export const __appearanceGeometryForTests = {
     polygonArea, polygonCentroid, convexIntersectionArea, selectCompleteBodyCandidate,
     constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
-    regularizeAppearanceBoundary, selectCompactPigmentProposal,
+    regularizeAppearanceBoundary, selectCompactPigmentProposal, findNormalizedFragmentConflict,
+    rejectNormalizedFragmentConflict, fragmentExtensionEvidence,
 };
 
 type CompactPigmentProposal = {
@@ -1389,6 +1487,15 @@ export async function refineAppearanceCandidate(
     baseline: ControlledMarkerDetection,
 ): Promise<ControlledMarkerDetection> {
     const existing = await refineAppearanceCandidateBaseline(image, seed, options, baseline);
+    if (existing.ok && existing.geometry_mode === 'dark_component'
+        && existing.area_px >= 64 && existing.area_px <= 400
+        && existing.warnings.includes('brightness_normalized_recovery')
+        && !existing.warnings.some(warning => warning.includes('unavailable'))
+        && baseline.ok && existing.area_px === baseline.area_px
+        && existing.boundary.length === baseline.boundary.length
+        && existing.boundary.every((p, i) => p.x === baseline.boundary[i].x && p.y === baseline.boundary[i].y)) {
+        return rejectNormalizedFragmentConflict(image, seed, options, existing);
+    }
     const coverageReasons = new Set([
         'not_enclosed_within_scan', 'candidate_outside_scan_roi',
         'appearance_candidate_outside_scan_roi', 'scan_range_too_small',
