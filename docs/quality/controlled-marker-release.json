@@ -144,7 +144,9 @@
             }
           }
         }
-      }
+      },
+      "safetyStatus": "research_checkpoint_with_confirmed_adversarial_failure",
+      "safetyEvidence": "根唯一责任记录A101-local-ambiguity.jsonl：两个小目标新增误接受；原恢复包不覆盖，禁止作为安全/交付依据。"
     }
   },
   "runtimeIntegration": {
@@ -197,12 +199,17 @@
     }
   },
   "archive": {
-    "status": "pending",
-    "note": "0.101.1同指纹本地研究候选待生成；0.101.0原包保留且已有双目标反例，不作当前安全证明。"
+    "status": "verified",
+    "manifestPath": "local_outputs/recovery-packages/肿物邻物歧义保护-0.101.1-研究候选-20261110/manifest.json",
+    "manifestSha256": "b3d583240efbfce4c034901ea6b7c375176541deadb90984952f156ab3597cbe",
+    "sourceDigest": "2e97b6016f69052ccfac399ebcde4a225ff7e59006ddaf247795e0a3d58aa37c",
+    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+    "note": "研究候选增量包5新副本+258继承逐文件回读，1项仅指纹；依赖原0.101.0基础包。后续E测试为包外同指纹旁证，不覆盖旧包，不代表九项/真机/医学通过。"
   },
   "scopeBoundaryReview": {
-    "status": "pending",
-    "note": "仅本人肿物外观补救和必要测试/身份，待同指纹存档回读。"
+    "status": "not_required",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
+    "note": "实际源码Diff仅本人肿物外观补救与必要测试/身份；恢复包范围外仅本任务嵌套运行副本目录登记项，无范围外共享代码变更。UI、切口、RSTL六项、模型资产未修改。"
   },
   "operatorEvaluation": {
     "status": "pending",
@@ -346,7 +353,9 @@
             }
           }
         }
-      }
+      },
+      "safetyStatus": "research_checkpoint_with_confirmed_adversarial_failure",
+      "safetyEvidence": "根唯一责任记录A101-local-ambiguity.jsonl：两个小目标新增误接受；原恢复包不覆盖，禁止作为安全/交付依据。"
     },
     {
       "profile": "small-lesion-boundary-candidate",
@@ -3071,10 +3080,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
-    "currentSourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
-    "capturedAt": "2026-11-10T09:02:53.167Z",
-    "reason": "Vh1 guarded compact recovery candidate under validation"
+    "previousSourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
+    "currentSourceDigest": "2e97b6016f69052ccfac399ebcde4a225ff7e59006ddaf247795e0a3d58aa37c",
+    "capturedAt": "2026-11-10T11:12:02.348980+00:00",
+    "reason": "0.101.1仅收紧未配对邻物冲突否决；保留0.101.0的已证双目标误接受。"
   },
   "integrationHistory": [
     {
@@ -3180,10 +3189,10 @@
     }
   ],
   "automatedValidation": {
-    "status": "in_progress",
-    "sourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
+    "status": "partial_pass",
+    "sourceDigest": "2e97b6016f69052ccfac399ebcde4a225ff7e59006ddaf247795e0a3d58aa37c",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md",
-    "note": "实际A原23次：原13成功几何保持，6拒识变候选；四套原安全测试/类型检查通过，36真实控制几何全部保持。16旧反例未出现新增变化，但新分支零触发不能代签其安全；138/243及新分支反例待完成。"
+    "note": "0.101.1同指纹243固定条件：原139接受几何保持、新增34候选（F05 13/F06 21）；相对0.101.0因邻物否决减少33（F06 6/F07 27）。五派生、appearance、类型、开发身份和隐私通过；原23重复与正式Worker的最终结果回读唯一责任记录。旧138/36仅是上一候选实测，不代签当前新运行。九项未销，非整组/真机/医学通过。"
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
@@ -3207,6 +3216,14 @@
     "note": "阶段候选源码逐文件回读；非整组/真机/医学验收。外部模型/依赖仅原位指纹。"
   },
   "sourceFingerprintHistory": [
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
+      "currentSourceDigest": "f3c060ab9304d7044a117e789fd12cad56d0f914d6dc32c9bd8a89654fbbfc1e",
+      "capturedAt": "2026-11-10T09:02:53.167Z",
+      "reason": "Vh1 guarded compact recovery candidate under validation"
+    },
     {
       "encoding": "UTF-8",
       "normalization": "CRLF-to-LF-only",
