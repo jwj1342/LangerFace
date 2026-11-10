@@ -159,7 +159,9 @@ for (const layout of scrollLayouts) {
       const scrollTarget = layout.mobile ? "pane" : layout.width <= 560 ? "root" : "document";
       await expect(page.locator('[data-workflow-mobile="true"] > .workflow-mobile-operation-pane')).toHaveCount(layout.mobile ? 1 : 0);
       await expect(page.locator(".mobile-workflow-dock")).toHaveCount(layout.mobile ? 1 : 0);
-      await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator('[data-workflow-mobile="true"] .workflow-mobile-recovery-slot')).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(1);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toBeEmpty();
       if (layout.width <= 1280) {
         const stageTop = await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top);
         await expectGestureScrolls(page, scrollTarget, 10_000, layout.touch);
