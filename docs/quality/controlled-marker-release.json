@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
+    "sourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -1746,7 +1746,7 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.32-candidate.1",
+    "version": "0.1.33-candidate.1",
     "name": "工作流触控：兼容悬停报告并保留跨布局绑定",
     "status": "candidate",
     "sourceFiles": [
@@ -1773,14 +1773,49 @@
       "web/src/services/workflowViewport.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "61da6a6c14eede365b270bbf0026e157cde83e6c651f83d2f1df6ec8361b4e1c",
+    "sourceDigest": "d26fe5b7f137403c5d3db7abf2032605f6a047d360d0dc2b966cf4f5b37deaf8",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
+    "runtimeSourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "note": "窄屏触控能力统一门禁，真实触摸仍按pointerType分流；既有手机两行工具栏/确认与双指恢复。稳定portal容器保持画布、控件及桌面顺序；不更改算法、模型、RSTL规则及原布局尺寸。真机人工待验，历史首次故障版本仍待确认。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.32-candidate.1",
+      "name": "工作流触控：兼容悬停报告并保留跨布局绑定",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowDraftRecovery.tsx",
+        "web/src/components/WorkflowLayout.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerRunDiagnostics.ts",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveRuntime.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/mobileWorkflowVisibility.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/services/workflowViewport.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "61da6a6c14eede365b270bbf0026e157cde83e6c651f83d2f1df6ec8361b4e1c",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "窄屏触控能力统一门禁，真实触摸仍按pointerType分流；既有手机两行工具栏/确认与双指恢复。稳定portal容器保持画布、控件及桌面顺序；不更改算法、模型、RSTL规则及原布局尺寸。真机人工待验，历史首次故障版本仍待确认。"
+    },
     {
       "version": "0.1.31-candidate.1",
       "name": "交互诊断：识别进行中也可保存故障快照",
@@ -2826,10 +2861,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e",
-    "currentSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
-    "capturedAt": "2026-11-10T05:34:39.100Z",
-    "reason": "UI0.1.32窄屏触控门禁及稳定布局容器；算法/资产指纹保持。"
+    "previousSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
+    "currentSourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
+    "capturedAt": "2026-11-10T05:42:33.662Z",
+    "reason": "UI0.1.33窄屏触控门禁及稳定布局容器；算法/资产指纹保持。"
   },
   "integrationHistory": [
     {

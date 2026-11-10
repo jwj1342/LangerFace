@@ -2358,7 +2358,9 @@
 }
 
 .workflow-mobile-operation-pane {
-  display: none;
+  /* Keep focused portal children visible until the layout effect moves them.
+     Outside phone mode this container is empty and creates no layout box. */
+  display: contents;
 }
 
 .workflow-workbench .stage-top {

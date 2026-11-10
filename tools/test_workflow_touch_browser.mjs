@@ -98,7 +98,7 @@ try {
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
       } finally { await cdp.detach(); }
       Object.assign(result.checks, {
-        twoRowToolbar: result.before.display === "grid" && result.before.rows === "40px 32px",
+        twoRowToolbar: result.before.display === "grid" && result.before.rows.startsWith("40px 32px"),
         firstTouchDoesNotRecognize: result.firstDown.busy !== "true",
         pinchZoomsIn: result.spread.zoom > result.before.zoom + 0.05,
         pinchZoomsOut: result.contract.zoom < result.spread.zoom - 0.05,
@@ -118,7 +118,7 @@ try {
       result.checks.independentScroll = result.scroll.bottom > 0 && result.scroll.returnsToTop
         && result.scroll.stageUnchanged && result.scroll.horizontalOverflow <= 1;
       await page.locator("#reviewerName").fill("lifecycle-regression");
-      await page.evaluate(async () => {
+      result.bindingBaseline = await page.evaluate(async () => {
         const { els } = await import("/src/services/liveDom.ts");
         const { sourceState, renderState } = await import("/src/services/liveState.ts");
         const visibility = await import("/src/services/mobileWorkflowVisibility.ts");
@@ -133,21 +133,29 @@ try {
           refine: JSON.stringify(renderState.refine2d), input,
           visibility: JSON.stringify(visibility.workflowLayerVisibilitySnapshot()),
         };
+        return {
+          disconnected: Object.entries(els).filter(([, node]) => node
+            && !(Array.isArray(node) ? node.every(item => item.isConnected) : node.isConnected)).map(([key]) => key),
+          focus: document.activeElement?.id, inputRects: input.getClientRects().length,
+          inputDisabled: input.disabled,
+        };
       });
       const samples = [];
       for (const width of [561, 360, 900, 360]) {
         await page.setViewportSize({ width, height: 596 });
         await page.waitForFunction(mobile => document.querySelector(".workflow-workbench")?.dataset.workflowMobile === String(mobile), width <= 560);
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        samples.push(await page.evaluate(async () => {
+        const sample = await page.evaluate(async () => {
           const { els } = await import("/src/services/liveDom.ts");
           const { sourceState, renderState } = await import("/src/services/liveState.ts");
           const visibility = await import("/src/services/mobileWorkflowVisibility.ts");
           const before = window.__workflowBindingBaseline;
           const root = document.querySelector(".workflow-workbench");
+          const retainedBinding = (key, node) => !node || (els[key] === node
+            && (Array.isArray(node) ? node.every(item => item.isConnected) : node.isConnected));
           return {
             width: innerWidth,
-            retainedBindings: Object.entries(before.els).every(([key, node]) => !node || (els[key] === node && node.isConnected)),
+            retainedBindings: Object.entries(before.els).every(([key, node]) => retainedBinding(key, node)),
             canvasIsVisibleCanvas: els.canvas === document.querySelector("#canvas"),
             retainedPhoto: sourceState.imageFile === before.photo && sourceState.planning2d === before.planning
               && sourceState.planning2d.getFrameState().revision === before.revision,
@@ -159,11 +167,14 @@ try {
             orderedRails: innerWidth <= 560
               ? root.querySelector(".workflow-mobile-operation-pane").contains(document.querySelector(".workflow-incision-rail"))
               : root.firstElementChild.matches(".workflow-live-rail") && root.lastElementChild.matches(".workflow-incision-rail"),
+            brokenBindings: Object.entries(before.els).filter(([key, node]) => !retainedBinding(key, node)).map(([key]) => key),
+            activeElement: document.activeElement?.id,
           };
-        }));
+        });
+        samples.push(sample);
       }
       result.lifecycle = samples;
-      result.checks.lifecycle = samples.every(sample => Object.entries(sample).every(([key, value]) => key === "width" || value === true));
+      result.checks.lifecycle = samples.every(sample => Object.entries(sample).every(([key, value]) => ["width", "brokenBindings", "activeElement"].includes(key) || value === true));
       result.checks.noBrowserErrors = errors.length === 0;
       result.errors = errors;
       assert.ok(Object.values(result.checks).every(Boolean), JSON.stringify(result.checks));
@@ -183,6 +194,7 @@ try {
     identity: expected, results,
     limits: ["Capability replay is not a phone OS emulator or actual-phone acceptance.",
       "Refinement retention compares existing state; this is not full RSTL effect equivalence.",
+      "Toolbar asserts the two original explicit rows; the pre-existing implicit filename row is recorded, not redesigned.",
       "Algorithm recognition quality and camera capture are outside this UI regression."],
   };
   if (output) writeFileSync(output, JSON.stringify(report, null, 2));
