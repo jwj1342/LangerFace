@@ -16,7 +16,7 @@ const option = (name) => {
 };
 const output = option("--output");
 const mutant = option("--mutant");
-assert(!mutant || mutant === "omit-primary", "unknown test-only mutant");
+assert(!mutant || ["omit-primary", "ignore-narrow-touch"].includes(mutant), "unknown test-only mutant");
 const moduleId = "virtual:workflow-status-contract";
 const resolvedId = `\0${moduleId}`;
 const moduleUrl = `/@id/__x00__${moduleId}`;
@@ -51,6 +51,7 @@ window.fixture = {
 mount();
 `;
 const html = (entry) => `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>[hidden],.hidden{display:none!important}body{margin:20px}
 .workflow-stage-status{display:block;max-width:600px}
 .workflow-developer-detail{display:block}</style></head><body>
@@ -66,6 +67,12 @@ function fixturePlugin() {
     load(id) { if (id === resolvedId) return fixtureModule; },
     transform(code, id) {
       if (!mutant || id.split("?")[0].replaceAll("\\", "/") !== componentPath.replaceAll("\\", "/")) return;
+      if (mutant === "ignore-narrow-touch") {
+        const addedCondition = " || narrowTouchWorkflowViewportActive()";
+        assert(code.includes(addedCondition), "mutant must remove the real narrow-touch condition");
+        mutantApplied = true;
+        return code.replace(addedCondition, "");
+      }
       const primary = '<span className="workflow-stage-status-copy">{statusText}</span>';
       assert(code.includes(primary), "mutant must target the real primary-status expression");
       mutantApplied = true;
@@ -89,20 +96,50 @@ const browser = await chromium.launch({
 const results = [];
 
 async function runModes(base, production) {
-  for (const touch of [false, true]) {
+  for (const input of [
+    { name: "desktop-mouse", touch: false, width: 1440, hide: false },
+    { name: "narrow-mouse", touch: false, width: 390, hide: false },
+    { name: "touch-only", touch: true, width: 390, hide: true },
+    { name: "touch-with-hover", touch: true, width: 390, hover: true, hide: true },
+    { name: "fine-with-touch", touch: true, width: 390, hover: true, fine: true, hide: true },
+    { name: "wide-touch-only", touch: true, width: 844, hide: true },
+    { name: "wide-touch-with-hover", touch: true, width: 844, hover: true, hide: false },
+  ]) {
+    const touch = input.touch;
     for (const query of ["", "?developer=1", "?markerDiagnostics=1"]) {
       const context = await browser.newContext({
-        viewport: touch ? { width: 390, height: 844 } : { width: 1440, height: 960 },
+        viewport: { width: input.width, height: 844 },
         isMobile: touch, hasTouch: touch,
       });
-      const result = { production, touch, query, checks: 0 };
+      if (input.hover) {
+        await context.addInitScript(({ fine }) => {
+          const nativeMatchMedia = window.matchMedia.bind(window);
+          window.matchMedia = (query) => {
+            let emulated = query.replaceAll("(hover: none)", "(min-width: 99999px)")
+              .replaceAll("(hover: hover)", "(min-width: 0px)");
+            if (fine) {
+              emulated = emulated.replaceAll("(pointer: coarse)", "(min-width: 99999px)")
+                .replaceAll("(pointer: fine)", "(min-width: 0px)");
+            }
+            return nativeMatchMedia(emulated);
+          };
+        }, { fine: Boolean(input.fine) });
+      }
+      const result = { production, input: input.name, touch, query, checks: 0 };
       try {
         const page = await context.newPage();
         const errors = [];
         page.on("pageerror", (error) => errors.push(error.message));
         await page.goto(`${base}/status-fixture${query}`);
         await page.waitForFunction(() => window.fixture && document.querySelector("#workflowStageStatus"));
-        const visible = !production && !touch && Boolean(query);
+        result.inputEvidence = await page.evaluate(() => ({
+          width: innerWidth,
+          points: navigator.maxTouchPoints,
+          coarse: matchMedia("(pointer: coarse)").matches,
+          hover: matchMedia("(hover: hover)").matches,
+        }));
+        assert.equal(result.inputEvidence.width, input.width, "fixture uses the product viewport contract");
+        const visible = !production && !input.hide && Boolean(query);
         await page.evaluate(() => window.fixture.status({
           stageStatus: "PRIMARY_REASON", stageStatusTone: "normal",
           stageBusy: false, developerDetails: ["PRIMARY_REASON", "INDEPENDENT_DETAIL"],
@@ -116,6 +153,31 @@ async function runModes(base, production) {
           assert.equal(await page.locator("#workflowStageStatus").getAttribute("aria-hidden"), "true");
         }
         result.checks += 1;
+        for (const state of [
+          { stageStatus: "WARNING_REASON", stageStatusTone: "warning", stageBusy: false },
+          { stageStatus: "BUSY_REASON", stageStatusTone: "normal", stageBusy: true },
+        ]) {
+          await page.evaluate((state) => window.fixture.status({ ...state, developerDetails: [] }), state);
+          await page.waitForFunction((text) => document.querySelector(".workflow-stage-status-copy")?.textContent === text, state.stageStatus);
+          assert.equal(await page.locator("#workflowStageStatus").isVisible(), visible, `${state.stageStatus}: explanatory visibility`);
+          assert.equal(await page.locator("#workflowStageStatus").getAttribute("aria-hidden"), String(!visible));
+          result.checks += 2;
+        }
+        await page.evaluate(() => window.fixture.status({
+          stageStatus: "PRIMARY_REASON", stageStatusTone: "normal",
+          stageBusy: false, developerDetails: ["PRIMARY_REASON", "INDEPENDENT_DETAIL"],
+        }));
+        await page.waitForFunction(() => document.querySelector(".workflow-stage-status-copy")?.textContent === "PRIMARY_REASON");
+        if (input.name === "touch-with-hover") {
+          for (const width of [560, 561, 844, 390]) {
+            await page.setViewportSize({ width, height: 844 });
+            await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+            const expectedVisible = !production && Boolean(query) && width > 560;
+            assert.equal(await page.locator("#workflowStageStatus").isVisible(), expectedVisible, `mixed touch at ${width}px`);
+            assert.equal(await page.locator("#workflowStageStatus").getAttribute("aria-hidden"), String(!expectedVisible));
+            result.checks += 2;
+          }
+        }
         for (let repetition = 0; repetition < 3; repetition += 1) {
           for (const message of [unsupported, corrupt]) {
             await page.evaluate((text) => window.fixture.message(text), message);

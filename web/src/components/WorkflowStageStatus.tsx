@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useIncisionStore } from "../stores/incisionStore";
 import { isDeveloperMode } from "../services/developerMode";
+import { narrowTouchWorkflowViewportActive, subscribeWorkflowViewport } from "../services/workflowViewport";
 import { StageMeta } from "./StageShell";
 
 const TOUCH_ONLY_MEDIA_QUERY = "(pointer: coarse) and (hover: none)";
@@ -9,17 +10,24 @@ const UPLOAD_ERROR_MESSAGES = new Set([
   "无法读取或检测该文件。请重新上传；若仍失败，请换用受支持的清晰照片或视频。",
 ]);
 
+function touchFeedbackHidden(): boolean {
+  return typeof window !== "undefined"
+    && (window.matchMedia(TOUCH_ONLY_MEDIA_QUERY).matches || narrowTouchWorkflowViewportActive());
+}
+
 export function WorkflowStageStatus() {
   const snapshot = useIncisionStore((state) => state.snapshot);
-  const [touchOnly, setTouchOnly] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(TOUCH_ONLY_MEDIA_QUERY).matches,
-  );
+  const [touchOnly, setTouchOnly] = useState(touchFeedbackHidden);
   useEffect(() => {
     const media = window.matchMedia(TOUCH_ONLY_MEDIA_QUERY);
-    const update = () => setTouchOnly(media.matches);
+    const update = () => setTouchOnly(touchFeedbackHidden());
     update();
     media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
+    const unsubscribeViewport = subscribeWorkflowViewport(update);
+    return () => {
+      media.removeEventListener?.("change", update);
+      unsubscribeViewport();
+    };
   }, []);
   const busy = Boolean(snapshot?.stageBusy);
   const developerDesktop = isDeveloperMode() && !touchOnly;

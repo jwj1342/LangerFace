@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
+    "sourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -1746,8 +1746,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.33-candidate.1",
-    "name": "工作流触控：兼容悬停报告并保留跨布局绑定",
+    "version": "0.1.34-candidate.1",
+    "name": "画布提示：隐藏窄屏触控开发者字幕",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
@@ -1773,14 +1773,49 @@
       "web/src/services/workflowViewport.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "d26fe5b7f137403c5d3db7abf2032605f6a047d360d0dc2b966cf4f5b37deaf8",
+    "sourceDigest": "74929cde266298e24eeeee08091593ba8b238f98f257a92f8b7a3a67bf753af9",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
+    "runtimeSourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-    "note": "窄屏触控能力统一门禁，真实触摸仍按pointerType分流；既有手机两行工具栏/确认与双指恢复。稳定portal容器保持画布、控件及桌面顺序；不更改算法、模型、RSTL规则及原布局尺寸。真机人工待验，历史首次故障版本仍待确认。"
+    "note": "补齐窄屏真实触控能力的字幕隐藏条件，保留原不限宽touch-only隐藏、纯鼠标开发提示和宽屏混合触屏策略。只改解释字幕可见性；布局尺寸、按钮、后台日志、算法、资产及RSTL保持。人工待验。"
   },
   "uiHistory": [
+    {
+      "version": "0.1.33-candidate.1",
+      "name": "工作流触控：兼容悬停报告并保留跨布局绑定",
+      "status": "candidate",
+      "sourceFiles": [
+        "web/src/components/IncisionStagePanel.tsx",
+        "web/src/components/LiveSourceControlsPanel.tsx",
+        "web/src/components/MobileWorkflowControls.tsx",
+        "web/src/components/StandaloneReviewControlsPanel.tsx",
+        "web/src/components/TumorInputPanel.tsx",
+        "web/src/components/WorkflowCanvasTools.tsx",
+        "web/src/components/WorkflowDraftRecovery.tsx",
+        "web/src/components/WorkflowLayout.tsx",
+        "web/src/components/WorkflowStageStatus.tsx",
+        "web/src/services/controlledMarkerRunDiagnostics.ts",
+        "web/src/services/controlledMarkerUiConfig.ts",
+        "web/src/services/incisionClinicalCopy.ts",
+        "web/src/services/incisionOverlayStyle.ts",
+        "web/src/services/incisionPhotoRuntime.ts",
+        "web/src/services/liveCanvasFit.ts",
+        "web/src/services/liveRuntime.ts",
+        "web/src/services/liveState.ts",
+        "web/src/services/mobileWorkflowVisibility.ts",
+        "web/src/services/workflowControllerUtils.ts",
+        "web/src/services/workflowIncisionController.ts",
+        "web/src/services/workflowViewport.ts",
+        "web/src/styles.css"
+      ],
+      "sourceDigest": "d26fe5b7f137403c5d3db7abf2032605f6a047d360d0dc2b966cf4f5b37deaf8",
+      "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
+      "runtimeSourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
+      "algorithmVersion": "0.100.3-candidate.1",
+      "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
+      "note": "窄屏触控能力统一门禁，真实触摸仍按pointerType分流；既有手机两行工具栏/确认与双指恢复。稳定portal容器保持画布、控件及桌面顺序；不更改算法、模型、RSTL规则及原布局尺寸。真机人工待验，历史首次故障版本仍待确认。"
+    },
     {
       "version": "0.1.32-candidate.1",
       "name": "工作流触控：兼容悬停报告并保留跨布局绑定",
@@ -2861,10 +2896,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e",
-    "currentSourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
-    "capturedAt": "2026-11-10T05:42:33.662Z",
-    "reason": "UI0.1.33窄屏触控门禁及稳定布局容器；算法/资产指纹保持。"
+    "previousSourceDigest": "d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6",
+    "currentSourceDigest": "83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad",
+    "capturedAt": "2026-11-10T06:54:31.118Z",
+    "reason": "UI0.1.34窄屏触控开发者字幕显示兼容修复；算法及资产保持。"
   },
   "integrationHistory": [
     {
