@@ -212,9 +212,12 @@
     }
   },
   "archive": {
-    "status": "pending",
+    "status": "verified",
     "sourceDigest": "37e074093915ed30c9cbc57b82c70875ed0e64bd9ba532f1a439eb6a98b3f5d2",
-    "note": "本轮基线复用0.101.1已核验恢复包；新候选验证后另存，不冒充已可发布。"
+    "manifestPath": "local_outputs/recovery-packages/肿物小片主体冲突拒识-0.101.2-研究候选-20261110/manifest.json",
+    "manifestSha256": "9ba66a2e4727f633fe5fca9fcb323d8b00c5eab150ac552699295d7888e3204c",
+    "verifiedAt": "2026-11-10T15:22:59.648087+00:00",
+    "note": "仅研究存点，5文件变化及恢复资源逐项回读；依赖0.101.0基础包。人工、真机、医学和完整下游仍未通过；后续E证据为包外旁证。"
   },
   "scopeBoundaryReview": {
     "status": "not_required",
