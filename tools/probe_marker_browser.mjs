@@ -13,8 +13,10 @@ const browser = await chromium.launch({ headless: true,
 const results = [];
 async function waitForDiagnosticPage(page, priorPages = 0) {
   await page.waitForFunction(async previous => {
-    // Upload/model readiness belongs to the live controller. Wait separately
-    // for the incision controller and its restored diagnostic session.
+    // Persisted diagnostics can be ready before command listeners are bound.
+    // The route status is published only after the formal mount returns.
+    const { useAppStore } = await import("/src/stores/appStore.ts");
+    if (useAppStore.getState().routeStatus !== "合并工作台已挂载") return false;
     if (!document.querySelector("[data-workflow-marker-mode]")) return false;
     const session = sessionStorage.getItem("langerface_diagnostic_session_v2");
     if (!session) return false;
@@ -43,11 +45,16 @@ async function verifyDiagnosticDownload(page, label) {
     [download] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), ready.click()]);
   } catch (error) {
     const message = await page.locator("#markerDiagnosticStatus").textContent();
-    throw new Error(`diagnostic download did not complete: ${message}`, { cause: error });
+    const observed = await page.evaluate(() => window.__deliveryDiagnosticEvents);
+    throw new Error(`diagnostic download did not complete: ${message}; observed=${JSON.stringify(observed)}`, { cause: error });
   }
   if (await download.failure()) throw new Error("diagnostic download failed");
   const bytes = readFileSync(await download.path());
   const payload = JSON.parse(bytes.toString("utf8"));
+  if (process.env.DIAGNOSTIC_PROBE_OUTPUT) {
+    mkdirSync(process.env.DIAGNOSTIC_PROBE_OUTPUT, { recursive: true });
+    writeFileSync(resolve(process.env.DIAGNOSTIC_PROBE_OUTPUT, `${label}-observed.json`), bytes);
+  }
   assert.equal(payload.schema, "marker-diagnostic-session/2");
   assert.equal(auditMarkerDiagnosticExport(payload).passed, true);
   const expectedBranch = createHash("sha256").update(expected.branch).digest("hex");
@@ -74,6 +81,16 @@ try {
          isMobile: mobile, hasTouch: mobile, acceptDownloads: true });
       try {
         const page = await context.newPage();
+         await page.addInitScript(() => {
+           window.__deliveryDiagnosticEvents = [];
+           for (const type of ["langerface:incision-tumor-react-command", "langerface:marker-run-diagnostic", "click"]) {
+             window.addEventListener(type, event => {
+               window.__deliveryDiagnosticEvents.push({ type, command: event.detail?.command,
+                 message: event.detail?.message, target: event.target?.id });
+               if (window.__deliveryDiagnosticEvents.length > 16) window.__deliveryDiagnosticEvents.shift();
+             }, true);
+           }
+         });
         const errors = [];
         page.on("pageerror", error => errors.push(error.message));
         const started = Date.now();
