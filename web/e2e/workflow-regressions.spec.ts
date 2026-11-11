@@ -403,12 +403,12 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
     const photoWidth = Math.round(Math.min(viewport.width / canvas.width, viewport.height / canvas.height) * canvas.width) * zoom;
     const boundary = document.querySelector<SVGPathElement>("[data-workflow-boundary]")!.getBBox();
     const width = parseFloat(getComputedStyle(document.querySelector("[data-workflow-candidate]")!).strokeWidth);
-    return { photoWidth, width, expectedWidth: 0.5 * photoWidth / 650,
+    return { photoWidth, width, expectedWidth: 0.95,
       sizeLimit: 0.06 * Math.min(boundary.width, boundary.height) };
   });
   const expectPhotoPaint = async () => {
-    // This full-face fixture is above the small-lesion cap. Derive the paint
-    // from the displayed photo, not the production helper or a fixed pixel value.
+    // Photo outlines use the reviewed screen-space width, independent of zoom.
+    // Read the rendered CSS rather than importing the production paint helper.
     await expect.poll(async () => {
       const paint = await readPhotoPaint();
       return Math.abs(paint.width - paint.expectedWidth);
@@ -438,7 +438,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   await page.mouse.wheel(0, -120);
   await expect.poll(async () => (await readPhotoPaint()).photoWidth).toBeGreaterThan(initialPaint.photoWidth);
   const zoomedPaint = await expectPhotoPaint();
-  expect(zoomedPaint.width / initialPaint.width).toBeCloseTo(zoomedPaint.photoWidth / initialPaint.photoWidth, 4);
+  expect(zoomedPaint.width).toBeCloseTo(initialPaint.width, 4);
   await page.mouse.wheel(0, 120);
   await expect.poll(async () => (await readPhotoPaint()).photoWidth).toBeCloseTo(initialPaint.photoWidth, 4);
   expect((await expectPhotoPaint()).width).toBeCloseTo(initialPaint.width, 4);
