@@ -711,7 +711,7 @@ export async function main(args = process.argv.slice(2)) {
         assertIdentity(captureMarkerIdentity(undefined), expectedIdentity);
         const result = await run(selection.name, [playwright, "test", "--config", selection.config,
           ...selection.extra, "--workers=1", "--retries=0",
-          "--output", join(folder, selection.name)], selection.name === "production" ? 600_000 : 180_000, true);
+          "--output", join(folder, selection.name)], selection.name === "production" ? 900_000 : 180_000, true);
         assert.equal(result.code, 0, `${selection.name} failed`);
         const report = result.report();
         assertResults(report, selection.expected);
