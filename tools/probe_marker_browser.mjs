@@ -12,7 +12,11 @@ const browser = await chromium.launch({ headless: true,
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined });
 const results = [];
 async function waitForDiagnosticPage(page, priorPages = 0) {
-  await page.waitForFunction(async previous => {
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    // This Playwright build treats an async waitForFunction predicate as a
+    // truthy Promise. Evaluate it to a boolean before deciding to poll again.
+    const ready = await page.evaluate(async previous => {
     // Persisted diagnostics can be ready before command listeners are bound.
     // The route status is published only after the formal mount returns.
     const { useAppStore } = await import("/src/stores/appStore.ts");
@@ -35,7 +39,11 @@ async function waitForDiagnosticPage(page, priorPages = 0) {
       });
       return Boolean(saved && saved.page_instances.length > previous && saved.page_instances.at(-1).service_identity);
     } finally { db.close(); }
-  }, priorPages, { timeout: 30000 });
+    }, priorPages);
+    if (ready) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("diagnostic controller/session did not become ready within 30000ms");
 }
 async function verifyDiagnosticDownload(page, label) {
   const ready = page.getByRole("button", { name: "导出诊断日志", exact: true });
