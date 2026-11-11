@@ -11,6 +11,30 @@ const expected = captureMarkerIdentity("small-lesion-boundary-candidate");
 const browser = await chromium.launch({ headless: true,
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined });
 const results = [];
+async function waitForDiagnosticPage(page, priorPages = 0) {
+  await page.waitForFunction(async previous => {
+    // Upload/model readiness belongs to the live controller. Wait separately
+    // for the incision controller and its restored diagnostic session.
+    if (!document.querySelector("[data-workflow-marker-mode]")) return false;
+    const session = sessionStorage.getItem("langerface_diagnostic_session_v2");
+    if (!session) return false;
+    const db = await new Promise(resolve => {
+      const request = indexedDB.open("langerface-diagnostics-v2", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    if (!db) return false;
+    try {
+      if (!db.objectStoreNames.contains("sessions")) return false;
+      const saved = await new Promise(resolve => {
+        const request = db.transaction("sessions", "readonly").objectStore("sessions").get(session);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+      return Boolean(saved && saved.page_instances.length > previous && saved.page_instances.at(-1).service_identity);
+    } finally { db.close(); }
+  }, priorPages, { timeout: 30000 });
+}
 async function verifyDiagnosticDownload(page, label) {
   const ready = page.getByRole("button", { name: "导出诊断日志", exact: true });
   await ready.waitFor({ state: "visible", timeout: 15000 });
@@ -54,6 +78,7 @@ try {
         page.on("pageerror", error => errors.push(error.message));
         const started = Date.now();
         await page.goto(new URL("/app/workflow?developer=1", base).href, { timeout: 30000 });
+         await waitForDiagnosticPage(page);
         const upload = mobile ? page.getByRole("button", { name: "上传照片", exact: true }) : page.locator("#uploadBtn");
         await upload.waitFor({ state: "visible", timeout: 30000 });
         await page.waitForFunction(() => !document.querySelector("#fileInput")?.disabled, {}, { timeout: 30000 });
@@ -76,7 +101,7 @@ try {
          const firstDownload = await verifyDiagnosticDownload(page, `${label}-before-refresh`);
          await page.reload({ timeout: 30000 });
          await page.waitForFunction(() => !document.querySelector("#fileInput")?.disabled, {}, { timeout: 30000 });
-         await page.waitForFunction(() => sessionStorage.getItem("langerface_diagnostic_session_v2"), {}, { timeout: 30000 });
+         await waitForDiagnosticPage(page, firstDownload.pages);
          const restoredDownload = await verifyDiagnosticDownload(page, `${label}-after-refresh`);
          assert.equal(restoredDownload.sessionId, firstDownload.sessionId, "refresh must retain the same session");
          assert.ok(firstDownload.sourceIds.length > 0, "first download must contain the uploaded source record");
