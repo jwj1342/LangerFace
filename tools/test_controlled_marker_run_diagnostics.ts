@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import { stripTypeScriptTypes } from "node:module";
 import { auditExportPayload } from "../web/src/services/exportPrivacy.ts";
-import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, diagnosticSha256, diagnosticPixelBinding, diagnosticReplayMismatches, parseDiagnosticRun, assertDiagnosticJson, classifyDiagnosticEvidence, captureWorkflowInteractionSnapshot, type RunInput } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
+import { MarkerRunDiagnostics, DIAGNOSTIC_LIMITS, auditMarkerDiagnosticExport, diagnosticExportPayload, diagnosticSha256, diagnosticPixelBinding, diagnosticReplayMismatches, parseDiagnosticRun, assertDiagnosticJson, classifyDiagnosticEvidence, captureWorkflowInteractionSnapshot, type RunInput } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
 import { CANVAS_EXPORT_DIAGNOSTIC_EVENT } from "../web/src/services/canvasRecording.ts";
 
 const pixels = new Uint8ClampedArray([10, 20, 30, 255, 20, 30, 40, 255, 50, 60, 70, 255, 80, 90, 100, 255]);
-const identity = { algorithmName: "小肿物边界候选算法", releaseName: "小肿物边界识别：稳定候选选择与中心一致性", changeSlug: "deterministic-selection-center-consistency", profile: "small-lesion-boundary-candidate", implementationVersion: "0.36.0-candidate.1", head: "66c838be4312e237056de5a5487cd9b3f9a42eea", branch: "test", worktreeId: "a".repeat(64), sourceDigest: "b6f9d35754eddb9513d156d3f662e932aa287ca4710223350f2f838ca6a0df95", assetDigest: "c".repeat(64), mode: "development" };
+const identity = { algorithmName: "小肿物边界候选算法", releaseName: "小肿物边界识别：稳定候选选择与中心一致性", changeSlug: "deterministic-selection-center-consistency", profile: "small-lesion-boundary-candidate", implementationVersion: "0.36.0-candidate.1", head: "66c838be4312e237056de5a5487cd9b3f9a42eea", branch: "verify/vh1-lesion-runtime-0.102.1-20261111", worktreeId: "a".repeat(64), sourceDigest: "b6f9d35754eddb9513d156d3f662e932aa287ca4710223350f2f838ca6a0df95", assetDigest: "c".repeat(64), mode: "development" };
 let revision = 0;
 let fetchMode = "ok";
 let fetchCalls = 0;
@@ -36,6 +37,10 @@ const run = diagnostics.begin(input, 1, "web_worker", pixels, transferred);
 structuredClone(transferred, { transfer: [transferred.buffer] });
 assert.equal(transferred.byteLength, 0);
 assert.throws(() => diagnostics.exportLatest(), /等待/);
+const pendingSnapshot = JSON.parse(diagnostics.exportSession());
+assert.equal(pendingSnapshot.pending_run_count, 1);
+assert.equal(pendingSnapshot.runs[0].status, "pending", "export must retain an unfinished failure snapshot");
+assert.equal(auditMarkerDiagnosticExport(pendingSnapshot).passed, true);
 run.finish(detection);
 await run.evidence; await Promise.resolve();
 assert.equal(run.run.file_binding, "PASS");
@@ -68,6 +73,48 @@ const exported = diagnostics.exportLatest();
 assert.ok(auditExportPayload(JSON.parse(exported)).violations.some(v => v.path === "service_identity.sourceDigest"), "reproduce real digest false positive");
 assert.deepEqual(auditMarkerDiagnosticExport(JSON.parse(exported)).violations, [], "typed diagnostic gate must accept real identity");
 assert.equal(JSON.parse(exported).service_identity.sourceDigest, identity.sourceDigest, "original fingerprint must not be redacted");
+const exportedRun = JSON.parse(exported);
+assert.equal(exportedRun.service_identity.branch, undefined, "raw branch text must not leave the browser");
+assert.equal(run.run.service_identity?.branch, identity.branch, "export must retain internal identity");
+assert.equal(exportedRun.service_identity.branch_sha256, createHash("sha256").update(identity.branch).digest("hex"));
+// Include UTF-8, SHA padding boundaries, multiple blocks and phone-like branch text.
+const branchVectors = ["test", identity.branch, "修复/诊断-😀", "138-0.102.1-000", "person@example.com",
+  ...Array.from({ length: 128 }, (_, n) => "x".repeat(n + 1)), "分".repeat(512)];
+for (const branch of branchVectors) {
+  const legacy = structuredClone(run.run);
+  legacy.service_identity!.branch = branch;
+  const before = JSON.stringify(legacy);
+  const converted = diagnosticExportPayload(legacy) as any;
+  assert.equal(converted.service_identity.branch_sha256, createHash("sha256").update(branch).digest("hex"));
+  assert.equal(converted.service_identity.branch, undefined);
+  assert.equal(auditMarkerDiagnosticExport(converted).passed, true);
+  assert.equal(JSON.stringify(legacy), before, "normalization may not mutate local evidence");
+  assert.deepEqual(diagnosticReplayMismatches(parseDiagnosticRun(JSON.stringify(legacy)), legacy), []);
+}
+for (const branch of ["", "\ud800", "\udfff", "a".repeat(513)]) {
+  const invalidBranch = structuredClone(run.run); invalidBranch.service_identity!.branch = branch;
+  assert.throws(() => diagnosticExportPayload(invalidBranch), /分支身份|诊断JSON字段不合法/);
+}
+const uppercaseBranch = structuredClone(exportedRun);
+uppercaseBranch.service_identity.branch_sha256 = uppercaseBranch.service_identity.branch_sha256.toUpperCase();
+assert.deepEqual(diagnosticReplayMismatches(parseDiagnosticRun(JSON.stringify(uppercaseBranch)), run.run), []);
+assert.deepEqual(diagnosticExportPayload(exportedRun), exportedRun, "identity conversion must be idempotent");
+const otherBranch = structuredClone(run.run);
+otherBranch.service_identity!.branch = "feat/other-branch";
+assert.ok(diagnosticReplayMismatches(exportedRun, otherBranch).includes("服务或声明身份未匹配"));
+for (const value of [null, "", "13800138000", "g".repeat(64), "a".repeat(63)]) {
+  const invalid = structuredClone(exportedRun); invalid.service_identity.branch_sha256 = value;
+  assert.throws(() => parseDiagnosticRun(JSON.stringify(invalid)), /分支/);
+  assert.ok(diagnosticReplayMismatches(invalid, run.run).includes("服务或声明身份未匹配"));
+}
+const missingBranch = structuredClone(exportedRun); delete missingBranch.service_identity.branch_sha256;
+assert.throws(() => parseDiagnosticRun(JSON.stringify(missingBranch)), /缺少分支/);
+const conflictingBranch = structuredClone(exportedRun); conflictingBranch.service_identity.branch = "wrong";
+assert.throws(() => parseDiagnosticRun(JSON.stringify(conflictingBranch)), /分支指纹不一致/);
+for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest", "mode", "profile", "implementationVersion"]) {
+  const changedIdentity = structuredClone(run.run); changedIdentity.service_identity![key] = "different";
+  assert.ok(diagnosticReplayMismatches(exportedRun, changedIdentity).includes("服务或声明身份未匹配"), key);
+}
 for (const badValue of ["13800138000", "person@example.com", "g".repeat(64), "a".repeat(63)]) {
   const bad = JSON.parse(exported); bad.service_identity.sourceDigest = badValue;
   assert.throws(() => auditMarkerDiagnosticExport(bad));
@@ -75,6 +122,7 @@ for (const badValue of ["13800138000", "person@example.com", "g".repeat(64), "a"
 for (const value of ["13800138000", "person@example.com"]) {
   const bad = JSON.parse(exported); bad.raw_result.warnings = [value];
   assert.equal(auditMarkerDiagnosticExport(bad).passed, false, "free-text privacy scanning must remain active");
+  assert.throws(() => parseDiagnosticRun(JSON.stringify(bad)), /隐私检查/);
 }
 const immutable = JSON.parse(exported); const originalTicket = JSON.stringify(immutable);
 auditMarkerDiagnosticExport(immutable);
@@ -139,6 +187,26 @@ diagnostics.dispose(); const count = fetchCalls; select(); await Promise.resolve
 
 // Execute the actual controller command function, with side-effect traps, gate closed.
 const source = fs.readFileSync(new URL("../web/src/services/workflowIncisionController.ts", import.meta.url), "utf8");
+// Execute the actual size-limiting method with a small byte budget, preserving
+// the production trimming algorithm while avoiding an 8MB fixture.
+const recorderSource = fs.readFileSync(new URL("../web/src/services/controlledMarkerRunDiagnostics.ts", import.meta.url), "utf8");
+const exportStart = recorderSource.indexOf("  exportSession(): string {");
+const exportEnd = recorderSource.indexOf("\n  import(", exportStart);
+const history = [{ event_type: "candidate_edit", stage: "preview", reason: "size_test", payload: "x".repeat(500) }];
+const smallSession = { ...JSON.parse(bundle), schema: "marker-diagnostic-session/2", runs: [], page_instances: [], sources: [], client_modules: [],
+  workflow_events: history, dropped_preview_events: 0, dropped_workflow_events: 0 };
+const minimalBytes = new TextEncoder().encode(JSON.stringify({ ...smallSession, workflow_events: [], exported_at_ms: Date.now(),
+  export_events: [], pending_run_count: 0, raw_image_embedded: false, uploaded: false }, null, 2)).length;
+const sizeContext = vm.createContext({ structuredClone, TextEncoder, assertDiagnosticJson, diagnosticExportPayload, MAX_DIAGNOSTIC_BYTES: minimalBytes + 100 });
+const sizeMethod = vm.runInContext(stripTypeScriptTypes(`(class {${recorderSource.slice(exportStart, exportEnd)}}).prototype.exportSession`), sizeContext);
+const originalHistory = JSON.stringify(history);
+const sizeState = { runs: [], controllerEvents: [{}], workflowEvents: history, actionEvents: [], interactionEvents: [], exportEvents: [],
+  captureInteraction() {}, persisted: () => smallSession };
+const trimmed = JSON.parse(sizeMethod.call(sizeState));
+assert.equal(trimmed.workflow_events.length, 0);
+assert.equal(trimmed.dropped_preview_events, 1);
+assert.equal(JSON.stringify(history), originalHistory, "export-size trimming must never erase the local history");
+assert.equal(smallSession.dropped_preview_events, 0, "export-only counters must not leak into persistence");
 const start = source.indexOf("function applyTumorCommand(");
 const end = source.indexOf("\nfunction ", start + 1);
 const commandSource = source.slice(start, end);
@@ -281,6 +349,22 @@ const actionId = bounded.recordAction({ domain: "wrinkle", action: "detection", 
 assert.match(actionId || "", /^action-/);
 assert.equal(bounded.recordAction({ domain: "Bad Domain", action: "detection", stage: "started", reason: "invalid" }), null);
 const session = JSON.parse(bounded.exportSession());
+const legacySession = structuredClone(session);
+legacySession.runs = [structuredClone(run.run)];
+legacySession.page_instances = [{ service_identity: structuredClone(run.run.service_identity) }];
+assert.deepEqual(diagnosticReplayMismatches(parseDiagnosticRun(JSON.stringify(legacySession)), run.run), [], "old restored session stays replayable");
+const pageOnly = structuredClone(legacySession); pageOnly.runs = [];
+const normalizedPageOnly = diagnosticExportPayload(pageOnly) as any;
+assert.equal(auditMarkerDiagnosticExport(normalizedPageOnly).passed, true, "page-only exports must handle the real runtime branch too");
+assert.equal(normalizedPageOnly.page_instances[0].service_identity.branch, undefined);
+for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest", "branch_sha256"]) {
+  for (const badValue of ["13800138000", "person@example.com", "g".repeat(64)]) {
+    const badPage = structuredClone(normalizedPageOnly); badPage.page_instances[0].service_identity[key] = badValue;
+    assert.throws(() => auditMarkerDiagnosticExport(badPage), /指纹字段不合法/);
+  }
+}
+const privatePage = structuredClone(normalizedPageOnly); privatePage.page_instances[0].extra = "person@example.com";
+assert.equal(auditMarkerDiagnosticExport(privatePage).passed, false);
 assert.equal(session.schema, "marker-diagnostic-session/2");
 assert.equal(session.workflow_events.length, 2, "consecutive previews are compacted");
 assert.equal(session.workflow_events[0].preview_count, 2);
