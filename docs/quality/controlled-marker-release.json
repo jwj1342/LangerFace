@@ -359,7 +359,7 @@
     "basis": "已回源操作者精确批准本批方案7文件、测试契约及仅隔离GitHub CI临时引用协议；仅绑定获准实施范围，不代表效果、人工保存或远端许可。",
     "limitations": [
       "当前本机不运行GitHub refs分支",
-      "operatorEvaluation/editorSaveConfirmation待实际人工，实施授权不代签",
+      "两人工事实已按ui35-pr-scope-confirmation-20261111回源登记；实施授权本身不代签完整效果。",
       "算法/RSTL/手机UI未修改，完整专业效果未验"
     ]
   },
@@ -1977,7 +1977,7 @@
     "runtimeSourceDigest": "1e3751aeccbdfadde3ccc44b45ae2fbe775e7ac60d0bca6d89e5812ee19681b6",
     "algorithmVersion": "0.100.3-candidate.1",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
-    "note": "UI仍0.1.35窄电脑版布局候选；本批仅测试运行集成0.2.3，整站指纹因package入口变化，新人工评价及保存确认待实际回执。"
+    "note": "UI仍0.1.35窄电脑版布局候选；本批仅测试运行集成0.2.3，整站指纹因package入口变化。操作者看图知晓差额后限定继续研发候选/原PR，保存事实已confirmed；不表示完全满意、实际交互、算法/RSTL/真机或医学验收。"
   },
   "uiHistory": [
     {
