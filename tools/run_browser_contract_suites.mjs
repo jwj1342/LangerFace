@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, realpathSync, existsSync, lstatSync,
-  openSync, closeSync, readdirSync } from "node:fs";
+  openSync, closeSync, readdirSync, writeSync } from "node:fs";
 import { resolve, relative, join, isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import net from "node:net";
@@ -417,7 +417,8 @@ export function collectOwned(snapshot, roots, owned) {
   return snapshot.filter(row => owned.get(row.pid)?.birth === row.birth);
 }
 
-export function awaitChildExit(child, { timeout, onTimeout, onAbandoned, grace = 10_000 }) {
+export function awaitChildExit(child, { timeout, onTimeout, onAbandoned,
+  onClosed = () => {}, grace = 10_000 }) {
   return new Promise((resolvePromise, reject) => {
     let finished = false, graceTimer;
     const finish = (error, status) => {
@@ -427,7 +428,10 @@ export function awaitChildExit(child, { timeout, onTimeout, onAbandoned, grace =
       if (error) reject(error); else resolvePromise(status);
     };
     const onError = error => finish(error);
-    const onClose = status => finish(null, status);
+    const onClose = (status, signal) => {
+      if (!finished) onClosed(status, signal);
+      finish(null, status);
+    };
     const timer = setTimeout(() => {
       graceTimer = setTimeout(() => {
         try { onAbandoned(); finish(null, null); } catch (error) { finish(error); }
@@ -446,6 +450,53 @@ function assertRegistered(identity) {
     algorithmDigest: identity.algorithmDigest,
   })) assert.equal(actual, release.current[field], `Unregistered ${field}`);
   assert.equal(identity.profile, "small-lesion-boundary-candidate");
+}
+
+export function commandReportOptions(reportPath) {
+  return {
+    args: ["--reporter=json,line"],
+    env: { PLAYWRIGHT_JSON_OUTPUT_FILE: reportPath, FORCE_COLOR: "0" },
+  };
+}
+
+export function writeComplete(fd, chunk, write = writeSync) {
+  let offset = 0;
+  while (offset < chunk.length) {
+    const count = write(fd, chunk, offset, chunk.length - offset);
+    assert.ok(Number.isSafeInteger(count) && count > 0 && count <= chunk.length - offset,
+      "Output write made no valid progress");
+    offset += count;
+  }
+}
+
+export function captureCommandOutput(child, { stdoutFd, stderrFd, onOutput, onError,
+  stdout = process.stdout, stderr = process.stderr }) {
+  // Keep raw evidence while exposing progress; JSON has its own reporter file.
+  const releases = [];
+  for (const [stream, fd, destination] of [
+    [child.stdout, stdoutFd, stdout], [child.stderr, stderrFd, stderr],
+  ]) {
+    let failed = false;
+    const fail = error => {
+      if (!failed) { failed = true; onError(error); }
+    };
+    const forward = chunk => {
+      if (failed) return;
+      try {
+        writeComplete(fd, chunk);
+        // Synchronous forwarding leaves no queued console writes after release.
+        writeComplete(destination.fd, chunk);
+        onOutput(chunk);
+      } catch (error) { fail(error); }
+    };
+    stream.on("data", forward);
+    stream.on("error", fail);
+    releases.push(() => {
+      stream.off("data", forward);
+      stream.destroy();
+    });
+  }
+  return () => releases.forEach(release => release());
 }
 
 const portOpen = port => new Promise(resolvePromise => {
@@ -513,19 +564,36 @@ export async function main(args = process.argv.slice(2)) {
   };
   process.on("SIGINT", signal);
   process.on("SIGTERM", signal);
-  async function run(name, executableArgs, timeout = 180_000) {
+  async function run(name, executableArgs, timeout = 180_000, jsonReport = false) {
     assert.equal(interrupted, false, "Run interrupted");
     const out = join(folder, `${name}.json`);
+    const rawOut = jsonReport ? join(folder, `${name}.stdout.log`) : out;
     const err = join(folder, `${name}.stderr.log`);
-    const outFd = openSync(out, "wx"), errFd = openSync(err, "wx");
+    const outFd = openSync(rawOut, "wx"), errFd = openSync(err, "wx");
+    const startedAt = new Date().toISOString(), started = Date.now();
+    let lastOutputAt = null, heartbeat, releaseOutput;
+    const diagnostic = event => console.error(JSON.stringify({
+      browserContract: name, event, at: new Date().toISOString(),
+      elapsedMs: Date.now() - started, lastOutputAt, pid: child?.pid,
+    }));
+    const suite = { name, startedAt, timeoutMs: timeout, stdout: out, rawStdout: rawOut,
+      stderr: err, ...(jsonReport ? { report: out } : {}) };
+    state.suites.push(suite); save();
     let code;
     let monitor;
     try {
       const notBefore = birthClock();
-        child = spawn(process.execPath, executableArgs, {
-          cwd: WEB, stdio: ["ignore", outFd, errFd], windowsHide: true,
+        const reporting = jsonReport ? commandReportOptions(out) : { args: [], env: {} };
+        child = spawn(process.execPath, [...executableArgs, ...reporting.args], {
+          cwd: WEB, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+          env: { ...process.env, ...reporting.env },
           detached: process.platform !== "win32",
         });
+        releaseOutput = captureCommandOutput(child, { stdoutFd: outFd, stderrFd: errFd,
+          onOutput: () => { lastOutputAt = new Date().toISOString(); },
+          onError: error => { state.failures.push(`${name} output: ${error.message}`); } });
+        diagnostic("spawned");
+        heartbeat = setInterval(() => diagnostic("running"), 30_000);
         const resolution = process.platform === "win32" ? 10_000n : 1n;
         const root = { pid: child.pid, active: true, parentPid: process.pid, image: process.execPath,
           notBefore: notBefore - resolution, notAfter: birthClock() + resolution };
@@ -537,13 +605,23 @@ export async function main(args = process.argv.slice(2)) {
         code = await awaitChildExit(child, {
           timeout,
           onTimeout: () => {
+            diagnostic("timeout");
             state.failures.push(`${name}: timeout`);
             try { terminate(); } catch (error) { state.failures.push(`Timeout cleanup: ${error.message}`); }
           },
           onAbandoned: () => {
+            suite.waitAbandonedAt = new Date().toISOString();
+            diagnostic("termination-grace-expired");
             processUnsettled = true;
             state.failures.push(`${name}: process did not close within termination grace period`);
+            releaseOutput();
             child.unref(); child.stdin?.destroy();
+          },
+          onClosed: (status, signal) => {
+            suite.exitCode = status;
+            suite.exitSignal = signal;
+            suite.closedAt = new Date().toISOString();
+            diagnostic("closed-before-cleanup");
           },
         });
           clearInterval(monitor);
@@ -556,8 +634,15 @@ export async function main(args = process.argv.slice(2)) {
             }
           } catch (error) { state.failures.push(`Process cleanup: ${error.message}`); }
           child = undefined;
-    } finally { clearInterval(monitor); closeSync(outFd); closeSync(errFd); }
-    state.suites.push({ name, exitCode: code, stdout: out, stderr: err }); save();
+    } finally {
+      clearInterval(monitor); clearInterval(heartbeat);
+      suite.finishedAt = new Date().toISOString();
+      suite.elapsedMs = Date.now() - started;
+      suite.lastOutputAt = lastOutputAt;
+      releaseOutput?.();
+      closeSync(outFd); closeSync(errFd); save();
+    }
+    diagnostic("cleanup-finished");
     return { code, report: () => JSON.parse(readFileSync(out, "utf8").replace(/^\uFEFF/, "")) };
   }
   const playwright = join(WEB, "node_modules/playwright/cli.js");
@@ -611,8 +696,8 @@ export async function main(args = process.argv.slice(2)) {
     for (const selection of selections) {
       try {
         const common = [playwright, "test", "--config", selection.config, ...selection.extra,
-          "--workers=1", "--retries=0", "--reporter=json"];
-        const listed = await run(`${selection.name}-list`, [...common, "--list"]);
+          "--workers=1", "--retries=0"];
+        const listed = await run(`${selection.name}-list`, [...common, "--list"], 180_000, true);
         assert.equal(listed.code, 0, "Unable to list tests");
         assertInventory(reportRows(listed.report()), selection.expected);
       } catch (error) { state.failures.push(`${selection.name} inventory: ${error.message}`); }
@@ -625,8 +710,8 @@ export async function main(args = process.argv.slice(2)) {
         await assertPortsClosed();
         assertIdentity(captureMarkerIdentity(undefined), expectedIdentity);
         const result = await run(selection.name, [playwright, "test", "--config", selection.config,
-          ...selection.extra, "--workers=1", "--retries=0", "--reporter=json",
-          "--output", join(folder, selection.name)], selection.name === "production" ? 600_000 : 180_000);
+          ...selection.extra, "--workers=1", "--retries=0",
+          "--output", join(folder, selection.name)], selection.name === "production" ? 600_000 : 180_000, true);
         assert.equal(result.code, 0, `${selection.name} failed`);
         const report = result.report();
         assertResults(report, selection.expected);
