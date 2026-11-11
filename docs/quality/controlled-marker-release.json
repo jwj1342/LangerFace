@@ -11,7 +11,7 @@
       "冲突拒识"
     ],
     "status": "candidate",
-    "sourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+    "sourceDigest": "a5b7d849b9afa93a2b03b716c4ef1f3dad53869ef4268bd49a25437b569990df",
     "algorithmDigest": "37b4b64bdaf85cceec8ca54dbeed668b1aec176e8bc22436451484b17a962655",
     "changeSlug": "alternate-fragment-recovery-conflict-veto",
     "previous": {
@@ -190,53 +190,60 @@
     }
   },
   "runtimeIntegration": {
-    "version": "0.2.3-candidate.1",
+    "version": "0.2.3-candidate.2",
     "name": "运行集成：诊断导出分支指纹与历史回放兼容",
     "status": "candidate",
     "scope": "仅诊断记录的导出副本/导入验证/回放身份及导出裁剪；不修改肿物识别、切口/RSTL、UI、模型或资产。",
-    "sourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+    "sourceDigest": "a5b7d849b9afa93a2b03b716c4ef1f3dad53869ef4268bd49a25437b569990df",
     "previous": {
-      "version": "0.2.2-candidate.1",
-      "name": "运行集成：图片视频导出补齐可见肿物与切口叠加",
+      "version": "0.2.3-candidate.1",
+      "name": "运行集成：诊断导出分支指纹与历史回放兼容",
       "status": "candidate",
-      "scope": "仅导出读取既有主画布及工作流SVG；保持原额外视图、隐藏/清除、镜像/缩放；视频逐帧合成并隔离取消后的旧帧。不修改肿物识别、切口生成/微调、RSTL六项、页面样式、模型及资产。",
-      "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
+      "scope": "仅诊断记录的导出副本/导入验证/回放身份及导出裁剪；不修改肿物识别、切口/RSTL、UI、模型或资产。",
+      "sourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
       "previous": {
-        "version": "0.2.1-candidate.1",
-        "name": "运行集成：上传照片时丢弃旧切口预览回包",
+        "version": "0.2.2-candidate.1",
+        "name": "运行集成：图片视频导出补齐可见肿物与切口叠加",
         "status": "candidate",
-        "scope": "仅独立切口页清空照片规划时使旧异步workflow请求失效，防止旧候选回写未选病灶照片；不改识别、切口几何、UI线宽、RSTL或模型。",
-        "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
+        "scope": "仅导出读取既有主画布及工作流SVG；保持原额外视图、隐藏/清除、镜像/缩放；视频逐帧合成并隔离取消后的旧帧。不修改肿物识别、切口生成/微调、RSTL六项、页面样式、模型及资产。",
+        "sourceDigest": "b383afd1a577b2eddbb698e2dbbdd6947614a7877218bb2a5f46e9267695dddd",
         "previous": {
-          "version": "0.2.0-candidate.1",
-          "name": "运行集成：照片鼻孔禁区随人脸拓扑投影",
+          "version": "0.2.1-candidate.1",
+          "name": "运行集成：上传照片时丢弃旧切口预览回包",
           "status": "candidate",
-          "scope": "仅照片鼻孔工程禁区从标准模型到照片的坐标投影；保留原掩膜、眼口环、闭嘴走廊、切口几何及RSTL实现；投影失败阻断。",
-          "sourceDigest": "8e8551423d4fb7755981a3fee5a4db5ed959c9836becc507e141d4d1194cb1ab",
+          "scope": "仅独立切口页清空照片规划时使旧异步workflow请求失效，防止旧候选回写未选病灶照片；不改识别、切口几何、UI线宽、RSTL或模型。",
+          "sourceDigest": "9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91",
           "previous": {
-            "version": "0.1.13-candidate.1",
-            "name": "运行集成：门禁提示去重并隐藏技术字段",
+            "version": "0.2.0-candidate.1",
+            "name": "运行集成：照片鼻孔禁区随人脸拓扑投影",
             "status": "candidate",
-            "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-            "sourceDigest": "581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d",
+            "scope": "仅照片鼻孔工程禁区从标准模型到照片的坐标投影；保留原掩膜、眼口环、闭嘴走廊、切口几何及RSTL实现；投影失败阻断。",
+            "sourceDigest": "8e8551423d4fb7755981a3fee5a4db5ed959c9836becc507e141d4d1194cb1ab",
             "previous": {
-              "version": "0.1.12-candidate.1",
-              "name": "运行集成：肿物与切口门禁分开显示",
+              "version": "0.1.13-candidate.1",
+              "name": "运行集成：门禁提示去重并隐藏技术字段",
               "status": "candidate",
               "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-              "sourceDigest": "a774b6fe9efe56979b280472b0430e69a0cfa00b7eed521fd22e9a596177b9aa",
+              "sourceDigest": "581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d",
               "previous": {
-                "version": "0.1.11-candidate.1",
-                "name": "运行集成：肿物/切口实线优先与敏感区红线",
+                "version": "0.1.12-candidate.1",
+                "name": "运行集成：肿物与切口门禁分开显示",
                 "status": "candidate",
-                "scope": "仅照片显示分级与可见线段裁剪；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
-                "sourceDigest": "da021f06d53bccc05a38bf00d4f3bad16bc228bb85de5277f8e48fb09dbb2df5",
+                "scope": "仅照片显示分级、拒绝肿物轮廓独立显示与简洁中文门禁提示；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
+                "sourceDigest": "a774b6fe9efe56979b280472b0430e69a0cfa00b7eed521fd22e9a596177b9aa",
                 "previous": {
-                  "version": "0.1.10-candidate.1",
-                  "name": "运行集成：安全拒识候选与紫线诊断绑定",
+                  "version": "0.1.11-candidate.1",
+                  "name": "运行集成：肿物/切口实线优先与敏感区红线",
                   "status": "candidate",
-                  "scope": "边缘点击无法证明完整边界时保持拒识紫线；黄色边界、蓝/红切口确认保存和RSTL保持",
-                  "sourceDigest": "b6a2ec045678fab257fb29ed09508eee48024f597687313d3c347b40804e76f2"
+                  "scope": "仅照片显示分级与可见线段裁剪；黄色肿物边界、蓝色合格切口、红色敏感区诊断、紫色低可信肿物；核心识别/几何/RSTL保持",
+                  "sourceDigest": "da021f06d53bccc05a38bf00d4f3bad16bc228bb85de5277f8e48fb09dbb2df5",
+                  "previous": {
+                    "version": "0.1.10-candidate.1",
+                    "name": "运行集成：安全拒识候选与紫线诊断绑定",
+                    "status": "candidate",
+                    "scope": "边缘点击无法证明完整边界时保持拒识紫线；黄色边界、蓝/红切口确认保存和RSTL保持",
+                    "sourceDigest": "b6a2ec045678fab257fb29ed09508eee48024f597687313d3c347b40804e76f2"
+                  }
                 }
               }
             }
@@ -247,7 +254,7 @@
   },
   "archive": {
     "status": "pending",
-    "sourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+    "sourceDigest": "a5b7d849b9afa93a2b03b716c4ef1f3dad53869ef4268bd49a25437b569990df",
     "note": "原0.102.1研究恢复包保留于integrationHistory最后项；本轮诊断修复尚未形成正式发布恢复包，不可PR/发布。开发测试采用已提交HEAD与backup回退点门禁。"
   },
   "scopeBoundaryReview": {
@@ -257,12 +264,12 @@
   },
   "operatorEvaluation": {
     "status": "pending",
-    "sourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+    "sourceDigest": "a5b7d849b9afa93a2b03b716c4ef1f3dad53869ef4268bd49a25437b569990df",
     "note": "本轮只做诊断修复自动验证，不继承旧人工或编辑器保存确认。"
   },
   "editorSaveConfirmation": {
     "status": "pending",
-    "sourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+    "sourceDigest": "a5b7d849b9afa93a2b03b716c4ef1f3dad53869ef4268bd49a25437b569990df",
     "note": "本轮只做诊断修复自动验证，不继承旧人工或编辑器保存确认。"
   },
   "history": [
@@ -3298,10 +3305,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF to LF",
-    "previousSourceDigest": "a057174ba1d81bdb3e5081141cacd8f420a11b02031be8dbbc4f001a6b040d2a",
-    "currentSourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
-    "capturedAt": "2026-11-12T00:56:30.227608+08:00",
-    "reason": "诊断导出分支指纹规范化、旧日志回放兼容与导出副本保全；通用隐私检查及肿物/切口/RSTL/UI算法保持。"
+    "previousSourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+    "currentSourceDigest": "a5b7d849b9afa93a2b03b716c4ef1f3dad53869ef4268bd49a25437b569990df",
+    "capturedAt": "2026-11-12T01:08:46.127195+08:00",
+    "reason": "真实浏览器新增模块FNV指纹误报反例；严格格式审计、BOM边界和裁剪一次规范化；算法不变。"
   },
   "integrationHistory": [
     {
@@ -3706,6 +3713,14 @@
       "currentSourceDigest": "a057174ba1d81bdb3e5081141cacd8f420a11b02031be8dbbc4f001a6b040d2a",
       "capturedAt": "2026-11-11T02:18:50.326852+08:00",
       "reason": "另一片段来源只增加主体冲突拒识；原亮度补救、UI、切口、RSTL及资产保持。"
+    },
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF to LF",
+      "previousSourceDigest": "a057174ba1d81bdb3e5081141cacd8f420a11b02031be8dbbc4f001a6b040d2a",
+      "currentSourceDigest": "9993fb40ef2be3f8355c2fa4717d9aef82323193ba557f8b1aae2b4227123d63",
+      "capturedAt": "2026-11-12T00:56:30.227608+08:00",
+      "reason": "诊断导出分支指纹规范化、旧日志回放兼容与导出副本保全；通用隐私检查及肿物/切口/RSTL/UI算法保持。"
     }
   ],
   "photoOpeningGuard": {

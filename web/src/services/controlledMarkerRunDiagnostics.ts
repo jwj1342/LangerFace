@@ -232,7 +232,7 @@ function diagnosticIdentity(value: Json | undefined): Record<string, Json> | nul
   }
   if (branch !== undefined) {
     if (typeof branch !== "string" || !branch || branch.length > 512
-      || new TextDecoder().decode(new TextEncoder().encode(branch)) !== branch) throw new Error("诊断分支身份不合法");
+      || new TextDecoder("utf-8", { ignoreBOM: true }).decode(new TextEncoder().encode(branch)) !== branch) throw new Error("诊断分支身份不合法");
     const computed = branchSha256(branch);
     if (digest !== undefined && (digest as string).toLowerCase() !== computed) throw new Error("诊断分支指纹不一致");
     identity.branch_sha256 = computed;
@@ -264,6 +264,7 @@ function auditIdentityDigests(identity: Json | undefined) {
   if (typeof identity !== "object" || Array.isArray(identity)) throw new Error("诊断身份结构不合法");
   for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest", "branch_sha256"]) {
     const field = identity[key];
+    if (key === "branch_sha256" && field === null) throw new Error(`诊断指纹字段不合法：${key}`);
     if (field === null || field === undefined) continue;
     const length = key === "head" ? 40 : 64;
     if (typeof field !== "string" || !new RegExp(`^[0-9a-f]{${length}}$`, "i").test(field)) throw new Error(`诊断指纹字段不合法：${key}`);
@@ -291,7 +292,14 @@ export function auditMarkerDiagnosticExport(value: unknown) {
     // Validate only recorded browser metadata; scan every other field unchanged.
     // Keep the original ticket (including its exact version) intact for replay.
     for (const page of auditCopy.page_instances as Json[]) {
-      if (!page || Array.isArray(page) || typeof page !== "object" || page.browser_engine === undefined) continue;
+      if (!page || Array.isArray(page) || typeof page !== "object") continue;
+      if (page.client_module_fingerprint !== undefined) {
+        if (typeof page.client_module_fingerprint !== "string" || !/^fnv1a32-[0-9a-f]{8}$/.test(page.client_module_fingerprint)) {
+          throw new Error("诊断客户端模块指纹不合法");
+        }
+        page.client_module_fingerprint = "[redacted]";
+      }
+      if (page.browser_engine === undefined) continue;
       const engine = page.browser_engine;
       if (typeof engine !== "string" || engine.length > 32
         || !/^(?:unknown|(?:Edg|Chrome|Firefox|Version)\/[0-9]{1,3}(?:\.[0-9]{1,5}){0,3})$/.test(engine)) {
@@ -1137,18 +1145,19 @@ export class MarkerRunDiagnostics {
     try { this.captureInteraction("export_snapshot", {}); } catch { /* Optional observation. */ }
     if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length
       && !this.interactionEvents.length) throw new Error("请先完成一次诊断动作");
-    const payload = structuredClone({ ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
+    const rawPayload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
       pending_run_count: this.runs.filter(run => run.status === "pending").length,
-      raw_image_embedded: false, uploaded: false });
+      raw_image_embedded: false, uploaded: false };
+    const payload = diagnosticExportPayload(rawPayload) as unknown as typeof rawPayload;
     assertDiagnosticJson(payload);
-    let text = JSON.stringify(diagnosticExportPayload(payload), null, 2);
+    let text = JSON.stringify(payload, null, 2);
     while (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) {
       const previewIndex = payload.workflow_events.findIndex(item => item.stage === "preview");
       if (previewIndex < 0) throw new Error("诊断包超过8MB；关键事件未被删除，请分段结束本次诊断会话后再导出");
       payload.workflow_events.splice(previewIndex, 1);
       payload.dropped_preview_events += 1;
       payload.dropped_workflow_events = (payload.dropped_workflow_events || 0) + 1;
-      text = JSON.stringify(diagnosticExportPayload(payload), null, 2);
+      text = JSON.stringify(payload, null, 2);
     }
     return text;
   }

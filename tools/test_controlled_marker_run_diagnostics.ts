@@ -78,7 +78,7 @@ assert.equal(exportedRun.service_identity.branch, undefined, "raw branch text mu
 assert.equal(run.run.service_identity?.branch, identity.branch, "export must retain internal identity");
 assert.equal(exportedRun.service_identity.branch_sha256, createHash("sha256").update(identity.branch).digest("hex"));
 // Include UTF-8, SHA padding boundaries, multiple blocks and phone-like branch text.
-const branchVectors = ["test", identity.branch, "修复/诊断-😀", "138-0.102.1-000", "person@example.com",
+const branchVectors = ["test", identity.branch, "修复/诊断-😀", "\ufeffbranch", "138-0.102.1-000", "person@example.com",
   ...Array.from({ length: 128 }, (_, n) => "x".repeat(n + 1)), "分".repeat(512)];
 for (const branch of branchVectors) {
   const legacy = structuredClone(run.run);
@@ -105,6 +105,7 @@ assert.ok(diagnosticReplayMismatches(exportedRun, otherBranch).includes("服务�
 for (const value of [null, "", "13800138000", "g".repeat(64), "a".repeat(63)]) {
   const invalid = structuredClone(exportedRun); invalid.service_identity.branch_sha256 = value;
   assert.throws(() => parseDiagnosticRun(JSON.stringify(invalid)), /分支/);
+  assert.throws(() => auditMarkerDiagnosticExport(invalid), /指纹字段/);
   assert.ok(diagnosticReplayMismatches(invalid, run.run).includes("服务或声明身份未匹配"));
 }
 const missingBranch = structuredClone(exportedRun); delete missingBranch.service_identity.branch_sha256;
@@ -357,6 +358,16 @@ const pageOnly = structuredClone(legacySession); pageOnly.runs = [];
 const normalizedPageOnly = diagnosticExportPayload(pageOnly) as any;
 assert.equal(auditMarkerDiagnosticExport(normalizedPageOnly).passed, true, "page-only exports must handle the real runtime branch too");
 assert.equal(normalizedPageOnly.page_instances[0].service_identity.branch, undefined);
+for (const fingerprint of ["fnv1a32-3721431b", "fnv1a32-12345678", "fnv1a32-00000000"]) {
+  const typedModule = structuredClone(normalizedPageOnly);
+  typedModule.page_instances[0].client_module_fingerprint = fingerprint;
+  assert.equal(auditMarkerDiagnosticExport(typedModule).passed, true, "real browser module fingerprint is typed metadata");
+  assert.equal(typedModule.page_instances[0].client_module_fingerprint, fingerprint, "audit must not change downloaded identity");
+}
+for (const fingerprint of ["13800138000", "person@example.com", "fnv1a32-13800138000", "fnv1a32-12345678\n", null]) {
+  const invalidModule = structuredClone(normalizedPageOnly); invalidModule.page_instances[0].client_module_fingerprint = fingerprint;
+  assert.throws(() => auditMarkerDiagnosticExport(invalidModule), /模块指纹/);
+}
 for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest", "branch_sha256"]) {
   for (const badValue of ["13800138000", "person@example.com", "g".repeat(64)]) {
     const badPage = structuredClone(normalizedPageOnly); badPage.page_instances[0].service_identity[key] = badValue;

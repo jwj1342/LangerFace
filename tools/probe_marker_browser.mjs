@@ -14,9 +14,13 @@ const results = [];
 async function verifyDiagnosticDownload(page, label) {
   const ready = page.getByRole("button", { name: "导出诊断日志", exact: true });
   await ready.waitFor({ state: "visible", timeout: 15000 });
-  const pending = page.waitForEvent("download", { timeout: 15000 });
-  await ready.click();
-  const download = await pending;
+  let download;
+  try {
+    [download] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), ready.click()]);
+  } catch (error) {
+    const message = await page.locator("#markerDiagnosticStatus").textContent();
+    throw new Error(`diagnostic download did not complete: ${message}`, { cause: error });
+  }
   if (await download.failure()) throw new Error("diagnostic download failed");
   const bytes = readFileSync(await download.path());
   const payload = JSON.parse(bytes.toString("utf8"));
@@ -35,6 +39,8 @@ async function verifyDiagnosticDownload(page, label) {
     writeFileSync(resolve(process.env.DIAGNOSTIC_PROBE_OUTPUT, `${label}.json`), bytes);
   }
   return { bytes: bytes.length, runs: payload.runs.length, pages: payload.page_instances.length,
+    sessionId: payload.session_id, pageIds: payload.page_instances.map(page => page.page_instance_id),
+    sourceIds: payload.sources.map(source => source.source_id),
     restored: payload.page_instances.some(page => page.restored_session), sha256: createHash("sha256").update(bytes).digest("hex") };
 }
 try {
@@ -70,7 +76,12 @@ try {
          const firstDownload = await verifyDiagnosticDownload(page, `${label}-before-refresh`);
          await page.reload({ timeout: 30000 });
          await page.waitForFunction(() => !document.querySelector("#fileInput")?.disabled, {}, { timeout: 30000 });
+         await page.waitForFunction(() => sessionStorage.getItem("langerface_diagnostic_session_v2"), {}, { timeout: 30000 });
          const restoredDownload = await verifyDiagnosticDownload(page, `${label}-after-refresh`);
+         assert.equal(restoredDownload.sessionId, firstDownload.sessionId, "refresh must retain the same session");
+         assert.ok(firstDownload.sourceIds.length > 0, "first download must contain the uploaded source record");
+         for (const id of firstDownload.pageIds) assert.ok(restoredDownload.pageIds.includes(id), "prior page record lost");
+         for (const id of firstDownload.sourceIds) assert.ok(restoredDownload.sourceIds.includes(id), "prior upload record lost");
          assert.equal(restoredDownload.restored, true, "refresh must restore the existing local session");
          assert.ok(restoredDownload.pages > firstDownload.pages, "page-only history must survive refresh");
         if (errors.length) throw new Error(errors.join("; "));
@@ -78,7 +89,7 @@ try {
            checks: ["developer-page", "enabled-upload", "real-filechooser", "synthetic-image-load", "photo-model-ready", "exact-runtime-identity",
              "real-diagnostic-download", "download-json-privacy-and-identity", "restored-session-download"],
            downloads: [firstDownload, restoredDownload],
-          excludes: ["clinical-effect", "real-phone", "camera", "RSTL-equivalence"] });
+           excludes: ["browser-detector-run-export", "browser-import-replay", "clinical-effect", "real-phone", "camera", "RSTL-equivalence"] });
       } finally { await context.close(); }
     }
   }
