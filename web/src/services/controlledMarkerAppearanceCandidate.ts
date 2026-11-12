@@ -120,7 +120,7 @@ class Patch {
     labValues: Float64Array;
     materialValues: Float64Array;
     anchors: Point[] = [];
-    constructor(cv: CV, image: Image, seed: Point, radius: number, materialMode = true) {
+    constructor(cv: CV, image: Image, seed: Point, radius: number, materialMode = true, anchorSearchRadius = radius) {
         this.x0 = Math.max(0, Math.floor(seed.x - radius - 196));
         this.y0 = Math.max(0, Math.floor(seed.y - radius - 196));
         this.width = Math.min(image.width, Math.ceil(seed.x + radius + 196) + 1) - this.x0;
@@ -156,7 +156,7 @@ class Patch {
                         for (let gy = 0; gy < gh; gy++)
                             for (let gx = 0; gx < gw; gx++) {
                                 const x = gx0 + 4 * gx, y = gy0 + 4 * gy;
-                                if (Math.hypot(x - seed.x, y - seed.y) > radius + 12)
+                                if (Math.hypot(x - seed.x, y - seed.y) > anchorSearchRadius + 12)
                                     continue;
                                 const i = ((y - this.y0) * this.width + x - this.x0) * 3;
                                 const other = lab(out.data[i], out.data[i + 1], out.data[i + 2]);
@@ -173,7 +173,7 @@ class Patch {
                 for (let gy = 1; gy < gh - 1; gy++)
                     for (let gx = 1; gx < gw - 1; gx++) {
                         const x = gx0 + 4 * gx, y = gy0 + 4 * gy, value = scores[gy * gw + gx];
-                        if (value < 2 || Math.hypot(x - seed.x, y - seed.y) > .95 * radius)
+                        if (value < 2 || Math.hypot(x - seed.x, y - seed.y) > .95 * anchorSearchRadius)
                             continue;
                         let peak = true;
                         for (let dy = -1; dy <= 1; dy++)
@@ -1475,7 +1475,7 @@ function compactPigmentSupport(
 function compactPigmentRecovery(
     cv: CV, image: MarkerImageData, seed: MarkerPoint, radius: number,
 ): { proposal: CompactPigmentProposal; support: CompactPigmentSupport } | null {
-    const patch = new Patch(cv, image, seed, radius, false);
+    const patch = new Patch(cv, image, seed, radius, false, Math.max(radius, 36));
     const bank: CompactPigmentProposal[] = [];
     for (const anchor of pigmentAnchors(patch.anchors, seed))
         for (const context of [24, 32, 48, 64, 96]) {
