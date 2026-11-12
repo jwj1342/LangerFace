@@ -183,6 +183,94 @@ function assertDiagnosticDropCounts(value: Record<string, Json>) {
     }
   }
 }
+// Export/import/replay are synchronous. Hash only bounded branch metadata;
+// image hashing continues to use WebCrypto. The test compares this with SHA-256.
+function branchSha256(branch: string): string {
+  const bytes = new TextEncoder().encode(branch);
+  const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64);
+  padded.set(bytes); padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 4, bytes.length * 8);
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const hash = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  const rotate = (v: number, n: number) => (v >>> n) | (v << (32 - n));
+  const w = new Uint32Array(64);
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const x = w[i - 15], y = w[i - 2];
+      w[i] = w[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + w[i - 7]
+        + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10));
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i]) >>> 0;
+      const t2 = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    for (const [i, v] of [a, b, c, d, e, f, g, h].entries()) hash[i] = (hash[i] + v) >>> 0;
+  }
+  return hash.map(v => v.toString(16).padStart(8, "0")).join("");
+}
+function diagnosticIdentity(value: Json | undefined): Record<string, Json> | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("诊断身份结构不合法");
+  const identity = { ...value };
+  const branch = identity.branch;
+  const digest = identity.branch_sha256;
+  if (digest !== undefined && (typeof digest !== "string" || !/^[0-9a-f]{64}$/i.test(digest))) {
+    throw new Error("诊断分支指纹不合法");
+  }
+  if (branch !== undefined) {
+    if (typeof branch !== "string" || !branch || branch.length > 512
+      || new TextDecoder("utf-8", { ignoreBOM: true }).decode(new TextEncoder().encode(branch)) !== branch) throw new Error("诊断分支身份不合法");
+    const computed = branchSha256(branch);
+    if (digest !== undefined && (digest as string).toLowerCase() !== computed) throw new Error("诊断分支指纹不一致");
+    identity.branch_sha256 = computed;
+    delete identity.branch;
+  } else if (digest === undefined) throw new Error("诊断缺少分支身份");
+  else identity.branch_sha256 = (digest as string).toLowerCase();
+  return identity;
+}
+/** Convert a copy, including legacy restored/imported records; never mutate the local trail. */
+export function diagnosticExportPayload(value: unknown): Json {
+  assertDiagnosticJson(value);
+  const copy = structuredClone(value);
+  if (!copy || Array.isArray(copy) || typeof copy !== "object") throw new Error("诊断结构不合法");
+  if (copy.schema === MARKER_DIAGNOSTIC_SCHEMA) {
+    if (copy.service_identity !== undefined) copy.service_identity = diagnosticIdentity(copy.service_identity);
+  } else if (copy.schema === MARKER_DIAGNOSTIC_SESSION_SCHEMA || copy.schema === MARKER_DIAGNOSTIC_BUNDLE_SCHEMA) {
+    if (!Array.isArray(copy.runs)) throw new Error("诊断记录结构不合法");
+    copy.runs = copy.runs.map(diagnosticExportPayload);
+    if (Array.isArray(copy.page_instances)) for (const page of copy.page_instances) {
+      if (page && !Array.isArray(page) && typeof page === "object" && page.service_identity !== undefined) {
+        page.service_identity = diagnosticIdentity(page.service_identity);
+      }
+    }
+  } else throw new Error("诊断版本不支持导出");
+  return copy;
+}
+function auditIdentityDigests(identity: Json | undefined) {
+  if (identity === undefined || identity === null) return;
+  if (typeof identity !== "object" || Array.isArray(identity)) throw new Error("诊断身份结构不合法");
+  for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest", "branch_sha256"]) {
+    const field = identity[key];
+    if (key === "branch_sha256" && field === null) throw new Error(`诊断指纹字段不合法：${key}`);
+    if (field === null || field === undefined) continue;
+    const length = key === "head" ? 40 : 64;
+    if (typeof field !== "string" || !new RegExp(`^[0-9a-f]{${length}}$`, "i").test(field)) throw new Error(`诊断指纹字段不合法：${key}`);
+    identity[key] = "[redacted]";
+  }
+}
 /** Typed digest metadata is not free text. Keep the shared privacy scanner unchanged. */
 export function auditMarkerDiagnosticExport(value: unknown) {
   assertDiagnosticJson(value);
@@ -204,7 +292,14 @@ export function auditMarkerDiagnosticExport(value: unknown) {
     // Validate only recorded browser metadata; scan every other field unchanged.
     // Keep the original ticket (including its exact version) intact for replay.
     for (const page of auditCopy.page_instances as Json[]) {
-      if (!page || Array.isArray(page) || typeof page !== "object" || page.browser_engine === undefined) continue;
+      if (!page || Array.isArray(page) || typeof page !== "object") continue;
+      if (page.client_module_fingerprint !== undefined) {
+        if (typeof page.client_module_fingerprint !== "string" || !/^fnv1a32-[0-9a-f]{8}$/.test(page.client_module_fingerprint)) {
+          throw new Error("诊断客户端模块指纹不合法");
+        }
+        page.client_module_fingerprint = "[redacted]";
+      }
+      if (page.browser_engine === undefined) continue;
       const engine = page.browser_engine;
       if (typeof engine !== "string" || engine.length > 32
         || !/^(?:unknown|(?:Edg|Chrome|Firefox|Version)\/[0-9]{1,3}(?:\.[0-9]{1,5}){0,3})$/.test(engine)) {
@@ -229,11 +324,7 @@ export function auditMarkerDiagnosticExport(value: unknown) {
               && typeof geometry.geometry_fingerprint === "string") geometry.geometry_fingerprint = "[redacted]";
           }
         }
-        const identity = entry.service_identity;
-        if (identity && !Array.isArray(identity) && typeof identity === "object") {
-          for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest"])
-            if (typeof identity[key] === "string") identity[key] = "[redacted]";
-        }
+        auditIdentityDigests(entry.service_identity);
       }
     }
     for (const event of auditCopy.controller_events as Json[]) {
@@ -301,11 +392,7 @@ export function auditMarkerDiagnosticExport(value: unknown) {
   digest(auditCopy, "prepared_rgba_sha256"); digest(auditCopy, "detector_rgba_sha256");
   const source = object(auditCopy.source_file);
   if (source) { digest(source, "sha256"); digest(source, "rgba_sha256"); }
-  const identity = object(auditCopy.service_identity);
-  if (identity) {
-    digest(identity, "head", 40);
-    for (const key of ["worktreeId", "sourceDigest", "assetDigest"]) digest(identity, key);
-  }
+  auditIdentityDigests(auditCopy.service_identity);
   return auditExportPayload(auditCopy);
 }
 export async function diagnosticSha256(data: Uint8Array | Uint8ClampedArray): Promise<string> {
@@ -345,8 +432,7 @@ function rawDetection(value: unknown): Json {
 }
 export function parseDiagnosticRun(text: string): DiagnosticRun {
   if (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) throw new Error("诊断文件超过8MB");
-  const value: unknown = JSON.parse(text);
-  assertDiagnosticJson(value);
+  const value = diagnosticExportPayload(JSON.parse(text));
   if (value && !Array.isArray(value) && typeof value === "object"
     && (value.schema === MARKER_DIAGNOSTIC_BUNDLE_SCHEMA || value.schema === MARKER_DIAGNOSTIC_SESSION_SCHEMA)) {
     if (!auditMarkerDiagnosticExport(value).passed) throw new Error("诊断包未通过隐私检查");
@@ -358,6 +444,7 @@ export function parseDiagnosticRun(text: string): DiagnosticRun {
   if (r.schema !== MARKER_DIAGNOSTIC_SCHEMA || r.status !== "recorded" || !r.input || !r.input.seed || !r.input.options || !r.input.parameters
     || r.raw_image_embedded !== false || r.uploaded !== false || r.client_source_binding !== "UNKNOWN"
     || !["web_worker", "main_thread_fallback"].includes(r.channel)) throw new Error("诊断版本或状态不支持复放");
+  if (!auditMarkerDiagnosticExport(r).passed) throw new Error("诊断记录未通过隐私检查");
   return r;
 }
 
@@ -532,9 +619,14 @@ export function diagnosticReplayMismatches(saved: DiagnosticRun, current: Diagno
   const { revision: _oldRevision, ...oldInput } = saved.input;
   const { revision: _newRevision, ...newInput } = current.input;
   if (stableDiagnosticJson(oldInput) !== stableDiagnosticJson(newInput)) mismatch.push("参数/坐标/变换不同");
+  let identityEqual = false;
+  try {
+    const oldIdentity = diagnosticIdentity(saved.service_identity), newIdentity = diagnosticIdentity(current.service_identity);
+    identityEqual = Boolean(oldIdentity && newIdentity && stableDiagnosticJson(oldIdentity) === stableDiagnosticJson(newIdentity));
+  } catch { /* Malformed identities must block replay, never the product workflow. */ }
   if (saved.service_snapshot_binding !== "PASS" || current.service_snapshot_binding !== "PASS"
     || saved.client_declared_contract_binding !== "PASS" || current.client_declared_contract_binding !== "PASS"
-    || stableDiagnosticJson(saved.service_identity) !== stableDiagnosticJson(current.service_identity)) mismatch.push("服务或声明身份未匹配");
+    || !identityEqual) mismatch.push("服务或声明身份未匹配");
   return mismatch;
 }
 
@@ -943,7 +1035,7 @@ export class MarkerRunDiagnostics {
     const run = this.runs.at(-1);
     if (!run || run.status === "pending") throw new Error("请先完成一次识别并等待诊断记录就绪");
     assertDiagnosticJson(run);
-    return JSON.stringify(run, null, 2);
+    return JSON.stringify(diagnosticExportPayload(run), null, 2);
   }
   /**
    * Record a privacy-safe event for any workflow domain. This is intentionally
@@ -1045,7 +1137,7 @@ export class MarkerRunDiagnostics {
       raw_image_embedded: false, uploaded: false,
     };
     assertDiagnosticJson(payload);
-    const text = JSON.stringify(payload, null, 2);
+    const text = JSON.stringify(diagnosticExportPayload(payload), null, 2);
     if (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) throw new Error("诊断包超过8MB，未导出；请保留当前页面并向开发者反馈，不要刷新以免丢失记录");
     return text;
   }
@@ -1053,9 +1145,10 @@ export class MarkerRunDiagnostics {
     try { this.captureInteraction("export_snapshot", {}); } catch { /* Optional observation. */ }
     if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length
       && !this.interactionEvents.length) throw new Error("请先完成一次诊断动作");
-    const payload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
+    const rawPayload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
       pending_run_count: this.runs.filter(run => run.status === "pending").length,
       raw_image_embedded: false, uploaded: false };
+    const payload = diagnosticExportPayload(rawPayload) as unknown as typeof rawPayload;
     assertDiagnosticJson(payload);
     let text = JSON.stringify(payload, null, 2);
     while (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) {
