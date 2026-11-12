@@ -2822,10 +2822,14 @@ function recoverScanSolidCandidate(
   analysisRadius: number, scanRadius: number, witness: ControlledMarkerDetection,
   pixelBoundary = false,
 ): ControlledMarkerDetection | null {
+  const recoverClippedSmallScan = !pixelBoundary && scanRadius < analysisRadius
+    && witness.ok && witness.geometry_mode === "dark_component"
+    && witness.boundary.some(point => Math.hypot(point.x - seed.x, point.y - seed.y) > scanRadius);
   const proposals: ControlledMarkerDetection[] = [];
   recoverSolidComponentNearSeed(image, seed, witness, {
     ...options, roiRadius: scanRadius,
     __solidAnalysisRadius: analysisRadius, __solidProposalCollector: proposals,
+    ...(recoverClippedSmallScan ? { __requireUnclippedSolidProposal: true } : {}),
   } as ControlledMarkerOptions);
   // A scan-wide threshold can merge a lesion into a shadow or wrinkle. Use
   // overlapping fixed-scale regions only to propose centres; clipped dark
@@ -2845,7 +2849,7 @@ function recoverScanSolidCandidate(
       y: Math.round(seed.y / step) * step + dy,
     };
     if (localSeed.x < 0 || localSeed.y < 0 || localSeed.x >= image.width || localSeed.y >= image.height
-      || (!pixelBoundary && Math.hypot(dx, dy) > scanRadius)) continue;
+      || (!pixelBoundary && Math.hypot(dx, dy) > (recoverClippedSmallScan ? analysisRadius : scanRadius))) continue;
     const local: ControlledMarkerDetection[] = [];
     recoverSolidComponentNearSeed(image, localSeed, witness, {
       ...options, roiRadius: analysisRadius,

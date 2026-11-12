@@ -1,6 +1,6 @@
 export const CONTROLLED_MARKER_RELEASE = Object.freeze({
-  "version": "0.102.2-candidate.1",
-  "name": "肿物边界识别：小扫描特征搜索与覆盖解耦",
-  "changeSlug": "small-scan-feature-search-decoupled-coverage",
+  "version": "0.102.3-candidate.1",
+  "name": "肿物边界识别：越圈小扫描的完整候选恢复",
+  "changeSlug": "small-scan-crossing-witness-complete-recovery",
   "status": "candidate"
 });
