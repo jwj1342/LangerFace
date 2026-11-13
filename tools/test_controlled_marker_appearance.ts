@@ -212,6 +212,78 @@ for (const evidence of [
 ]) assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
     { ...isolatedPigment, evidence }, enclosingMaterial, { x: 14, y: 14 }), false,
     'an outward continuation or missing sector preserves the original selection');
+const relativeBaseline = { ...associatedBaseline, boundary: square(12, 12, 4), area_px: 16,
+    diagnostics: { filled_candidate_route: 'relative_color_filled_candidate' } } as any;
+const repeatedRecovery = { proposal: isolatedPigment, support: {
+    kind: 'separate_anchors' as const, anchor: { x: 12, y: 12 }, context: 64,
+    peerAnchor: { x: 24, y: 12 }, peerContext: 48, overlapIou: 1,
+} };
+const corroborate = geometry.corroborateContainedPigmentCandidate;
+assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), repeatedRecovery,
+    'repeated independent support can corroborate an existing local outline beyond the tiny baseline ratio');
+for (const reference of [
+    { ...relativeBaseline, ok: false },
+    { ...relativeBaseline, geometry_mode: 'enclosed_region' },
+    associatedBaseline,
+    { ...relativeBaseline, boundary: square(7, 12, 4) },
+    { ...relativeBaseline, boundary: [] },
+]) assert.equal(corroborate(reference, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), null);
+for (const evidence of [
+    { ...isolatedPigment.evidence, outerContinuation: .01 },
+    { ...isolatedPigment.evidence, sectorContinuation: [0, 0, .01, 0, 0, 0, 0, 0] },
+    { ...isolatedPigment.evidence, sectorContinuation: [] },
+]) assert.equal(corroborate(relativeBaseline, { ...isolatedPigment, evidence }, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), null);
+assert.equal(corroborate(relativeBaseline, isolatedPigment, square(10, 10, 10),
+    { x: 14, y: 14 }, () => repeatedRecovery), null, 'partial enclosing body is insufficient');
+assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 21, y: 14 }, () => repeatedRecovery), null, 'the clicked object must be inside the local outline');
+assert.equal(corroborate(relativeBaseline, isolatedPigment, isolatedPigment.candidate.boundary,
+    { x: 14, y: 14 }, () => repeatedRecovery), null, 'the enclosing body must be strictly larger');
+for (const recovery of [null, { ...repeatedRecovery,
+    proposal: compactProposal(square(9, 8, 12), 12, 64, 10) }]) {
+    assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+        { x: 14, y: 14 }, () => recovery), null,
+        'missing or equal-area shifted recovery cannot replace the existing outline');
+}
+assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => { throw new Error('optional recovery unavailable'); }), null,
+    'an optional recovery error preserves the prior selection');
+let rejectedRecoveryCalls = 0;
+assert.equal(corroborate(associatedBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => { rejectedRecoveryCalls++; return repeatedRecovery; }), null);
+assert.equal(rejectedRecoveryCalls, 0, 'ineligible sources never run the extra recovery');
+const acceptedLocal = { ...relativeBaseline, boundary: isolatedPigment.candidate.boundary,
+    area_px: 144, diagnostics: { filled_candidate_route: 'localized_pigment_envelope' } } as any;
+const largerRelativeBaseline = { ...relativeBaseline, boundary: square(10, 10, 8), area_px: 64 };
+assert.equal(corroborate(largerRelativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), null,
+    'a ratio at most four cannot bypass an unsuccessful original association');
+assert.equal(corroborate(largerRelativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery, acceptedLocal), repeatedRecovery,
+    'an already associated local outline retains independent corroboration');
+const gradualFallback = { ...relativeBaseline, ok: false, boundary: [], area_px: 0,
+    failure_code: 'unstable_enclosure', rejected_boundary: relativeBaseline.boundary,
+    rejected_geometry_mode: 'dark_component', rejected_reasons: ['gradual_shading_edge'],
+    diagnostics: { filled_candidate_route: 'reject_unverified_filled_fallback' } } as any;
+assert.equal(corroborate(gradualFallback, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery, acceptedLocal), repeatedRecovery,
+    'an already accepted identical local outline can survive a larger material replacement');
+for (const reference of [
+    { ...gradualFallback, failure_code: 'scan_range_too_small' },
+    { ...gradualFallback, rejected_reasons: ['not_enclosed_within_scan'] },
+    { ...gradualFallback, rejected_reasons: ['gradual_shading_edge', 'noncompact_or_thin'] },
+    { ...gradualFallback, rejected_boundary: square(7, 12, 4) },
+]) assert.equal(corroborate(reference, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery, acceptedLocal), null);
+for (const local of [undefined, { ...acceptedLocal, ok: false },
+    { ...acceptedLocal, boundary: square(9, 8, 12) }]) {
+    assert.equal(corroborate(gradualFallback, isolatedPigment, enclosingMaterial,
+        { x: 14, y: 14 }, () => repeatedRecovery, local), null,
+        'a rejected input needs the same previously accepted local outline');
+}
 const tinyRecoveredBoundary = Array.from({ length: 32 }, (_, index) => {
     const angle = 2 * Math.PI * index / 32;
     return { x: 30 + Math.cos(angle) * 6, y: 40 + Math.sin(angle) * 5 };

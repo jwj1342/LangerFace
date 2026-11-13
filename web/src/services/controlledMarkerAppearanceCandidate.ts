@@ -1200,6 +1200,50 @@ function preserveAssociatedPigmentCandidate(
     const area = polygonArea(boundary);
     return polygonArea(baseline.boundary) < area && area < polygonArea(bodyBoundary);
 }
+function corroborateContainedPigmentCandidate(
+    baseline: ControlledMarkerDetection,
+    pigment: NonNullable<ReturnType<typeof localizedPigmentCandidate>>,
+    bodyBoundary: Point[],
+    seed: Point,
+    recover: () => ReturnType<typeof compactPigmentRecovery>,
+    localResult?: ControlledMarkerDetection,
+): ReturnType<typeof compactPigmentRecovery> {
+    const boundary = pigment.candidate.boundary, sectors = pigment.evidence.sectorContinuation;
+    const area = polygonArea(boundary);
+    const relative = baseline.ok && baseline.geometry_mode === 'dark_component'
+        && baseline.diagnostics?.filled_candidate_route === 'relative_color_filled_candidate'
+        && (area / Math.max(1, baseline.area_px) > 4
+            || localResult?.ok && localResult.diagnostics?.filled_candidate_route === 'localized_pigment_envelope');
+    // This fallback already accepted the same local outline before the material
+    // selection; it does not turn a coverage rejection into a successful result.
+    const acceptedLocal = !baseline.ok && baseline.failure_code === 'unstable_enclosure'
+        && baseline.diagnostics?.filled_candidate_route === 'reject_unverified_filled_fallback'
+        && baseline.rejected_geometry_mode === 'dark_component'
+        && baseline.rejected_reasons?.length === 1 && baseline.rejected_reasons[0] === 'gradual_shading_edge'
+        && localResult?.ok && localResult.diagnostics?.filled_candidate_route === 'localized_pigment_envelope'
+        && localResult.boundary.length === boundary.length
+        && localResult.boundary.every((point, index) => point.x === boundary[index].x && point.y === boundary[index].y);
+    const old = relative ? baseline.boundary : baseline.rejected_boundary ?? [];
+    if ((!relative && !acceptedLocal) || old.length < 3 || bodyBoundary.length < 3)
+        return null;
+    const oldArea = polygonArea(old);
+    if (!(oldArea > 0 && oldArea < area && area < polygonArea(bodyBoundary))
+        || pigment.evidence.outerContinuation !== 0
+        || !Array.isArray(sectors) || sectors.length !== 8 || sectors.some(value => value !== 0)
+        || !contains(seed, boundary)
+        || !old.every(point => contains(point, boundary))
+        || !boundary.every(point => contains(point, bodyBoundary)))
+        return null;
+    try {
+        const recovered = recover(), repeated = recovered?.proposal.candidate.boundary;
+        return repeated && repeated.length === boundary.length
+            && repeated.every((point, index) => point.x === boundary[index].x && point.y === boundary[index].y)
+            ? recovered : null;
+    } catch {
+        // Optional corroboration must not discard the previously refined result.
+        return null;
+    }
+}
 function shouldPreserveSupportedBaselineOnIncompleteBody(
     baseline: ControlledMarkerDetection,
     incompleteBoundary: Point[],
@@ -1318,6 +1362,18 @@ async function refineAppearanceCandidateBaseline(image: MarkerImageData, seed: M
                     selection: 'associated_pigment_inside_complete_material_body',
                     enclosingMaterialAreaPx: polygonArea(body.boundary),
                 });
+        }
+        if (refined === materialResult && pigment
+            && (result === baseline || result.diagnostics?.filled_candidate_route === 'localized_pigment_envelope')) {
+            const corroborated = corroborateContainedPigmentCandidate(baseline, pigment, body.boundary, seed,
+                () => compactPigmentRecovery(cv, image, seed, radius), result);
+            if (corroborated)
+                return appearanceResult(baseline, pigment.candidate.boundary, seed,
+                    'independently_corroborated_localized_pigment', {
+                        ...pigment.evidence, recoverySupport: corroborated.support,
+                        selection: 'repeated_pigment_inside_complete_material_body',
+                        enclosingMaterialAreaPx: polygonArea(body.boundary),
+                    });
         }
         return refined;
     }
@@ -1466,7 +1522,7 @@ export const __appearanceGeometryForTests = {
     constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
     regularizeAppearanceBoundary, selectCompactPigmentProposal, findNormalizedFragmentConflict,
     rejectNormalizedFragmentConflict, fragmentExtensionEvidence, selectCompleteFragmentBody,
-    preserveAssociatedPigmentCandidate,
+    preserveAssociatedPigmentCandidate, corroborateContainedPigmentCandidate,
 };
 
 type CompactPigmentProposal = {
