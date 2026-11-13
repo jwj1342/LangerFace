@@ -3805,10 +3805,11 @@
     }
   ],
   "automatedValidation": {
-    "status": "local-limited-engineering-only-runtime-and-boundary-pending",
+    "status": "failed-current-product-input-and-cross-scan-stability",
     "sourceDigest": "f8cfd7b77891f8f7ac5231f469a42f99bfc91f49f03edf290493d57b2dbecc26",
-    "note": "行为测试绑定同一外观文件；版本登记后未再调用识别。7侧脸落点、16控制；原外观套件/类型通过。保留首错、错误中间引用和232/200计数超限。",
-    "evidence": "../../local_outputs/volunteer-validation-20261016/evidence/54号反馈-Vh1-20261110/执行卡.json#manualFeedback56Round3_20261113.approvedEveningCloseout"
+    "note": "原冻结RGBA侧脸7点选择约1666.5的工程证据保留。续测实际页面原图新RGBA时UI/Worker均275.8，完整一致且SVG匹配，但未命中本次局部候选选择；3点15mm中原点218.4、另2点1666.5。3小圈拒识和6相邻保持。不得整组/正式人工验收，原始失败像素已保全；输入处理差异和首个候选分叉未证。",
+    "evidence": "../../local_outputs/volunteer-validation-20261016/evidence/54号反馈-Vh1-20261110/执行卡.json#manualFeedback56Round3_20261113.approvedTargetedValidation20261113",
+    "testedHead": "88b55ebca680897ba0446e5898ce80c92099e1d2"
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
