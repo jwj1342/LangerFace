@@ -1,4 +1,4 @@
-const MOBILE_WORKFLOW_MEDIA_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
+import { narrowTouchWorkflowViewportActive } from "./workflowViewport";
 
 let rstlLayerVisible = true;
 let wrinkleLayerVisible = true;
@@ -25,8 +25,7 @@ function workflowRoot(): HTMLElement | null {
 }
 
 export function mobileWorkflowViewportActive(): boolean {
-  return typeof window.matchMedia === "function"
-    && window.matchMedia(MOBILE_WORKFLOW_MEDIA_QUERY).matches;
+  return narrowTouchWorkflowViewportActive();
 }
 
 export function mobileRstlLayerVisible(): boolean {

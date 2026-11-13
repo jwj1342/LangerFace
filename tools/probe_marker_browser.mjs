@@ -1,22 +1,109 @@
 #!/usr/bin/env node
 import { chromium } from "../web/node_modules/playwright/index.mjs";
 import { captureMarkerIdentity, assertMarkerIdentity } from "./marker_runtime_identity.mts";
+import { auditMarkerDiagnosticExport } from "../web/src/services/controlledMarkerRunDiagnostics.ts";
+import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const expected = captureMarkerIdentity("small-lesion-boundary-candidate");
 const browser = await chromium.launch({ headless: true,
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined });
 const results = [];
+async function waitForDiagnosticPage(page, priorPages = 0) {
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    // This Playwright build treats an async waitForFunction predicate as a
+    // truthy Promise. Evaluate it to a boolean before deciding to poll again.
+    const ready = await page.evaluate(async previous => {
+    // Persisted diagnostics can be ready before command listeners are bound.
+    // The route status is published only after the formal mount returns.
+    const { useAppStore } = await import("/src/stores/appStore.ts");
+    if (useAppStore.getState().routeStatus !== "合并工作台已挂载") return false;
+    if (!document.querySelector("[data-workflow-marker-mode]")) return false;
+    const session = sessionStorage.getItem("langerface_diagnostic_session_v2");
+    if (!session) return false;
+    const db = await new Promise(resolve => {
+      const request = indexedDB.open("langerface-diagnostics-v2", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+    if (!db) return false;
+    try {
+      if (!db.objectStoreNames.contains("sessions")) return false;
+      const saved = await new Promise(resolve => {
+        const request = db.transaction("sessions", "readonly").objectStore("sessions").get(session);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+      return Boolean(saved && saved.page_instances.length > previous && saved.page_instances.at(-1).service_identity);
+    } finally { db.close(); }
+    }, priorPages);
+    if (ready) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("diagnostic controller/session did not become ready within 30000ms");
+}
+async function verifyDiagnosticDownload(page, label) {
+  const ready = page.getByRole("button", { name: "导出诊断日志", exact: true });
+  await ready.waitFor({ state: "visible", timeout: 15000 });
+  let download;
+  try {
+    [download] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), ready.click()]);
+  } catch (error) {
+    const message = await page.locator("#markerDiagnosticStatus").textContent();
+    const observed = await page.evaluate(() => window.__deliveryDiagnosticEvents);
+    throw new Error(`diagnostic download did not complete: ${message}; observed=${JSON.stringify(observed)}`, { cause: error });
+  }
+  if (await download.failure()) throw new Error("diagnostic download failed");
+  const bytes = readFileSync(await download.path());
+  const payload = JSON.parse(bytes.toString("utf8"));
+  if (process.env.DIAGNOSTIC_PROBE_OUTPUT) {
+    mkdirSync(process.env.DIAGNOSTIC_PROBE_OUTPUT, { recursive: true });
+    writeFileSync(resolve(process.env.DIAGNOSTIC_PROBE_OUTPUT, `${label}-observed.json`), bytes);
+  }
+  assert.equal(payload.schema, "marker-diagnostic-session/2");
+  assert.equal(auditMarkerDiagnosticExport(payload).passed, true);
+  const expectedBranch = createHash("sha256").update(expected.branch).digest("hex");
+  const identities = [...payload.page_instances.map(page => page.service_identity), ...payload.runs.map(run => run.service_identity)].filter(Boolean);
+  assert.ok(identities.length > 0, "download must contain actual service identity");
+  for (const identity of identities) {
+    assert.equal(identity.branch, undefined);
+    assert.equal(identity.branch_sha256, expectedBranch);
+    for (const key of ["head", "sourceDigest", "worktreeId", "implementationVersion", "profile"]) assert.equal(identity[key], expected[key], key);
+  }
+  if (process.env.DIAGNOSTIC_PROBE_OUTPUT) {
+    mkdirSync(process.env.DIAGNOSTIC_PROBE_OUTPUT, { recursive: true });
+    writeFileSync(resolve(process.env.DIAGNOSTIC_PROBE_OUTPUT, `${label}.json`), bytes);
+  }
+  return { bytes: bytes.length, runs: payload.runs.length, pages: payload.page_instances.length,
+    sessionId: payload.session_id, pageIds: payload.page_instances.map(page => page.page_instance_id),
+    sourceIds: payload.sources.map(source => source.source_id),
+    restored: payload.page_instances.some(page => page.restored_session), sha256: createHash("sha256").update(bytes).digest("hex") };
+}
 try {
   for (const base of process.argv.slice(2)) {
     for (const mobile of [false, true]) {
       const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 960 },
-        isMobile: mobile, hasTouch: mobile });
+         isMobile: mobile, hasTouch: mobile, acceptDownloads: true });
       try {
         const page = await context.newPage();
+         await page.addInitScript(() => {
+           window.__deliveryDiagnosticEvents = [];
+           for (const type of ["langerface:incision-tumor-react-command", "langerface:marker-run-diagnostic", "click"]) {
+             window.addEventListener(type, event => {
+               window.__deliveryDiagnosticEvents.push({ type, command: event.detail?.command,
+                 message: event.detail?.message, target: event.target?.id });
+               if (window.__deliveryDiagnosticEvents.length > 16) window.__deliveryDiagnosticEvents.shift();
+             }, true);
+           }
+         });
         const errors = [];
         page.on("pageerror", error => errors.push(error.message));
         const started = Date.now();
         await page.goto(new URL("/app/workflow?developer=1", base).href, { timeout: 30000 });
+         await waitForDiagnosticPage(page);
         const upload = mobile ? page.getByRole("button", { name: "上传照片", exact: true }) : page.locator("#uploadBtn");
         await upload.waitFor({ state: "visible", timeout: 30000 });
         await page.waitForFunction(() => !document.querySelector("#fileInput")?.disabled, {}, { timeout: 30000 });
@@ -35,10 +122,24 @@ try {
         const response = await page.request.get(new URL("/__runtime-identity.json", base).href);
         if (!response.ok()) throw new Error(`identity HTTP ${response.status()}`);
         assertMarkerIdentity(await response.json(), expected);
+         const label = `${new URL(base).port || "https"}-${mobile ? "mobile" : "desktop"}`;
+         const firstDownload = await verifyDiagnosticDownload(page, `${label}-before-refresh`);
+         await page.reload({ timeout: 30000 });
+         await page.waitForFunction(() => !document.querySelector("#fileInput")?.disabled, {}, { timeout: 30000 });
+         await waitForDiagnosticPage(page, firstDownload.pages);
+         const restoredDownload = await verifyDiagnosticDownload(page, `${label}-after-refresh`);
+         assert.equal(restoredDownload.sessionId, firstDownload.sessionId, "refresh must retain the same session");
+         assert.ok(firstDownload.sourceIds.length > 0, "first download must contain the uploaded source record");
+         for (const id of firstDownload.pageIds) assert.ok(restoredDownload.pageIds.includes(id), "prior page record lost");
+         for (const id of firstDownload.sourceIds) assert.ok(restoredDownload.sourceIds.includes(id), "prior upload record lost");
+         assert.equal(restoredDownload.restored, true, "refresh must restore the existing local session");
+         assert.ok(restoredDownload.pages > firstDownload.pages, "page-only history must survive refresh");
         if (errors.length) throw new Error(errors.join("; "));
         results.push({ base, viewport: mobile ? "mobile-simulation" : "desktop", status: "PASS", elapsedMs: Date.now() - started,
-          checks: ["developer-page", "enabled-upload", "real-filechooser", "synthetic-image-load", "photo-model-ready", "exact-runtime-identity"],
-          excludes: ["clinical-effect", "real-phone", "camera", "RSTL-equivalence"] });
+           checks: ["developer-page", "enabled-upload", "real-filechooser", "synthetic-image-load", "photo-model-ready", "exact-runtime-identity",
+             "real-diagnostic-download", "download-json-privacy-and-identity", "restored-session-download"],
+           downloads: [firstDownload, restoredDownload],
+           excludes: ["browser-detector-run-export", "browser-import-replay", "clinical-effect", "real-phone", "camera", "RSTL-equivalence"] });
       } finally { await context.close(); }
     }
   }

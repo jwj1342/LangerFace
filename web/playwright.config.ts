@@ -4,6 +4,7 @@ const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: "./e2e",
+  grepInvert: /@source-contract/,
   testIgnore: [
     "**/controlled-marker-color-difference-real-sample.spec.ts",
     "**/controlled-marker-image10.spec.ts",

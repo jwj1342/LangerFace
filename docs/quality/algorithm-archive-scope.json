@@ -88,7 +88,9 @@
     "tools/test_probe_marker_delivery.mjs",
     "docs/quality/LESION_CANDIDATE_REVIEW.md",
     "README.md",
-    "docs/README.md"
+    "docs/README.md",
+    "web/src/services/workflowViewport.ts",
+    "docs/quality/controlled-marker-release.json"
   ],
   "excludedTeamAlgorithms": [
     "standard-rstl-generation",

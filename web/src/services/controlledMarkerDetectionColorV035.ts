@@ -2622,8 +2622,18 @@ function recoverScanEnclosedCandidate(
 // Large filled pigment can contain enough texture to fragment a luminance
 // threshold into tiny rings. Recover only a seed-connected, colour-consistent
 // object; do not enlarge the existing small-object thresholds globally.
+type MedianCache = {
+  x0: number;
+  y0: number;
+  width: number;
+  height: number;
+  values: Float64Array;
+  valid: Uint8Array;
+};
+
 function recoverLargeChromaticSolidAtAnchor(
   image: MarkerImageData, seed: MarkerPoint, analysisRadius: number, scanRadius: number,
+  cache?: MedianCache,
 ): ControlledMarkerDetection | null {
   const radius = Math.min(scanRadius, analysisRadius * 4);
   if (!Number.isFinite(radius) || radius <= analysisRadius * 1.5) return null;
@@ -2635,6 +2645,19 @@ function recoverLargeChromaticSolidAtAnchor(
   const labs: LabColor[] = [];
   const lumas: number[] = [];
   for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
+    const cx = x - (cache?.x0 ?? 0), cy = y - (cache?.y0 ?? 0);
+    const cacheIndex = cache && Number.isInteger(cx) && Number.isInteger(cy)
+      && cx >= 0 && cy >= 0 && cx < cache.width && cy < cache.height
+      ? cy * cache.width + cx : -1;
+    if (cache && cacheIndex >= 0 && cache.valid[cacheIndex]) {
+      labs.push({
+        l: cache.values[cacheIndex * 4],
+        a: cache.values[cacheIndex * 4 + 1],
+        b: cache.values[cacheIndex * 4 + 2],
+      });
+      lumas.push(cache.values[cacheIndex * 4 + 3]);
+      continue;
+    }
     const channels: number[][] = [[], [], []];
     for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
       const i = (clamp(y + dy, 0, image.height - 1) * image.width
@@ -2644,6 +2667,11 @@ function recoverLargeChromaticSolidAtAnchor(
     const rgb = channels.map(values => values.sort((a, b) => a - b)[4]);
     labs.push(rgbToLab(rgb[0], rgb[1], rgb[2]));
     lumas.push(0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]);
+    if (cache && cacheIndex >= 0) {
+      const value = labs[labs.length - 1];
+      cache.values.set([value.l, value.a, value.b, lumas[lumas.length - 1]], cacheIndex * 4);
+      cache.valid[cacheIndex] = 1;
+    }
   }
   const reference: LabColor = { l: 0, a: 0, b: 0 };
   for (const channel of ["l", "a", "b"] as const) {
@@ -2729,6 +2757,23 @@ function recoverLargeChromaticSolid(
   // pointer ownership are checked again after that recentering.
   if (scanRadius <= analysisRadius * 1.5) return null;
   const step = Math.max(1, Math.round(analysisRadius / 2));
+  // Reuse exact median/Lab values only within this synchronous proposal set.
+  const reach = Math.min(scanRadius, analysisRadius * 4) + step * 2 + 2;
+  const cacheX0 = Math.max(0, Math.floor(seed.x - reach));
+  const cacheY0 = Math.max(0, Math.floor(seed.y - reach));
+  const cacheWidth = Math.min(image.width, Math.ceil(seed.x + reach) + 1) - cacheX0;
+  const cacheHeight = Math.min(image.height, Math.ceil(seed.y + reach) + 1) - cacheY0;
+  const cachePixels = cacheWidth * cacheHeight;
+  const cache: MedianCache | undefined = cachePixels > 0 && cachePixels * 33 <= 8 * 1024 * 1024
+    ? {
+        x0: cacheX0,
+        y0: cacheY0,
+        width: cacheWidth,
+        height: cacheHeight,
+        values: new Float64Array(cachePixels * 4),
+        valid: new Uint8Array(cachePixels),
+      }
+    : undefined;
   const offsets = [-2, -1, 0, 1, 2].flatMap(y => [-2, -1, 0, 1, 2]
     .map(x => ({ x: x * step, y: y * step })))
     .sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
@@ -2745,9 +2790,9 @@ function recoverLargeChromaticSolid(
     const anchor = { x: seed.x + offset.x, y: seed.y + offset.y };
     if (anchor.x < 0 || anchor.y < 0 || anchor.x >= image.width || anchor.y >= image.height
       || Math.hypot(offset.x, offset.y) >= scanRadius) continue;
-    const proposal = recoverLargeChromaticSolidAtAnchor(image, anchor, analysisRadius, scanRadius);
+    const proposal = recoverLargeChromaticSolidAtAnchor(image, anchor, analysisRadius, scanRadius, cache);
     if (!proposal || !owned(proposal)) continue;
-    const canonical = recoverLargeChromaticSolidAtAnchor(image, proposal.center!, analysisRadius, scanRadius);
+    const canonical = recoverLargeChromaticSolidAtAnchor(image, proposal.center!, analysisRadius, scanRadius, cache);
     // A failed centre verification is not repaired by retaining a favourable
     // peripheral colour sample. Each anchor contributes at most one vote.
     if (!canonical || !owned(canonical)) continue;
@@ -2903,7 +2948,23 @@ function recoverScanSolidCandidate(
       ...(directProposal ? ["scan_solid_direct_proposal_recovered"] : []),
     ]));
   }
-  return accepted.sort((a, b) => b.area_px - a.area_px)[0] || null;
+  // 已有局部结果通过共同门禁，且多窗口再次得到同一对象时，
+  // 扫描范围内不相交的更大暗区不能仅凭面积替换它。点击点无需
+  // 位于前景；这里只比较两条受支持轮廓，不改变原扫描覆盖。
+  const supportedWitness = !pixelBoundary && witness.ok
+    && witness.geometry_mode === "dark_component"
+    && candidateGate(witness, seed, Number(options.expectedDiameterPx || 0),
+      evidence, analysisRadius, Number(options.scanDiameterMm || 0), scanRadius).valid;
+  const coherent = supportedWitness
+    ? accepted.filter(candidate => sameSolidObject(witness, candidate))
+    : [];
+  return (coherent.length ? coherent : accepted).sort((a, b) => b.area_px - a.area_px)[0] || null;
+}
+
+function sameSolidObject(a: ControlledMarkerDetection, b: ControlledMarkerDetection): boolean {
+  return a.ok && b.ok && a.geometry_mode === "dark_component"
+    && b.geometry_mode === "dark_component" && !!a.center && !!b.center
+    && boundaryContains(a.center, b.boundary) && boundaryContains(b.center, a.boundary);
 }
 
 /**
@@ -2981,6 +3042,11 @@ export function detectControlledMarker(
     const large = recoverLargeChromaticSolid(image, seed, analysisRoiRadius, scanRadius);
     if (large && (!hollow || large.area_px > hollow.area_px * 4)
       && (!solid || large.area_px > solid.area_px * 4)) return finish(large);
+    // 同对象实心证据不被另一处独立闭环抢走；原大目标路线仍先执行。
+    if (solid && sameSolidObject(result, solid)
+      && (!hollow || !boundaryContains(solid.center!, hollow.boundary))) {
+      return finish(solid);
+    }
     // A complete ring remains primary beside a small dark distractor. A much
     // larger validated filled target can replace a tiny enclosed skin patch.
     if (solid && (!hollow || solid.area_px > hollow.area_px * 2)) return finish(solid);

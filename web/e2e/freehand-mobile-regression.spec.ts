@@ -1,6 +1,30 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
+import { captureMarkerIdentity } from "../../tools/marker_runtime_identity.mts";
+
+async function assertSourceRuntime(page: Page) {
+  const expected = captureMarkerIdentity(undefined);
+  const proof = await page.evaluate(async () => {
+    const response = await fetch("/__runtime-identity.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`Source runtime identity returned ${response.status}`);
+    const path = "/src/services/controlledMarkerDetectionProfile.ts";
+    const module = await import(path);
+    return { identity: await response.json(),
+      profile: module.CONTROLLED_MARKER_DETECTOR_PROFILE,
+      version: module.CONTROLLED_MARKER_DETECTOR_VERSION };
+  });
+  expect(proof.identity.mode).toBe("development");
+  for (const key of ["profile", "implementationVersion", "releaseName", "sourceDigest",
+    "algorithmDigest", "assetDigest", "head", "branch", "worktreeId"] as const) {
+    expect(proof.identity[key], `source runtime ${key}`).toBe(expected[key]);
+  }
+  expect(proof.profile).toBe(expected.profile);
+  expect(proof.version).toBe(expected.implementationVersion);
+  await test.info().attach("source-runtime-identity", {
+    body: JSON.stringify(proof), contentType: "application/json",
+  });
+}
 
 test.describe.configure({ mode: "serial" });
 test.use({
@@ -68,6 +92,10 @@ async function dragOperationPaneFrom(page: Page, locator: Locator) {
   const box = await locator.boundingBox();
   if (!box) throw new Error("mobile operation control has no layout box");
   const start = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.5 };
+  await dragUpFrom(page, start);
+}
+
+async function dragUpFrom(page: Page, start: { x: number; y: number }) {
   const session = await page.context().newCDPSession(page);
   const touchPoint = (y: number) => ({
     x: start.x,
@@ -84,12 +112,296 @@ async function dragOperationPaneFrom(page: Page, locator: Locator) {
         type: "touchMove",
         touchPoints: [touchPoint(start.y - offset)],
       });
+      await page.waitForTimeout(20);
     }
+    // Release after the finger stops; an instantaneous synthetic flick can
+    // consume the next tap to cancel its fling instead of clicking Upload.
+    await page.waitForTimeout(80);
     await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   } finally {
     await session.detach();
   }
 }
+
+async function expectGestureScrolls(page: Page, target: "pane" | "root" | "document", timeout = 10_000, touch = true) {
+  const offset = () => page.evaluate((kind) => (
+    kind === "pane" ? document.querySelector(".workflow-mobile-operation-pane")?.scrollTop ?? 0
+      : kind === "root" ? document.querySelector(".workflow-workbench")?.scrollTop ?? 0
+        : document.scrollingElement?.scrollTop ?? 0
+  ), target);
+  const before = await offset();
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("scroll test requires a fixed viewport");
+  if (touch) await dragUpFrom(page, { x: 10, y: viewport.height - 24 });
+  else {
+    await page.mouse.move(10, viewport.height - 24);
+    await page.mouse.wheel(0, 250);
+  }
+  await expect.poll(offset, { timeout, message: "a gesture must move the actual scroll target" })
+    .toBeGreaterThan(before + 5);
+}
+
+async function expectZoomRailContained(page: Page) {
+  const overflow = await page.locator(".workflow-workbench > .stage").evaluate((stage) => {
+    const stageBox = stage.getBoundingClientRect();
+    return Array.from(stage.querySelectorAll<HTMLElement>(".zoom-strip, .zoom-card, .zoom-card canvas"))
+      .filter((element) => element.getBoundingClientRect().height > 0)
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.top < stageBox.top - 1 || box.bottom > stageBox.bottom + 1;
+      })
+      .map((element) => element.className);
+  });
+  expect(overflow, "zoom cards must occupy space inside the stage, not cover the operation rail").toEqual([]);
+}
+
+const scrollLayouts = [
+  { name: "fine393", width: 393, height: 726, touch: false, mobile: false },
+  { name: "fine560", width: 560, height: 844, touch: false, mobile: false },
+  { name: "touch561", width: 561, height: 844, touch: true, mobile: false },
+  { name: "touch393", width: 393, height: 726, touch: true, mobile: true },
+  { name: "touch560", width: 560, height: 844, touch: true, mobile: true },
+  { name: "short-phone", width: 390, height: 480, touch: true, mobile: true },
+  { name: "landscape", width: 844, height: 390, touch: true, mobile: false },
+  { name: "desktop1440", width: 1440, height: 960, touch: false, mobile: false },
+];
+
+for (const layout of scrollLayouts) {
+  test(`workflow scroll and upload remain usable: ${layout.name}`, async ({ browser, baseURL }) => {
+    test.setTimeout(90_000);
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: layout.width, height: layout.height },
+      hasTouch: layout.touch,
+      isMobile: layout.touch,
+      deviceScaleFactor: 1,
+    });
+    const page = await context.newPage();
+    try {
+      await page.goto("/app/workflow?developer=1");
+      await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+      const scrollTarget = layout.mobile ? "pane" : layout.width <= 560 ? "root" : "document";
+      await expect(page.locator('[data-workflow-mobile="true"] > .workflow-mobile-operation-pane')).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator(".mobile-workflow-dock")).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator('[data-workflow-mobile="true"] .workflow-mobile-recovery-slot')).toHaveCount(layout.mobile ? 1 : 0);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(1);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toBeEmpty();
+      if (layout.width <= 1280) {
+        const stageTop = await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top);
+        await expectGestureScrolls(page, scrollTarget, 10_000, layout.touch);
+        if (layout.width <= 560) {
+          expect(await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top))
+            .toBeCloseTo(stageTop, 1);
+        }
+      }
+      await expectZoomRailContained(page);
+      const upload = layout.mobile
+        ? page.getByRole("button", { name: "上传照片", exact: true })
+        : page.locator("#uploadBtn");
+      if (scrollTarget === "root") {
+        await upload.evaluate(element => element.scrollIntoView({ block: "end", behavior: "instant" }));
+      }
+      await upload.scrollIntoViewIfNeeded();
+      // Finish the preceding scroll before testing a separate tap; a tap during
+      // a fling can stop the fling instead of activating the control.
+      await expect.poll(async () => page.evaluate(() => new Promise<boolean>((resolve) => {
+        let prior = `${scrollY}:${document.querySelector(".workflow-mobile-operation-pane")?.scrollTop}`;
+        let stableFrames = 0;
+        let frames = 0;
+        const tick = () => {
+          const current = `${scrollY}:${document.querySelector(".workflow-mobile-operation-pane")?.scrollTop}`;
+          stableFrames = current === prior ? stableFrames + 1 : 0;
+          prior = current;
+          if (stableFrames >= 12) resolve(true);
+          else if (++frames >= 120) resolve(false);
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }))).toBe(true);
+      const [chooser] = await Promise.all([
+        page.waitForEvent("filechooser", { timeout: 10_000 }),
+        layout.touch ? upload.tap() : upload.click(),
+      ]);
+      await chooser.setFiles([]);
+      await uploadGeneratedPhoto(page, "single", "#fileInput");
+      await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+      await expect(page.locator(".workflow-marker-toggle")).toBeEnabled({ timeout: 45_000 });
+      await expectZoomRailContained(page);
+      await expectAllVisibleButtonsReachable(page);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("workflow gesture assertion detects a locked existing mobile pane", async ({ page }) => {
+  await page.goto("/app/workflow?developer=1");
+  await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+  await expect(page.locator(".workflow-mobile-operation-pane")).toBeVisible();
+  const lock = await page.addStyleTag({
+    content: ".workflow-mobile-operation-pane { touch-action: none !important; }",
+  });
+  let detected = false;
+  try {
+    await expectGestureScrolls(page, "pane", 1_500);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("a gesture must move")) throw error;
+    detected = true;
+  }
+  expect(detected, "the same scroll assertion must reject a locked pane even when its DOM exists").toBe(true);
+  await lock.evaluate((element) => element.remove());
+  await expectGestureScrolls(page, "pane");
+});
+
+test("workflow wheel assertion detects a locked narrow fallback root", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/app/workflow?developer=1");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    const lock = await page.addStyleTag({
+      content: ".workflow-workbench.app { overflow-y: hidden !important; }",
+    });
+    let detected = false;
+    try {
+      await expectGestureScrolls(page, "root", 1_500, false);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("a gesture must move")) throw error;
+      detected = true;
+    }
+    expect(detected, "the wheel assertion must reject a locked fallback root").toBe(true);
+    await lock.evaluate(element => element.remove());
+    await expectGestureScrolls(page, "root", 10_000, false);
+  } finally {
+    await context.close();
+  }
+});
+
+test("narrow mouse layout preserves the original canvas and real refine quality",
+  { tag: "@source-contract" }, async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/app/workflow?developer=1");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    await assertSourceRuntime(page);
+    const result = await page.evaluate(async () => {
+      const fitPath = "/src/services/liveCanvasFit.ts";
+      const statePath = "/src/services/liveState.ts";
+      const refinePath = "/src/services/liveRefine2d.ts";
+      const domPath = "/src/services/liveDom.ts";
+      const { fitCanvasDisplayToStage } = await import(fitPath);
+      const { renderState } = await import(statePath);
+      const { undoRefine } = await import(refinePath);
+      const { els } = await import(domPath);
+      els.canvas.width = els.canvas.height = 640;
+      els.canvas.classList.add("image-source");
+      renderState.imageView.zoom = 1;
+      renderState.imageView.offsetX = renderState.imageView.offsetY = 0;
+      fitCanvasDisplayToStage();
+      const line = (name: string, y: number) => ({ name, pts: [[100, y, 0], [400, y, 0]] });
+      const state = renderState.refine2d;
+      state.active = true;
+      state.latestAutoLines = [line("a", 100), line("b", 140)];
+      state.undoStack = [{ label: "synthetic-layout-regression",
+        lines: [line("a", 100), line("b", 110.204)] }];
+      undoRefine();
+      const box = els.canvas.getBoundingClientRect();
+      const originalQuality = structuredClone(state.quality);
+      const root = document.querySelector<HTMLElement>(".workflow-workbench")!;
+      root.scrollTop = 200;
+      els.upload.focus();
+      state.undoStack = [{ label: "after-scroll-and-focus",
+        lines: [line("a", 100), line("b", 110.204)] }];
+      undoRefine();
+      return { width: box.width, height: box.height, left: box.left,
+        stageHeight: document.querySelector(".stage")!.getBoundingClientRect().height,
+        quality: state.quality, hidden: els.refine2dQuality.classList.contains("hidden"),
+        originalBox: box.toJSON(), afterScrollAndFocusBox: els.canvas.getBoundingClientRect().toJSON(),
+        originalQuality };
+    });
+    expect(result.width).toBe(393);
+    expect(result.height).toBe(393);
+    expect(result.left).toBe(0);
+    expect(result.stageHeight).toBe(527);
+    expect(result.quality.ok).toBe(true);
+    expect(result.hidden).toBe(true);
+    expect(result.afterScrollAndFocusBox).toEqual(result.originalBox);
+    expect(result.quality).toEqual(result.originalQuality);
+    await assertSourceRuntime(page);
+  } finally {
+    await context.close();
+  }
+});
+
+test("width transitions retain desktop controls and layer state on fine pointers",
+  { tag: "@source-contract" }, async ({ browser, baseURL }) => {
+  const context = await browser.newContext({
+    baseURL, viewport: { width: 900, height: 900 }, hasTouch: false, isMobile: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/app/workflow?developer=1");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    await assertSourceRuntime(page);
+    await page.evaluate(async () => {
+      const path = "/src/services/mobileWorkflowVisibility.ts";
+      const visibility = await import(path);
+      visibility.setMobileRstlLayerVisible(false);
+      visibility.setMobileWrinkleLayerVisible(false);
+    });
+    for (const width of [560, 561, 900, 393]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator(".workflow-mobile-operation-pane")).toBeHidden();
+      await expect(page.locator(".mobile-workflow-dock")).toHaveCount(0);
+      await expect(page.locator(".workflow-mobile-recovery-slot")).toBeHidden();
+      const layers = await page.evaluate(async () => {
+        const path = "/src/services/mobileWorkflowVisibility.ts";
+        const { workflowLayerVisibilitySnapshot } = await import(path);
+        const { rstl, wrinkles } = workflowLayerVisibilitySnapshot();
+        return { rstl, wrinkles };
+      });
+      expect(layers).toEqual({ rstl: false, wrinkles: false });
+      const bindings = await page.evaluate(async () => {
+        const path = "/src/services/liveDom.ts";
+        const { els } = await import(path);
+        return [els.canvas, els.upload, els.file].every(node => node.isConnected)
+          && els.canvas === document.querySelector("#canvas")
+          && els.upload === document.querySelector("#uploadBtn")
+          && els.file === document.querySelector("#fileInput");
+      });
+      expect(bindings, "runtime must keep the current canvas and upload nodes after width changes").toBe(true);
+    }
+    const upload = page.locator("#uploadBtn");
+    await upload.evaluate(element => element.scrollIntoView({ block: "end", behavior: "instant" }));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), upload.click()]);
+    await chooser.setFiles([]);
+    await uploadGeneratedPhoto(page, "single", "#fileInput");
+    await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+    await page.getByLabel("肿物边界").selectOption("freehand");
+    await expect(page.locator("#startBoundaryBtn")).toHaveText("结束描绘");
+    const box = await page.locator("#canvas").boundingBox();
+    if (!box) throw new Error("resized workflow canvas is missing");
+    const cx = box.x + box.width * 0.62;
+    const cy = box.y + box.height * 0.48;
+    const radius = Math.min(box.width, box.height) * 0.055;
+    await page.mouse.move(cx + radius, cy);
+    await page.mouse.down();
+    for (let index = 1; index <= 18; index++) {
+      const angle = index * Math.PI * 2 / 18;
+      await page.mouse.move(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+    }
+    await page.mouse.up();
+    await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d")).toMatch(/^M /);
+    await assertSourceRuntime(page);
+  } finally {
+    await context.close();
+  }
+});
 
 async function expectToolbarControlsUnobscured(page: Page) {
   const result = await page.locator(".workflow-canvas-tools").evaluate((toolbar) => {
@@ -139,6 +451,15 @@ async function expectAllVisibleButtonsReachable(page: Page) {
   const count = await buttons.count();
   for (let index = 0; index < count; index += 1) {
     const button = buttons.nth(index);
+    await button.evaluate(element => {
+      const root = element.closest(".workflow-workbench");
+      if (root && root.getAttribute("data-workflow-mobile") !== "true"
+        && root.querySelector(":scope > .stage")
+        && getComputedStyle(root.querySelector(":scope > .stage")!).position === "sticky"
+        && !element.closest(".stage")) {
+        element.scrollIntoView({ block: "end", behavior: "instant" });
+      }
+    });
     await button.scrollIntoViewIfNeeded();
     const result = await button.evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -191,6 +512,7 @@ test("desktop workflow keeps the three-column shell while status text remains hi
         sourceOrder: Array.from(root.children).map((child) => {
           if (child.classList.contains("workflow-live-rail")) return "live";
           if (child.classList.contains("stage")) return "stage";
+          if (child.classList.contains("workflow-mobile-operation-pane")) return "mobile-pane";
           if (child.classList.contains("workflow-incision-rail")) return "incision";
           return "other";
         }),
@@ -203,7 +525,7 @@ test("desktop workflow keeps the three-column shell while status text remains hi
       };
     });
     expect(desktopLayout).toEqual({
-      sourceOrder: ["live", "stage", "incision"],
+      sourceOrder: ["live", "stage", "mobile-pane", "incision"],
       liveLeft: 0,
       liveWidth: 320,
       stageLeft: 320,
@@ -211,6 +533,22 @@ test("desktop workflow keeps the three-column shell while status text remains hi
       incisionLeft: 1120,
       incisionWidth: 320,
     });
+    const pane = page.locator(".workflow-workbench > .workflow-mobile-operation-pane");
+    await expect(pane).toHaveCount(1);
+    expect(await pane.evaluate((element) => ({
+      display: getComputedStyle(element).display,
+      boxes: element.getClientRects().length,
+      rails: element.querySelectorAll(".workflow-live-rail, .workflow-incision-rail").length,
+      recoverySlots: element.querySelectorAll(":scope > .workflow-mobile-recovery-slot").length,
+      visibleDescendants: Array.from(element.querySelectorAll<HTMLElement>("*"))
+        .filter((child) => {
+          const box = child.getBoundingClientRect();
+          return getComputedStyle(child).visibility !== "hidden" && box.width > 0 && box.height > 0;
+        }).length,
+    }))).toEqual({ display: "contents", boxes: 0, rails: 0, recoverySlots: 1, visibleDescendants: 0 });
+    const upload = page.locator("#uploadBtn");
+    await upload.scrollIntoViewIfNeeded();
+    await upload.click({ trial: true });
   } finally {
     await context.close();
   }

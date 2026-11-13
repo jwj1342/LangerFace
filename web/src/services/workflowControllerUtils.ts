@@ -6,11 +6,44 @@ import {
   type SurfaceProjectedFusiformFit,
 } from "./incisionPhotoPlanning.ts";
 import type { Vec3 } from "./softBody";
+import type { PhotoPlanningControllerSnapshot } from "./photoPlanningController.ts";
 import { projectPhotoNostrilZones, type PhotoOpeningReference } from "./incisionPhotoOpeningProjection.ts";
 import {
   CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
   CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
 } from "./controlledMarkerUiConfig.ts";
+
+export function workflowPhotoDetectionFeedback(snapshot: PhotoPlanningControllerSnapshot | null | undefined) {
+  if (snapshot?.source.kind !== "image"
+    || snapshot.detection.source_revision !== snapshot.source.revision
+    || !["ready", "failed"].includes(snapshot.detection.status)) return null;
+  const { source, detection } = snapshot;
+  const failed = detection.status === "failed";
+  const reason = failed
+    ? /^[a-z][a-z_:-]{0,63}$/.test(detection.reason) ? detection.reason : "unknown_detection_failure"
+    : "single_face_ready";
+  const attempts = detection.attempts;
+  const message = !failed ? ""
+    : reason === "multiple_faces"
+      ? `人脸检测返回了多个人脸候选，单人脸检查未通过；子图和标记暂不可用（检测 ${attempts} 次）。`
+      : reason === "no_face"
+        ? `未检测到人脸；子图和标记暂不可用（检测 ${attempts} 次）。请换用正面、清晰的照片。`
+        : reason === "detection_error"
+          ? `照片人脸检测失败；子图和标记暂不可用（检测 ${attempts} 次）。请重新上传；若仍失败，请保留诊断日志。`
+          : `照片人脸检测未通过；子图和标记暂不可用（原因：${reason}；检测 ${attempts} 次）。`;
+  return {
+    key: JSON.stringify([source.revision, detection.status, reason, attempts, detection.landmark_count]),
+    status: detection.status,
+    reason,
+    failed,
+    message,
+    sourceRevision: source.revision,
+    width: source.width,
+    height: source.height,
+    attempts,
+    landmarkCount: detection.landmark_count,
+  };
+}
 
 export interface WorkflowPointerIntent {
   pointerId: number;

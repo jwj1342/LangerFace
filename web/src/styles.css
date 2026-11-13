@@ -578,16 +578,18 @@
   }
 
   .workflow-incision-overlay [data-workflow-boundary] {
-    fill: rgb(250 204 21 / 12%);
-    stroke: #facc15;
-    stroke-width: 2;
+    fill: rgb(253 224 71 / 9%);
+    stroke: #fde047;
+    stroke-width: 0.95;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
   }
 
   .workflow-incision-overlay [data-workflow-boundary-halo] {
     fill: none;
     stroke: rgb(3 7 18 / 88%);
-    stroke-width: 3;
+    stroke-width: 1.45;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -595,8 +597,8 @@
 
   .workflow-incision-overlay [data-workflow-candidate] {
     fill: none;
-    stroke: #2563eb;
-    stroke-width: 2;
+    stroke: #67e8f9;
+    stroke-width: 0.95;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -604,8 +606,8 @@
 
   .workflow-incision-overlay [data-workflow-candidate-halo] {
     fill: none;
-    stroke: #2563eb;
-    stroke-width: 2;
+    stroke: #082f49;
+    stroke-width: 0.95;
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -614,7 +616,7 @@
   .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
     fill: none;
     stroke: #ef4444;
-    stroke-width: 1.5;
+    stroke-width: 0.95;
     stroke-dasharray: 7 5;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -624,7 +626,7 @@
   .workflow-incision-overlay [data-workflow-rejected-marker] {
     fill: rgb(217 70 239 / 10%);
     stroke: #d946ef;
-    stroke-width: 1.5;
+    stroke-width: 0.95;
     stroke-dasharray: 6 4;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -634,6 +636,13 @@
   .workflow-incision-overlay [data-workflow-center] {
     fill: transparent;
     stroke: #ffffff;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-incision-center] circle {
+    fill: #f43f5e;
+    stroke: #0b1118;
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }
@@ -2349,7 +2358,9 @@
 }
 
 .workflow-mobile-operation-pane {
-  display: none;
+  /* Keep focused portal children visible until the layout effect moves them.
+     Outside phone mode this container is empty and creates no layout box. */
+  display: contents;
 }
 
 .workflow-workbench .stage-top {
@@ -2405,6 +2416,7 @@
 .workflow-workbench .workflow-stage-status[data-developer-details="true"] > .workflow-developer-detail {
   flex: 0 0 auto;
   width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .workflow-workbench .workflow-stage-spinner {
@@ -2666,6 +2678,12 @@ body:has(.dark-workbench-page) {
   }
 }
 
+@media (min-width: 561px) and (max-width: 880px) {
+  .workflow-workbench.app {
+    grid-template-rows: minmax(max-content, 72dvh) auto auto;
+  }
+}
+
 @media (max-width: 980px) {
   .incision-workbench.app {
     grid-template-columns: 1fr;
@@ -2728,6 +2746,25 @@ body:has(.dark-workbench-page) {
 
 @media (max-width: 560px) {
 
+  /* Keep the original stage geometry when the touch-only operation pane is absent. */
+  .workflow-workbench.app:not([data-workflow-mobile="true"]) {
+    grid-template-rows: var(--workflow-mobile-stage-height) auto auto;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-top: var(--workflow-mobile-stage-height);
+    scrollbar-width: none;
+  }
+
+  .workflow-workbench.app:not([data-workflow-mobile="true"])::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workflow-workbench.app:not([data-workflow-mobile="true"]) > .stage {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
   .workflow-workbench.app {
     --workflow-mobile-stage-height: max(
       320px,
@@ -2743,7 +2780,7 @@ body:has(.dark-workbench-page) {
 
   /* 工具栏已恒定预留标记行，视野不再随标记状态补偿高度。 */
 
-  .workflow-workbench > .workflow-mobile-operation-pane {
+  .workflow-workbench:where([data-workflow-mobile="true"]) > .workflow-mobile-operation-pane {
     display: flex;
     grid-column: 1;
     grid-row: 2;
@@ -2760,7 +2797,7 @@ body:has(.dark-workbench-page) {
     -webkit-overflow-scrolling: touch;
   }
 
-  .workflow-workbench > .workflow-mobile-operation-pane::-webkit-scrollbar {
+  .workflow-workbench:where([data-workflow-mobile="true"]) > .workflow-mobile-operation-pane::-webkit-scrollbar {
     display: none;
   }
 
@@ -3005,16 +3042,16 @@ body:has(.dark-workbench-page) {
   accent-color: var(--clinical-accent);
 }
 
-@media (max-width: 560px) and (pointer: coarse) and (hover: none) {
-  .workflow-workbench .desktop-layer-controls {
+@media (max-width: 560px) {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .desktop-layer-controls {
     display: none;
   }
-  .workflow-workbench .workflow-tumor-transfer-actions,
-  .workflow-workbench .workflow-recalculate-action {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-tumor-transfer-actions,
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-recalculate-action {
     display: none;
   }
 
-  .workflow-workbench .workflow-stage-status {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-status {
     min-block-size: 34px;
     max-block-size: 96px;
     align-items: center;
@@ -3026,35 +3063,35 @@ body:has(.dark-workbench-page) {
     line-height: 1.3;
   }
 
-  .workflow-workbench .workflow-stage-status.is-collapsed {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-status.is-collapsed {
     visibility: hidden;
   }
 
-  .workflow-workbench .workflow-stage-status::-webkit-scrollbar {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-status::-webkit-scrollbar {
     display: none;
   }
 
-  .workflow-workbench .zoom-strip {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .zoom-strip {
     --workflow-mobile-zoom-card-size: calc((100vw - 44px) / 3);
   }
 
-  .workflow-workbench .zoom-card {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .zoom-card {
     flex: 0 0 var(--workflow-mobile-zoom-card-size);
     min-width: var(--workflow-mobile-zoom-card-size);
     max-width: var(--workflow-mobile-zoom-card-size);
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-mobile-marker-confirm {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-mobile-marker-confirm {
     display: inline-flex;
   }
 
-  .workflow-workbench .workflow-stage-actions {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-actions {
     block-size: auto;
     align-items: stretch;
     overflow: hidden;
   }
 
-  .workflow-workbench .workflow-canvas-tools {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: 40px 32px;
@@ -3067,13 +3104,13 @@ body:has(.dark-workbench-page) {
     overflow: hidden;
   }
 
-  .workflow-workbench .workflow-canvas-tools[data-marker-mode="true"] {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools[data-marker-mode="true"] {
     grid-template-rows: 40px 32px;
     gap: 4px 6px;
     block-size: 76px;
   }
 
-  .workflow-workbench .workflow-canvas-tools > button {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools > button {
     width: 100%;
     min-width: 0;
     padding-inline: 6px;
@@ -3084,23 +3121,23 @@ body:has(.dark-workbench-page) {
     order: initial;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-marker-toggle {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-toggle {
     grid-area: 1 / 1;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-repair-toggle {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-repair-toggle {
     grid-area: 1 / 2;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-clear-repair {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-clear-repair {
     grid-area: 1 / 3;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-mobile-marker-confirm {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-mobile-marker-confirm {
     grid-area: 2 / 1;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-marker-scan {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-scan {
     grid-area: 2 / 2 / 3 / 4;
     grid-template-columns: max-content minmax(108px, 1fr);
     width: 100%;
@@ -3109,31 +3146,31 @@ body:has(.dark-workbench-page) {
     border: 0;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-marker-scan input {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-scan input {
     width: 100%;
   }
 
-  .workflow-workbench .workflow-canvas-tools .workflow-marker-cancel {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-cancel {
     grid-area: 2 / 1;
   }
 
-  .workflow-workbench .workflow-canvas-tools[data-marker-busy="true"] .workflow-mobile-marker-confirm {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools[data-marker-busy="true"] .workflow-mobile-marker-confirm {
     grid-area: 2 / 2;
   }
 
-  .workflow-workbench .workflow-canvas-tools[data-marker-busy="true"] .workflow-marker-scan {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools[data-marker-busy="true"] .workflow-marker-scan {
     grid-area: 2 / 3 / 3 / 4;
   }
 
-  .workflow-workbench #liveInputCard {
+  .workflow-workbench:where([data-workflow-mobile="true"]) #liveInputCard {
     display: none;
   }
 
-  .workflow-workbench #wrinkleDisplayMode {
+  .workflow-workbench:where([data-workflow-mobile="true"]) #wrinkleDisplayMode {
     display: none;
   }
 
-  .workflow-workbench .mobile-workflow-dock {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-dock {
     display: grid;
     gap: 10px;
     margin: 0 10px;
@@ -3145,17 +3182,17 @@ body:has(.dark-workbench-page) {
     box-shadow: 0 8px 22px rgb(0 0 0 / 26%);
   }
 
-  .workflow-workbench .mobile-workflow-section {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-section {
     display: grid;
     gap: 8px;
   }
 
-  .workflow-workbench .mobile-workflow-section + .mobile-workflow-section {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-section + .mobile-workflow-section {
     padding-top: 10px;
     border-top: 1px solid #2c3743;
   }
 
-  .workflow-workbench .mobile-workflow-heading {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-heading {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -3164,132 +3201,79 @@ body:has(.dark-workbench-page) {
     font-weight: 750;
   }
 
-  .workflow-workbench .mobile-workflow-heading small {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-heading small {
     color: #94a3b8;
     font-size: 10px;
     font-weight: 600;
     text-align: right;
   }
 
-  .workflow-workbench .mobile-source-grid,
-  .workflow-workbench .mobile-layer-grid {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-source-grid,
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid {
     display: grid;
     gap: 7px;
   }
 
-  .workflow-workbench .mobile-source-grid {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-source-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .workflow-workbench .mobile-layer-grid {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .workflow-workbench .mobile-source-grid .btn,
-  .workflow-workbench .mobile-layer-grid .btn {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-source-grid .btn,
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid .btn {
     min-width: 0;
     min-height: 42px;
     padding-inline: 8px;
     white-space: nowrap;
   }
 
-  .workflow-workbench .mobile-layer-toggle[aria-pressed="true"] {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-toggle[aria-pressed="true"] {
     color: #e0f2fe;
     background: rgb(8 145 178 / 18%);
     border-color: #67e8f9;
     box-shadow: inset 0 0 0 1px rgb(103 232 249 / 24%);
   }
 
-  .workflow-workbench .workflow-incision-overlay [data-workflow-marker-scan-label] {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-incision-overlay [data-workflow-marker-scan-label] {
     display: none;
   }
 
-  .workflow-workbench[data-mobile-incision-candidate-visible="false"]
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-candidate],
-  .workflow-workbench[data-mobile-incision-candidate-visible="false"]
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-candidate-halo],
-  .workflow-workbench[data-mobile-incision-candidate-visible="false"]
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-diagnostic-candidate],
-  .workflow-workbench[data-mobile-incision-candidate-visible="false"]
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-rejected-marker] {
     display: none;
   }
 
-  .workflow-workbench .workflow-incision-overlay [data-workflow-boundary] {
-    fill: rgb(253 224 71 / 9%);
-    stroke: #fde047;
-    /* Fallback only: the controller owns the fine screen-space stroke. */
-    stroke-width: 1.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-boundary-halo] {
-    fill: none;
-    stroke-width: 2.2;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-candidate] {
-    stroke: #67e8f9;
-    stroke-width: 0.8;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-candidate-halo] {
-    stroke: #082f49;
-    stroke-width: 0.8;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
-    stroke-width: 0.9;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-rejected-marker] {
-    stroke-width: 0.9;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-center] {
-    fill: transparent;
-    stroke: #ffffff;
-    stroke-width: 1;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-incision-center] circle {
-    fill: #f43f5e;
-    stroke: #0b1118;
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .workflow-workbench .workflow-incision-overlay [data-workflow-incision-center] path {
-    fill: none;
-    stroke: #22d3ee;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .workflow-workbench .canvas-legend {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .canvas-legend {
     color: #f8fafc;
     background: rgb(8 15 24 / 88%);
     border-color: rgb(226 232 240 / 24%);
   }
 
-  .workflow-workbench .legend-swatch.lesion-center {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.lesion-center {
     background: transparent;
     border-color: #ffffff;
   }
 
-  .workflow-workbench .legend-swatch.incision-center {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.incision-center {
     background: #f43f5e;
     border-color: #0b1118;
   }
 
-  .workflow-workbench .legend-swatch.ring {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.ring {
     border-color: #fde047;
     box-shadow: 0 0 5px rgb(253 224 71 / 62%);
   }
 
-  .workflow-workbench .legend-swatch.line {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.line {
     height: 2px;
     background: #67e8f9;
     box-shadow: 0 0 5px rgb(103 232 249 / 74%);

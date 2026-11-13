@@ -19,6 +19,8 @@ export const DIAGNOSTIC_LIMITS = {
   clientModules: 32,
   exportEvents: 512,
   actionEvents: 8192,
+  interactionEvents: 128,
+  interactionBytes: 512_000,
 } as const;
 const MAX_DIAGNOSTIC_BYTES = DIAGNOSTIC_LIMITS.bytes;
 const MAX_SESSION_EVENTS = DIAGNOSTIC_LIMITS.workflowEvents;
@@ -181,6 +183,94 @@ function assertDiagnosticDropCounts(value: Record<string, Json>) {
     }
   }
 }
+// Export/import/replay are synchronous. Hash only bounded branch metadata;
+// image hashing continues to use WebCrypto. The test compares this with SHA-256.
+function branchSha256(branch: string): string {
+  const bytes = new TextEncoder().encode(branch);
+  const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64);
+  padded.set(bytes); padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 4, bytes.length * 8);
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const hash = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+  const rotate = (v: number, n: number) => (v >>> n) | (v << (32 - n));
+  const w = new Uint32Array(64);
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const x = w[i - 15], y = w[i - 2];
+      w[i] = w[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + w[i - 7]
+        + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10));
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i]) >>> 0;
+      const t2 = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    for (const [i, v] of [a, b, c, d, e, f, g, h].entries()) hash[i] = (hash[i] + v) >>> 0;
+  }
+  return hash.map(v => v.toString(16).padStart(8, "0")).join("");
+}
+function diagnosticIdentity(value: Json | undefined): Record<string, Json> | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("诊断身份结构不合法");
+  const identity = { ...value };
+  const branch = identity.branch;
+  const digest = identity.branch_sha256;
+  if (digest !== undefined && (typeof digest !== "string" || !/^[0-9a-f]{64}$/i.test(digest))) {
+    throw new Error("诊断分支指纹不合法");
+  }
+  if (branch !== undefined) {
+    if (typeof branch !== "string" || !branch || branch.length > 512
+      || new TextDecoder("utf-8", { ignoreBOM: true }).decode(new TextEncoder().encode(branch)) !== branch) throw new Error("诊断分支身份不合法");
+    const computed = branchSha256(branch);
+    if (digest !== undefined && (digest as string).toLowerCase() !== computed) throw new Error("诊断分支指纹不一致");
+    identity.branch_sha256 = computed;
+    delete identity.branch;
+  } else if (digest === undefined) throw new Error("诊断缺少分支身份");
+  else identity.branch_sha256 = (digest as string).toLowerCase();
+  return identity;
+}
+/** Convert a copy, including legacy restored/imported records; never mutate the local trail. */
+export function diagnosticExportPayload(value: unknown): Json {
+  assertDiagnosticJson(value);
+  const copy = structuredClone(value);
+  if (!copy || Array.isArray(copy) || typeof copy !== "object") throw new Error("诊断结构不合法");
+  if (copy.schema === MARKER_DIAGNOSTIC_SCHEMA) {
+    if (copy.service_identity !== undefined) copy.service_identity = diagnosticIdentity(copy.service_identity);
+  } else if (copy.schema === MARKER_DIAGNOSTIC_SESSION_SCHEMA || copy.schema === MARKER_DIAGNOSTIC_BUNDLE_SCHEMA) {
+    if (!Array.isArray(copy.runs)) throw new Error("诊断记录结构不合法");
+    copy.runs = copy.runs.map(diagnosticExportPayload);
+    if (Array.isArray(copy.page_instances)) for (const page of copy.page_instances) {
+      if (page && !Array.isArray(page) && typeof page === "object" && page.service_identity !== undefined) {
+        page.service_identity = diagnosticIdentity(page.service_identity);
+      }
+    }
+  } else throw new Error("诊断版本不支持导出");
+  return copy;
+}
+function auditIdentityDigests(identity: Json | undefined) {
+  if (identity === undefined || identity === null) return;
+  if (typeof identity !== "object" || Array.isArray(identity)) throw new Error("诊断身份结构不合法");
+  for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest", "branch_sha256"]) {
+    const field = identity[key];
+    if (key === "branch_sha256" && field === null) throw new Error(`诊断指纹字段不合法：${key}`);
+    if (field === null || field === undefined) continue;
+    const length = key === "head" ? 40 : 64;
+    if (typeof field !== "string" || !new RegExp(`^[0-9a-f]{${length}}$`, "i").test(field)) throw new Error(`诊断指纹字段不合法：${key}`);
+    identity[key] = "[redacted]";
+  }
+}
 /** Typed digest metadata is not free text. Keep the shared privacy scanner unchanged. */
 export function auditMarkerDiagnosticExport(value: unknown) {
   assertDiagnosticJson(value);
@@ -202,7 +292,14 @@ export function auditMarkerDiagnosticExport(value: unknown) {
     // Validate only recorded browser metadata; scan every other field unchanged.
     // Keep the original ticket (including its exact version) intact for replay.
     for (const page of auditCopy.page_instances as Json[]) {
-      if (!page || Array.isArray(page) || typeof page !== "object" || page.browser_engine === undefined) continue;
+      if (!page || Array.isArray(page) || typeof page !== "object") continue;
+      if (page.client_module_fingerprint !== undefined) {
+        if (typeof page.client_module_fingerprint !== "string" || !/^fnv1a32-[0-9a-f]{8}$/.test(page.client_module_fingerprint)) {
+          throw new Error("诊断客户端模块指纹不合法");
+        }
+        page.client_module_fingerprint = "[redacted]";
+      }
+      if (page.browser_engine === undefined) continue;
       const engine = page.browser_engine;
       if (typeof engine !== "string" || engine.length > 32
         || !/^(?:unknown|(?:Edg|Chrome|Firefox|Version)\/[0-9]{1,3}(?:\.[0-9]{1,5}){0,3})$/.test(engine)) {
@@ -227,11 +324,7 @@ export function auditMarkerDiagnosticExport(value: unknown) {
               && typeof geometry.geometry_fingerprint === "string") geometry.geometry_fingerprint = "[redacted]";
           }
         }
-        const identity = entry.service_identity;
-        if (identity && !Array.isArray(identity) && typeof identity === "object") {
-          for (const key of ["head", "worktreeId", "sourceDigest", "assetDigest"])
-            if (typeof identity[key] === "string") identity[key] = "[redacted]";
-        }
+        auditIdentityDigests(entry.service_identity);
       }
     }
     for (const event of auditCopy.controller_events as Json[]) {
@@ -299,11 +392,7 @@ export function auditMarkerDiagnosticExport(value: unknown) {
   digest(auditCopy, "prepared_rgba_sha256"); digest(auditCopy, "detector_rgba_sha256");
   const source = object(auditCopy.source_file);
   if (source) { digest(source, "sha256"); digest(source, "rgba_sha256"); }
-  const identity = object(auditCopy.service_identity);
-  if (identity) {
-    digest(identity, "head", 40);
-    for (const key of ["worktreeId", "sourceDigest", "assetDigest"]) digest(identity, key);
-  }
+  auditIdentityDigests(auditCopy.service_identity);
   return auditExportPayload(auditCopy);
 }
 export async function diagnosticSha256(data: Uint8Array | Uint8ClampedArray): Promise<string> {
@@ -343,8 +432,7 @@ function rawDetection(value: unknown): Json {
 }
 export function parseDiagnosticRun(text: string): DiagnosticRun {
   if (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) throw new Error("诊断文件超过8MB");
-  const value: unknown = JSON.parse(text);
-  assertDiagnosticJson(value);
+  const value = diagnosticExportPayload(JSON.parse(text));
   if (value && !Array.isArray(value) && typeof value === "object"
     && (value.schema === MARKER_DIAGNOSTIC_BUNDLE_SCHEMA || value.schema === MARKER_DIAGNOSTIC_SESSION_SCHEMA)) {
     if (!auditMarkerDiagnosticExport(value).passed) throw new Error("诊断包未通过隐私检查");
@@ -356,6 +444,7 @@ export function parseDiagnosticRun(text: string): DiagnosticRun {
   if (r.schema !== MARKER_DIAGNOSTIC_SCHEMA || r.status !== "recorded" || !r.input || !r.input.seed || !r.input.options || !r.input.parameters
     || r.raw_image_embedded !== false || r.uploaded !== false || r.client_source_binding !== "UNKNOWN"
     || !["web_worker", "main_thread_fallback"].includes(r.channel)) throw new Error("诊断版本或状态不支持复放");
+  if (!auditMarkerDiagnosticExport(r).passed) throw new Error("诊断记录未通过隐私检查");
   return r;
 }
 
@@ -390,6 +479,92 @@ function browserEngine() {
   const ua = navigator.userAgent || "";
   const match = ua.match(/(?:Edg|Chrome|Firefox)\/[0-9.]+|Version\/[0-9.]+(?=.*Safari)/);
   return match?.[0] || "unknown";
+}
+
+/** Observe only allowlisted numbers/enums, never DOM text, URLs or image pixels. */
+export function captureWorkflowInteractionSnapshot(): Json | null {
+  try {
+    const root = document.querySelector(".workflow-workbench");
+    if (!root) return null;
+    const number = (value: number) => Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+    const media = (query: string) => {
+      try { return typeof window.matchMedia === "function" ? window.matchMedia(query).matches : null; }
+      catch { return null; }
+    };
+    const box = (element: Element | null): Json => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const enumeration = (value: string) => /^[a-z -]{1,80}$/.test(value) ? value : null;
+      return {
+        x: number(rect.x), y: number(rect.y), width: number(rect.width), height: number(rect.height),
+        client_height: number(element.clientHeight), scroll_height: number(element.scrollHeight),
+        scroll_top: number(element.scrollTop), display: enumeration(style.display),
+        overflow_y: enumeration(style.overflowY), touch_action: enumeration(style.touchAction),
+        grid_rows: /^(?:none|(?:[0-9.]+px\s*){1,12})$/.test(style.gridTemplateRows)
+          ? style.gridTemplateRows.trim() : null,
+      };
+    };
+    const context = document.querySelector<HTMLElement>("[data-workflow-marker-mode]");
+    const pointerMode = document.querySelector<HTMLElement>(".workflow-workbench .main-wrap")?.dataset.workflowPointerMode;
+    const flag = (value: string | undefined) => value === "true" ? true : value === "false" ? false : null;
+    return {
+      schema: "workflow-interaction-context/1",
+      viewport: { width: number(window.innerWidth), height: number(window.innerHeight),
+        device_pixel_ratio: number(window.devicePixelRatio),
+        visual_width: window.visualViewport ? number(window.visualViewport.width) : null,
+        visual_height: window.visualViewport ? number(window.visualViewport.height) : null,
+        visual_scale: window.visualViewport ? number(window.visualViewport.scale) : null },
+      touch_points: typeof navigator === "undefined" ? null : number(navigator.maxTouchPoints),
+      pointer_events_supported: typeof PointerEvent !== "undefined",
+      touch_events_supported: typeof TouchEvent !== "undefined",
+      media: {
+        narrow: media("(max-width: 560px)"),
+        mobile_query: media("(max-width: 560px) and (pointer: coarse) and (hover: none)"),
+        primary_pointer_coarse: media("(pointer: coarse)"), primary_pointer_fine: media("(pointer: fine)"),
+        primary_pointer_none: media("(pointer: none)"), any_pointer_coarse: media("(any-pointer: coarse)"),
+        any_pointer_fine: media("(any-pointer: fine)"),
+        primary_hover_none: media("(hover: none)"), primary_hover: media("(hover: hover)"),
+        any_hover: media("(any-hover: hover)"),
+      },
+      layout: {
+        mobile_pane_present: Boolean(document.querySelector(".workflow-mobile-operation-pane")),
+        root: box(root), operation_pane: box(document.querySelector(".workflow-mobile-operation-pane")),
+        stage: box(document.querySelector(".workflow-workbench .stage")),
+        tools: box(document.querySelector(".workflow-canvas-tools")),
+        canvas: box(document.querySelector(".workflow-workbench #canvas")),
+        pointer_mode: pointerMode === undefined ? null
+          : ["", "marker", "freehand", "refine"].includes(pointerMode) ? pointerMode : "other",
+        marker_mode: flag(context?.dataset.workflowMarkerMode), marker_busy: flag(context?.dataset.workflowMarkerBusy),
+      },
+    };
+  } catch { return null; }
+}
+
+function boundedInteractionPages(pages: Json[]): Json[] {
+  const copy = pages.map(page => page && !Array.isArray(page) && typeof page === "object" ? { ...page } : page);
+  const samples = copy.flatMap(page => page && !Array.isArray(page) && typeof page === "object"
+    && Array.isArray(page.interaction_events) ? page.interaction_events : []);
+  const keep = new Set<Json>();
+  let bytes = 0;
+  const encoder = new TextEncoder();
+  // Keep the most recent observations across the entire session, independent of core events.
+  const time = (value: Json) => value && !Array.isArray(value) && typeof value === "object"
+    && typeof value.observed_at_ms === "number" ? value.observed_at_ms : 0;
+  for (const sample of samples.sort((a, b) => time(b) - time(a))) {
+    const size = encoder.encode(JSON.stringify(sample)).byteLength;
+    if (keep.size >= DIAGNOSTIC_LIMITS.interactionEvents || bytes + size > DIAGNOSTIC_LIMITS.interactionBytes) continue;
+    keep.add(sample); bytes += size;
+  }
+  for (const page of copy) {
+    if (!page || Array.isArray(page) || typeof page !== "object" || !Array.isArray(page.interaction_events)) continue;
+    const retained = page.interaction_events.filter(sample => keep.has(sample));
+    const previous = typeof page.session_budget_omitted_interaction_events === "number"
+      ? page.session_budget_omitted_interaction_events : 0;
+    page.session_budget_omitted_interaction_events = previous + page.interaction_events.length - retained.length;
+    page.interaction_events = retained;
+  }
+  return copy;
 }
 
 type PersistedDiagnosticSession = {
@@ -444,9 +619,14 @@ export function diagnosticReplayMismatches(saved: DiagnosticRun, current: Diagno
   const { revision: _oldRevision, ...oldInput } = saved.input;
   const { revision: _newRevision, ...newInput } = current.input;
   if (stableDiagnosticJson(oldInput) !== stableDiagnosticJson(newInput)) mismatch.push("参数/坐标/变换不同");
+  let identityEqual = false;
+  try {
+    const oldIdentity = diagnosticIdentity(saved.service_identity), newIdentity = diagnosticIdentity(current.service_identity);
+    identityEqual = Boolean(oldIdentity && newIdentity && stableDiagnosticJson(oldIdentity) === stableDiagnosticJson(newIdentity));
+  } catch { /* Malformed identities must block replay, never the product workflow. */ }
   if (saved.service_snapshot_binding !== "PASS" || current.service_snapshot_binding !== "PASS"
     || saved.client_declared_contract_binding !== "PASS" || current.client_declared_contract_binding !== "PASS"
-    || stableDiagnosticJson(saved.service_identity) !== stableDiagnosticJson(current.service_identity)) mismatch.push("服务或声明身份未匹配");
+    || !identityEqual) mismatch.push("服务或声明身份未匹配");
   return mismatch;
 }
 
@@ -486,14 +666,119 @@ export class MarkerRunDiagnostics {
   private initialIdentity = serviceIdentity();
   imported: DiagnosticRun | null = null;
   private getFrame: () => FrameIdentity | null | undefined;
+  private observedPointers = new Set<number>();
+  private lastInteractionSample = 0;
+  private interactionEvents: Array<Record<string, Json>> = [];
+  private droppedInteractionEvents = 0;
+  private interactionRevision = 0;
+  private interactionTimers = new Set<ReturnType<typeof setTimeout>>();
+  private viewportTimer: ReturnType<typeof setTimeout> | null = null;
+  private interactionOptions: AddEventListenerOptions = { capture: true, passive: true };
   constructor(getFrame: () => FrameIdentity | null | undefined) {
     this.getFrame = getFrame;
     document.addEventListener("change", this.onFile, true);
     document.addEventListener("cancel", this.onFile, true);
     window.addEventListener(CANVAS_EXPORT_DIAGNOSTIC_EVENT, this.onExport as EventListener);
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "touchstart", "touchmove", "touchend", "touchcancel", "scroll"]) {
+      document.addEventListener(type, this.onInteraction, this.interactionOptions);
+    }
+    window.addEventListener("resize", this.onViewport, { passive: true });
+    window.addEventListener("blur", this.onInputReset, { passive: true });
     this.ready = this.restore();
+    void this.ready.then(() => this.captureClientModule("workflow_interaction_diagnostics", import.meta.url))
+      .catch(() => { /* Optional source evidence must not block product startup. */ });
   }
   whenReady() { return this.ready; }
+  private syncInteractionPage() {
+    const page = this.pageInstances.find(item => item && !Array.isArray(item)
+      && typeof item === "object" && item.page_instance_id === this.pageInstanceId);
+    if (page && !Array.isArray(page) && typeof page === "object") {
+      page.interaction_events = this.interactionEvents;
+      page.dropped_interaction_events = this.droppedInteractionEvents;
+      page.interaction_revision = ++this.interactionRevision;
+    }
+  }
+  private captureInteraction(action: string, details: Record<string, Json>) {
+    if (!this.alive) return null;
+    const context = captureWorkflowInteractionSnapshot();
+    if (!context) return null;
+    const entry: Record<string, Json> = { action, observed_at_ms: Date.now(), phase: "capture",
+      event_seq: ++this.eventSequence, source_revision: this.getFrame()?.revision ?? null,
+      details: { ...details, context } };
+    this.interactionEvents.push(entry);
+    if (this.interactionEvents.length > DIAGNOSTIC_LIMITS.interactionEvents) {
+      this.interactionEvents.shift();
+      this.droppedInteractionEvents++;
+    }
+    this.syncInteractionPage();
+    this.queuePersist();
+    return entry;
+  }
+  private onViewport = () => {
+    if (!this.alive || this.viewportTimer !== null) return;
+    this.viewportTimer = setTimeout(() => {
+      this.viewportTimer = null;
+      try { this.captureInteraction("viewport_changed", {}); } catch { /* Optional observation. */ }
+    }, 250);
+  };
+  private onInputReset = () => {
+    const priorCount = this.observedPointers.size;
+    this.observedPointers.clear();
+    try { this.captureInteraction("window_blurred", { prior_active_pointers: priorCount,
+      pointer_count_reset: true }); } catch { /* Optional observation. */ }
+  };
+  private onInteraction = (event: Event) => {
+    try {
+      if (!this.alive || typeof Element === "undefined" || !(event.target instanceof Element)) return;
+      const root = event.target.closest(".workflow-workbench");
+      const pointer = event as PointerEvent;
+      const tracked = this.observedPointers.has(pointer.pointerId);
+      if (!root && !tracked) return;
+      if (event.type === "pointerdown" && this.observedPointers.size < 10) this.observedPointers.add(pointer.pointerId);
+      if (event.type === "pointerup" || event.type === "pointercancel") this.observedPointers.delete(pointer.pointerId);
+      const now = Date.now();
+      const sampledMove = ["pointermove", "touchmove", "scroll"].includes(event.type);
+      if (sampledMove && now - this.lastInteractionSample < 250) return;
+      if (event.type === "pointermove" && !this.observedPointers.size) return;
+      this.lastInteractionSample = now;
+      const allowedIds = new Set(["canvas", "mainWrap", "fileInput"]);
+      const target = allowedIds.has(event.target.id) ? event.target.id
+        : event.target.closest(".workflow-marker-toggle") ? "marker_toggle"
+        : event.target.closest(".workflow-mobile-marker-confirm") ? "marker_confirm"
+        : event.target.closest(".workflow-mobile-operation-pane") ? "operation_pane" : "workflow";
+      const coordinate = (value: number) => Number.isFinite(value) ? Math.round(value) : null;
+      const touches = event.type.startsWith("touch") ? Array.from((event as TouchEvent).touches).filter(touch =>
+        touch.target instanceof Element && touch.target.closest(".workflow-workbench") === root) : null;
+      const entry = this.captureInteraction(event.type, {
+        target, pointer_type: ["touch", "mouse", "pen"].includes(pointer.pointerType) ? pointer.pointerType : "unknown",
+        active_pointers: this.observedPointers.size, trusted: event.isTrusted,
+        pointer_id: coordinate(pointer.pointerId), client_x: coordinate(pointer.clientX), client_y: coordinate(pointer.clientY),
+        touch_count: touches ? touches.length : null,
+        touch_positions: touches ? touches.slice(0, 2).map(touch => ({
+          client_x: coordinate(touch.clientX), client_y: coordinate(touch.clientY),
+        })) : null,
+      });
+      // A later task is outside native event dispatch; a microtask can run between listeners.
+      if (entry && !sampledMove && this.interactionTimers.size < 16) {
+        const timer = setTimeout(() => {
+          this.interactionTimers.delete(timer);
+          if (!this.alive || !this.interactionEvents.includes(entry)) return;
+          try {
+            const details = entry.details as Record<string, Json>;
+            details.after_phase = "later_task_sample";
+            details.after_observed_at_ms = Date.now();
+            details.after_source_revision = this.getFrame()?.revision ?? null;
+            details.after = entry.source_revision === details.after_source_revision
+              ? captureWorkflowInteractionSnapshot() : null;
+            details.default_prevented_after = event.defaultPrevented;
+            this.syncInteractionPage();
+            this.queuePersist();
+          } catch { /* Optional observation. */ }
+        }, 0);
+        this.interactionTimers.add(timer);
+      }
+    } catch { /* Diagnostics must never block a product input handler. */ }
+  };
   async captureClientModule(moduleRole: string, moduleUrl: string) {
     if (!/^[a-z0-9_-]{1,64}$/.test(moduleRole) || !this.alive) return;
     try {
@@ -540,6 +825,8 @@ export class MarkerRunDiagnostics {
       viewport: { width: window.innerWidth || 0, height: window.innerHeight || 0, device_pixel_ratio: window.devicePixelRatio || 1 },
       touch_points: typeof navigator === "undefined" ? 0 : navigator.maxTouchPoints || 0,
       browser_engine: browserEngine(), navigation_type: navigation?.type || "unknown",
+      interaction_context: captureWorkflowInteractionSnapshot(),
+      interaction_events: this.interactionEvents, dropped_interaction_events: this.droppedInteractionEvents,
     });
     if (this.pageInstances.length > DIAGNOSTIC_LIMITS.pageInstances) {
       this.droppedPageInstances += this.pageInstances.length - DIAGNOSTIC_LIMITS.pageInstances;
@@ -557,7 +844,7 @@ export class MarkerRunDiagnostics {
   private persisted(): PersistedDiagnosticSession {
     return {
       schema: MARKER_DIAGNOSTIC_SESSION_SCHEMA, session_id: this.sessionId, event_seq: this.eventSequence,
-      page_instances: this.pageInstances, sources: this.sources, runs: this.runs,
+      page_instances: boundedInteractionPages(this.pageInstances), sources: this.sources, runs: this.runs,
       controller_events: this.controllerEvents, workflow_events: this.workflowEvents,
       action_events: this.actionEvents,
       client_modules: this.clientModules, dropped_preview_events: this.droppedPreviewEvents,
@@ -579,10 +866,18 @@ export class MarkerRunDiagnostics {
       return items.slice(-limit);
     };
     this.eventSequence = Math.max(this.eventSequence, prior.event_seq || 0);
-    this.pageInstances = trimMerged(mergeUnique(prior.page_instances || [], this.pageInstances, item => {
-      if (item && !Array.isArray(item) && typeof item === "object") return String(item.page_instance_id || stableDiagnosticJson(item));
-      return stableDiagnosticJson(item);
-    }), DIAGNOSTIC_LIMITS.pageInstances, count => { this.droppedPageInstances += count; });
+    const pageMap = new Map<string, Json>();
+    for (const item of [...(prior.page_instances || []), ...this.pageInstances]) {
+      if (!item || Array.isArray(item) || typeof item !== "object") continue;
+      const key = String(item.page_instance_id || stableDiagnosticJson(item));
+      const saved = pageMap.get(key);
+      const previous = saved && !Array.isArray(saved) && typeof saved === "object" ? saved : null;
+      const revision = typeof item.interaction_revision === "number" ? item.interaction_revision : 0;
+      const savedRevision = previous && typeof previous.interaction_revision === "number" ? previous.interaction_revision : 0;
+      if (!previous || key === this.pageInstanceId || revision > savedRevision) pageMap.set(key, item);
+    }
+    this.pageInstances = trimMerged([...pageMap.values()], DIAGNOSTIC_LIMITS.pageInstances,
+      count => { this.droppedPageInstances += count; });
     this.sources = trimMerged(mergeUnique(prior.sources || [], this.sources, item => {
       if (item && !Array.isArray(item) && typeof item === "object") return String(item.source_id || stableDiagnosticJson(item));
       return stableDiagnosticJson(item);
@@ -740,7 +1035,7 @@ export class MarkerRunDiagnostics {
     const run = this.runs.at(-1);
     if (!run || run.status === "pending") throw new Error("请先完成一次识别并等待诊断记录就绪");
     assertDiagnosticJson(run);
-    return JSON.stringify(run, null, 2);
+    return JSON.stringify(diagnosticExportPayload(run), null, 2);
   }
   /**
    * Record a privacy-safe event for any workflow domain. This is intentionally
@@ -842,15 +1137,18 @@ export class MarkerRunDiagnostics {
       raw_image_embedded: false, uploaded: false,
     };
     assertDiagnosticJson(payload);
-    const text = JSON.stringify(payload, null, 2);
+    const text = JSON.stringify(diagnosticExportPayload(payload), null, 2);
     if (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) throw new Error("诊断包超过8MB，未导出；请保留当前页面并向开发者反馈，不要刷新以免丢失记录");
     return text;
   }
   exportSession(): string {
-    if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length) throw new Error("请先完成一次诊断动作");
-    if (this.runs.some(run => run.status === "pending")) throw new Error("诊断记录尚在生成，请稍后导出");
-    const payload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
+    try { this.captureInteraction("export_snapshot", {}); } catch { /* Optional observation. */ }
+    if (!this.runs.length && !this.controllerEvents.length && !this.workflowEvents.length && !this.actionEvents.length
+      && !this.interactionEvents.length) throw new Error("请先完成一次诊断动作");
+    const rawPayload = { ...this.persisted(), exported_at_ms: Date.now(), export_events: this.exportEvents,
+      pending_run_count: this.runs.filter(run => run.status === "pending").length,
       raw_image_embedded: false, uploaded: false };
+    const payload = diagnosticExportPayload(rawPayload) as unknown as typeof rawPayload;
     assertDiagnosticJson(payload);
     let text = JSON.stringify(payload, null, 2);
     while (new TextEncoder().encode(text).byteLength > MAX_DIAGNOSTIC_BYTES) {
@@ -869,5 +1167,15 @@ export class MarkerRunDiagnostics {
     this.alive = false; this.generation++; this.selection = null; this.runs = []; this.controllerEvents = []; this.workflowEvents = []; this.actionEvents = []; this.exportEvents = []; this.imported = null;
     document.removeEventListener("change", this.onFile, true); document.removeEventListener("cancel", this.onFile, true);
     window.removeEventListener(CANVAS_EXPORT_DIAGNOSTIC_EVENT, this.onExport as EventListener);
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "touchstart", "touchmove", "touchend", "touchcancel", "scroll"]) {
+      document.removeEventListener(type, this.onInteraction, true);
+    }
+    window.removeEventListener("resize", this.onViewport);
+    window.removeEventListener("blur", this.onInputReset);
+    this.observedPointers.clear();
+    if (this.viewportTimer !== null) clearTimeout(this.viewportTimer);
+    for (const timer of this.interactionTimers) clearTimeout(timer);
+    this.interactionTimers.clear();
+    this.interactionEvents = [];
   }
 }
