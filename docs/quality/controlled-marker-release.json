@@ -4180,5 +4180,23 @@
     ],
     "sourceDigest": "6a80603dbb980edb6861674f5ff58d5251ebc7b8608a3ad24a2124b27f0cb786",
     "note": "独立照片消费组件身份；肿物识别0.93、切口方向0.1和标准RSTL算法未改变。非个体鼻孔分割、非医学安全距离。 本轮仅同文件照片paint改动，开口投影及门禁不变；重绑整体源码身份。"
+  },
+  "rejectedCandidates20261114": {
+    "status": "rejected_and_reverted",
+    "versions": [
+      "0.104.2-candidate.1",
+      "0.104.3-candidate.1",
+      "0.104.4-candidate.1"
+    ],
+    "highestAttemptedVersion": "0.104.4-candidate.1",
+    "nextNewNumericVersionAtLeast": "0.104.5",
+    "candidateCommit": "4f3b1ec",
+    "preservedRef": "backup/mo004-readback-rejected-20261114",
+    "rollbackCommit": "299d5b4",
+    "activeRestoredVersion": "0.104.1-candidate.1",
+    "activeSourceDigest": "bd37f234bfdc65b2dc6831926d0d06888bf63fa098e7f08de7015c9c8a2d3a37",
+    "reason": "肿物专用readback缩图虽统一Chrome GPU/DPR并使MO004五点成功，但改变MK003相邻输出，且未确认正常皮肤对照(540,1190)由拒识转接受；不满足相邻保持，禁止交付为修复。该对照无专业金标准，不称医学假阳性。",
+    "evidence": "项目既有54号反馈-Vh1-20261110/feedback56-mo004-device-parity-20261114-adjacent.jsonl",
+    "limits": "不得复用已试验版本；原0.104.1只是明确回退基线，原手机拒识及其他旧失败保留。"
   }
 }
