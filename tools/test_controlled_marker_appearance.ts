@@ -185,6 +185,33 @@ assert.ok(directional.boundary[1].x < constrained.boundary[1].x,
     'weakly supported sectors retain the conservative inward shrink');
 assert.ok(directional.boundary[2].x > constrained.boundary[2].x,
     'strongly supported sectors preserve more of a locally evidenced edge');
+const associatedBaseline = { ...localReference,
+    diagnostics: { filled_candidate_route: 'validated_legacy_filled_candidate' } } as any;
+const isolatedPigment = compactProposal(square(8, 8, 12), 12, 64, 10);
+const enclosingMaterial = square(5, 5, 18);
+assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    isolatedPigment, enclosingMaterial, { x: 14, y: 14 }), true,
+    'an already associated local object may survive inside a complete larger body');
+for (const reference of [
+    { ...associatedBaseline, ok: false, boundary: [], area_px: 0 },
+    { ...associatedBaseline, diagnostics: { filled_candidate_route: 'validated_recovered_pixel_boundary' } },
+    { ...associatedBaseline, boundary: square(7, 10, 8) },
+]) assert.equal(geometry.preserveAssociatedPigmentCandidate(reference,
+    isolatedPigment, enclosingMaterial, { x: 14, y: 14 }), false,
+    'rejected, other-source and incompletely contained baselines retain the original result');
+assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    isolatedPigment, square(10, 10, 10), { x: 14, y: 14 }), false,
+    'a partial or different body cannot corroborate the complete local outline');
+assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    isolatedPigment, enclosingMaterial, { x: 21, y: 14 }), false,
+    'a neighboring object cannot replace the clicked target');
+for (const evidence of [
+    { ...isolatedPigment.evidence, outerContinuation: .01 },
+    { ...isolatedPigment.evidence, sectorContinuation: [0, 0, 0, .01, 0, 0, 0, 0] },
+    { ...isolatedPigment.evidence, sectorContinuation: [0, 0] },
+]) assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    { ...isolatedPigment, evidence }, enclosingMaterial, { x: 14, y: 14 }), false,
+    'an outward continuation or missing sector preserves the original selection');
 const tinyRecoveredBoundary = Array.from({ length: 32 }, (_, index) => {
     const angle = 2 * Math.PI * index / 32;
     return { x: 30 + Math.cos(angle) * 6, y: 40 + Math.sin(angle) * 5 };

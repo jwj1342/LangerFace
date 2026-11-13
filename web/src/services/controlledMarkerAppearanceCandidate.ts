@@ -1179,6 +1179,27 @@ function pigmentAssociated(baseline: ControlledMarkerDetection, boundary: Point[
         }
     return intersection / Math.max(1, union) >= .5;
 }
+function preserveAssociatedPigmentCandidate(
+    baseline: ControlledMarkerDetection,
+    pigment: NonNullable<ReturnType<typeof localizedPigmentCandidate>>,
+    bodyBoundary: Point[],
+    seed: Point,
+): boolean {
+    if (!baseline.ok || baseline.geometry_mode !== 'dark_component'
+        || baseline.diagnostics?.filled_candidate_route !== 'validated_legacy_filled_candidate'
+        || baseline.boundary.length < 3 || bodyBoundary.length < 3)
+        return false;
+    const boundary = pigment.candidate.boundary;
+    const sectors = pigment.evidence.sectorContinuation;
+    if (pigment.evidence.outerContinuation !== 0
+        || !Array.isArray(sectors) || sectors.length !== 8 || sectors.some(value => value !== 0)
+        || !contains(seed, boundary)
+        || !baseline.boundary.every(point => contains(point, boundary))
+        || !boundary.every(point => contains(point, bodyBoundary)))
+        return false;
+    const area = polygonArea(boundary);
+    return polygonArea(baseline.boundary) < area && area < polygonArea(bodyBoundary);
+}
 function shouldPreserveSupportedBaselineOnIncompleteBody(
     baseline: ControlledMarkerDetection,
     incompleteBoundary: Point[],
@@ -1286,6 +1307,18 @@ async function refineAppearanceCandidateBaseline(image: MarkerImageData, seed: M
         if (refined.ok && result.ok && result.center
             && !contains(result.center, materialResult.boundary))
             return result;
+        // Keep an independently evaluated local object only after the original
+        // association, full-body coverage and all later refinement vetoes pass.
+        if (refined === materialResult && pigment
+            && result.diagnostics?.filled_candidate_route === 'localized_pigment_envelope'
+            && preserveAssociatedPigmentCandidate(baseline, pigment, body.boundary, seed)) {
+            return appearanceResult(baseline, pigment.candidate.boundary, seed,
+                'corroborated_localized_pigment', {
+                    ...pigment.evidence,
+                    selection: 'associated_pigment_inside_complete_material_body',
+                    enclosingMaterialAreaPx: polygonArea(body.boundary),
+                });
+        }
         return refined;
     }
     catch {
@@ -1433,6 +1466,7 @@ export const __appearanceGeometryForTests = {
     constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
     regularizeAppearanceBoundary, selectCompactPigmentProposal, findNormalizedFragmentConflict,
     rejectNormalizedFragmentConflict, fragmentExtensionEvidence, selectCompleteFragmentBody,
+    preserveAssociatedPigmentCandidate,
 };
 
 type CompactPigmentProposal = {
