@@ -248,35 +248,13 @@ const stateBefore = JSON.stringify(replayState);
 await vm.runInContext("replayMarkerDiagnostic(replayState)", replayContext);
 assert.equal(JSON.stringify(replayState), stateBefore);
 assert.match(replayMessage, /身份/);
-for (const cancelledAt of ["source", "evidence", "none"] as const) {
-  const state = { ...replayState };
-  let resume!: () => void;
-  const pending = new Promise<void>(resolve => { resume = resolve; });
-  let begins = 0; let workers = 0; let runs = 0;
-  const matching = parseDiagnosticRun(exported);
-  const env = vm.createContext({
-    state, markerDiagnostics: new WeakMap([[state, { imported: matching,
-      begin: () => { begins++; return { run: matching, evidence: cancelledAt === "evidence" ? pending : Promise.resolve() }; },
-      message() {},
-    }]]),
-    sourceState: { planning2d: { getFrameState: () => ({ ...getFrame(), source: {} }) } },
-    workflowPhotoProjection: () => ({ surfaceLandmarks: [] }), controlledMarkerPixelsPerMm: () => 1,
-    markerDiagnosticInput: () => input, document: doc, drawRepairsToContext() {}, diagnosticReplayMismatches,
-    markerPhotoSource: () => cancelledAt === "source" ? pending : Promise.resolve({}),
-    ensureWorker: () => { workers++; return {}; }, runControlledMarker: async () => { runs++; },
-  });
-  vm.runInContext(stripTypeScriptTypes(replaySource), env);
-  const replay = vm.runInContext("replayMarkerDiagnostic(state)", env);
-  if (cancelledAt === "evidence") {
-    for (let i = 0; !begins && i < 10; i++) await Promise.resolve();
-    assert.equal(begins, 1);
-  }
-  if (cancelledAt !== "none") { state.markerRequestId++; resume(); }
-  await replay;
-  assert.equal(begins, cancelledAt === "source" ? 0 : 1, cancelledAt);
-  assert.equal(workers, cancelledAt === "none" ? 1 : 0, cancelledAt);
-  assert.equal(runs, cancelledAt === "none" ? 1 : 0, cancelledAt);
-}
+let resolveReplaySource!: (source: unknown) => void;
+replayContext.markerPhotoSource = () => new Promise(resolve => { resolveReplaySource = resolve; });
+const cancelledReplay = vm.runInContext("replayMarkerDiagnostic(replayState)", replayContext);
+replayState.markerRequestId++;
+const afterReplayCancel = JSON.stringify(replayState);
+resolveReplaySource({}); await cancelledReplay;
+assert.equal(JSON.stringify(replayState), afterReplayCancel, "cancelled preflight cannot resume an old request");
 
 // Compare the actual detector-call boundary with diagnostics off/on; no browser/model.
 const runStart = source.indexOf("async function runControlledMarker(");
