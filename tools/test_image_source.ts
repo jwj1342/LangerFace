@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { fitImageToMaxSide, MAX_IMAGE_SOURCE_DIM } from "../web/src/services/imageSource.ts";
+import { fitImageToMaxSide, MAX_IMAGE_SOURCE_DIM, prepareImageSource, prepareMarkerImageSource } from "../web/src/services/imageSource.ts";
 import {
   confirmLikelyScreenshotUpload,
   likelyMobileScreenshot,
@@ -14,6 +14,39 @@ import {
 } from "../web/src/services/staticImageDetection.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+{
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const calls: Array<{ options: unknown; draw: unknown[] }> = [];
+  Object.defineProperty(globalThis, "document", { configurable: true, value: {
+    createElement() {
+      const call = { options: undefined as unknown, draw: [] as unknown[] };
+      calls.push(call);
+      return { width: 0, height: 0, getContext(_kind: string, options?: unknown) {
+        call.options = options;
+        return { imageSmoothingEnabled: false, imageSmoothingQuality: "low",
+          drawImage(...args: unknown[]) { call.draw = args; } };
+      } };
+    },
+  } });
+  try {
+    const image = { width: 3448, height: 4600 } as unknown as HTMLImageElement;
+    const shared = prepareImageSource(image);
+    const marker = prepareMarkerImageSource(image);
+    assert.deepEqual([marker.width, marker.height, marker.scale, marker.scaled],
+      [shared.width, shared.height, shared.scale, shared.scaled]);
+    assert.equal(calls[0].options, undefined, "the shared display/model preparation stays unchanged");
+    assert.deepEqual(calls[1].options, { willReadFrequently: true }, "marker resizing chooses the readback context on first use");
+    assert.deepEqual(calls[1].draw, calls[0].draw, "marker preparation retains the original dimensions and source");
+    assert.notEqual(marker.source, shared.source, "marker pixels cannot mutate the shared source");
+    const small = { width: 800, height: 600 } as unknown as HTMLImageElement;
+    assert.equal(prepareMarkerImageSource(small).source, small, "unscaled photos retain the existing source path");
+    assert.equal(calls.length, 2, "unscaled photos do not allocate another canvas");
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "document", previous);
+    else Reflect.deleteProperty(globalThis, "document");
+  }
+}
 
 {
   assert.equal(likelyMobileScreenshot({ width: 1080, height: 2376 }), true,

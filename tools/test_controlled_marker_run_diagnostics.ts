@@ -240,6 +240,7 @@ const replayContext = vm.createContext({
   markerDiagnostics: new WeakMap([[replayState, fakeDiagnostics]]), sourceState: { planning2d: { getFrameState: () => ({ ...getFrame(), source: {} }) } },
   workflowPhotoProjection: () => ({ surfaceLandmarks: [] }), controlledMarkerPixelsPerMm: () => 1,
   markerDiagnosticInput: () => input, document: doc, drawRepairsToContext() {}, diagnosticReplayMismatches,
+  markerPhotoSource: async (frame: { source: unknown }) => frame.source,
   ensureWorker: trap, runControlledMarker: trap, replayState,
 });
 vm.runInContext(stripTypeScriptTypes(replaySource), replayContext);
@@ -247,6 +248,13 @@ const stateBefore = JSON.stringify(replayState);
 await vm.runInContext("replayMarkerDiagnostic(replayState)", replayContext);
 assert.equal(JSON.stringify(replayState), stateBefore);
 assert.match(replayMessage, /身份/);
+let resolveReplaySource!: (source: unknown) => void;
+replayContext.markerPhotoSource = () => new Promise(resolve => { resolveReplaySource = resolve; });
+const cancelledReplay = vm.runInContext("replayMarkerDiagnostic(replayState)", replayContext);
+replayState.markerRequestId++;
+const afterReplayCancel = JSON.stringify(replayState);
+resolveReplaySource({}); await cancelledReplay;
+assert.equal(JSON.stringify(replayState), afterReplayCancel, "cancelled preflight cannot resume an old request");
 
 // Compare the actual detector-call boundary with diagnostics off/on; no browser/model.
 const runStart = source.indexOf("async function runControlledMarker(");
@@ -267,6 +275,7 @@ async function detectorBoundary(enabled: boolean, rejection = false) {
     markerRequestSnapshot: () => input.parameters, minimumWorkflowMarkerScanDiameterMm: () => 8,
     workflowPhotoProjection: () => ({ surfaceLandmarks: [] }), controlledMarkerPixelsPerMm: () => 1,
     document: doc, prepareControlledMarkerAttempt() {}, requestFrame() {}, drawRepairsToContext() {},
+    markerPhotoSource: async (frame: { source: unknown }) => frame.source,
     markerDiagnostics: new WeakMap(enabled ? [[state, fake]] : []), markerDiagnosticInput: () => input,
     setStatus() {}, publish() {}, ensureWorker: () => null,
     detectControlledMarker: (image: { data: Uint8ClampedArray }, seed: unknown, options: unknown) => {
@@ -283,6 +292,43 @@ async function detectorBoundary(enabled: boolean, rejection = false) {
 const off = await detectorBoundary(false); const on = await detectorBoundary(true);
 assert.equal(on.call, off.call); assert.equal(on.finishCalls, 1); assert.equal(off.finishCalls, 0);
 assert.equal((await detectorBoundary(true, true)).finishCalls, 1);
+// Exercise ownership while the new photo preparation is awaiting decoding.
+for (const outcome of ["ready", "decode_error", "pixel_error", "source_changed", "parameters_changed", "cancelled"] as const) {
+  const state = { mounted: true, markerMode: true, markerBusy: false, markerRequestId: 0,
+    boundaryMode: "ellipse", kind: "cutaneous", repairStrokes: [] };
+  const frame = { kind: "image", source: {}, landmarks: [1], revision: 2, width: 2, height: 2 };
+  let currentRevision = frame.revision;
+  let resolveSource!: (value: unknown) => void; let rejectSource!: (error: Error) => void;
+  const pending = new Promise((resolve, reject) => { resolveSource = resolve; rejectSource = reject; });
+  let calls = 0; let completions = 0;
+  const environment = vm.createContext({
+    state, testSeed: { x: 1, y: 1 }, mobileWorkflowViewportActive: () => false,
+    sourceState: { planning2d: { getFrameState: () => ({ ...frame, revision: currentRevision }), setSelection() {} } },
+    markerRequestSnapshot: () => input.parameters, minimumWorkflowMarkerScanDiameterMm: () => 8,
+    workflowPhotoProjection: () => ({ surfaceLandmarks: [] }), controlledMarkerPixelsPerMm: () => 1,
+    document: { createElement: () => ({ getContext: () => ({ drawImage() {}, getImageData: () => {
+      if (outcome === "pixel_error") throw new Error("readback failed");
+      return { data: pixels.slice() };
+    } }) }) },
+    prepareControlledMarkerAttempt() {}, requestFrame() {}, drawRepairsToContext() {},
+    markerPhotoSource: () => pending, markerDiagnostics: new WeakMap(),
+    setStatus() {}, publish() {}, ensureWorker: () => null,
+    detectControlledMarker: () => { calls++; return { ok: false }; },
+    workflowMarkerRequestStillCurrent: () => outcome !== "parameters_changed",
+    completeControlledMarkerAttempt: () => { completions++; state.markerBusy = false; },
+    controlledMarkerRepairable: () => false, controlledMarkerFailureMessage: () => "test failure",
+  });
+  vm.runInContext(stripTypeScriptTypes(runSource), environment);
+  const running = vm.runInContext("runControlledMarker(state, testSeed)", environment);
+  assert.equal(state.markerBusy, true, `${outcome}: decoding must reserve the request`);
+  if (outcome === "source_changed") currentRevision++;
+  if (outcome === "cancelled") { state.markerRequestId++; state.markerBusy = true; }
+  if (outcome === "decode_error") rejectSource(new Error("decode failed")); else resolveSource({});
+  await running;
+  assert.equal(calls, outcome === "ready" ? 1 : 0, outcome);
+  assert.equal(state.markerBusy, outcome === "cancelled", `${outcome}: only the current owner may release busy`);
+  assert.equal(completions, outcome === "cancelled" ? 0 : 1, outcome);
+}
 assert.ok(source.indexOf("diagnosticRun = diagnostics.begin") < source.indexOf("Comlink.transfer({ width: image.width"));
 const bounded = new MarkerRunDiagnostics(getFrame);
 assert.throws(() => bounded.exportBundle(), /操作一次/);

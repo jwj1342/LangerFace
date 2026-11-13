@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { prepareMarkerImageSource, type PreparedImageSource } from "./imageSource.ts";
 import { narrowTouchWorkflowViewportActive } from "./workflowViewport";
 import { MarkerRunDiagnostics, auditMarkerDiagnosticExport, diagnosticReplayMismatches, type RunInput, type DiagnosticRun, type WorkflowDiagnosticSnapshot } from "./controlledMarkerRunDiagnostics";
 
@@ -1515,6 +1516,40 @@ function workflowPhotoReady(state: WorkflowIncisionState) {
 }
 
 const markerDiagnostics = new WeakMap<WorkflowIncisionState, MarkerRunDiagnostics>();
+const markerPhotoSources = new WeakMap<File, Promise<PreparedImageSource>>();
+
+function prepareMarkerPhoto(file: File, decoded?: HTMLImageElement): Promise<PreparedImageSource> {
+  const cached = markerPhotoSources.get(file);
+  if (cached) return cached;
+  const prepared = (async () => {
+    let url: string | null = null;
+    try {
+      const image = decoded || new Image();
+      if (!decoded) {
+        url = URL.createObjectURL(file);
+        image.src = url;
+        await image.decode();
+      }
+      return prepareMarkerImageSource(image);
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+    }
+  })();
+  markerPhotoSources.set(file, prepared);
+  void prepared.catch(() => {
+    if (markerPhotoSources.get(file) === prepared) markerPhotoSources.delete(file);
+  });
+  return prepared;
+}
+
+async function markerPhotoSource(frame: PhotoPlanningFrameState): Promise<CanvasImageSource> {
+  const file = sourceState.imageFile;
+  if (!file) return frame.source as CanvasImageSource;
+  const prepared = await prepareMarkerPhoto(file);
+  if (prepared.width !== frame.width || prepared.height !== frame.height)
+    throw new Error("肿物照片像素尺寸与当前照片不一致，请重新上传原图。");
+  return prepared.source;
+}
 const diagnosticEditPending = new WeakMap<WorkflowIncisionState, {
   controlId: string | null; requestedValue: number | null; before: WorkflowDiagnosticSnapshot;
 }>();
@@ -2105,15 +2140,18 @@ async function replayMarkerDiagnostic(state: WorkflowIncisionState) {
     const ppm = projection && controlledMarkerPixelsPerMm(state, frame, seed, projection.surfaceLandmarks);
     if (!ppm || ppm <= 0) throw new Error("无法核对毫米尺度");
     const input = markerDiagnosticInput(state, frame, seed, ppm);
+    const requestId = state.markerRequestId;
     const canvas = document.createElement("canvas"); canvas.width = frame.width; canvas.height = frame.height;
     const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) throw new Error("无法核对照片像素");
-    context.drawImage(frame.source as CanvasImageSource, 0, 0, frame.width, frame.height);
+    const source = await markerPhotoSource(frame);
+    if (!state.mounted || requestId !== state.markerRequestId) return;
+    context.drawImage(source, 0, 0, frame.width, frame.height);
     const before = context.getImageData(0, 0, frame.width, frame.height).data;
     drawRepairsToContext(state, context);
-    const check = diagnostics.begin(input, state.markerRequestId, "preflight", before, context.getImageData(0, 0, frame.width, frame.height).data, false);
+    const check = diagnostics.begin(input, requestId, "preflight", before, context.getImageData(0, 0, frame.width, frame.height).data, false);
     await check.evidence;
-    if (!state.mounted || sourceState.planning2d?.getFrameState().revision !== frame.revision || state.markerBusy
+    if (!state.mounted || requestId !== state.markerRequestId || sourceState.planning2d?.getFrameState().revision !== frame.revision || state.markerBusy
       || JSON.stringify(input) !== JSON.stringify(markerDiagnosticInput(state, frame, seed, ppm))) throw new Error("核对期间输入已变化，请重试");
     const mismatches = diagnosticReplayMismatches(saved, check.run);
     if (mismatches.length) throw new Error(mismatches.join("；"));
@@ -2173,16 +2211,41 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     return;
   }
   prepareControlledMarkerAttempt(state);
-  context.drawImage(frame.source as CanvasImageSource, 0, 0, frame.width, frame.height);
-  const diagnostics = markerDiagnostics.get(state);
-  let diagnosticBefore = diagnostics ? context.getImageData(0, 0, frame.width, frame.height).data : null;
-  drawRepairsToContext(state, context);
-  const image = context.getImageData(0, 0, frame.width, frame.height);
   const requestId = ++state.markerRequestId;
-  if (mobileRetrySeed) state.markerPendingSeed = null;
   state.markerBusy = true;
   state.markerSeed = { ...seed };
   state.markerSourceRevision = frame.revision;
+  setStatus(state, "正在准备肿物照片像素…");
+  publish(state, "controlled_marker_running");
+  const diagnostics = markerDiagnostics.get(state);
+  let diagnosticBefore: Uint8ClampedArray | null = null;
+  let image: ImageData;
+  try {
+    const source = await markerPhotoSource(frame);
+    if (!state.mounted || requestId !== state.markerRequestId) return;
+    if (sourceState.planning2d?.getFrameState().revision !== frame.revision
+      || !workflowMarkerRequestStillCurrent(started, markerRequestSnapshot(state))) {
+      completeControlledMarkerAttempt(state, null);
+      setStatus(state, "照片或参数在像素准备期间已变化，请重新点击标记。", "warning");
+      publish(state, "controlled_marker_stale_source");
+      return;
+    }
+    context.drawImage(source, 0, 0, frame.width, frame.height);
+    if (diagnostics) {
+      try { diagnosticBefore = context.getImageData(0, 0, frame.width, frame.height).data; }
+      catch { diagnostics.message("诊断采集失败；识别仍按原流程运行"); }
+    }
+    drawRepairsToContext(state, context);
+    image = context.getImageData(0, 0, frame.width, frame.height);
+  } catch (error) {
+    if (state.mounted && requestId === state.markerRequestId) {
+      completeControlledMarkerAttempt(state, mobileRetrySeed);
+      setStatus(state, error instanceof Error ? error.message : "肿物照片像素准备失败，请重试。", "warning");
+      publish(state, "controlled_marker_no_context");
+    }
+    return;
+  }
+  if (mobileRetrySeed) state.markerPendingSeed = null;
   setStatus(state, state.repairStrokes.length ? "正在使用人工补线重新识别肿物边界…" : "正在识别肿物边界…");
   const diagnosticActionId = diagnostics?.recordAction({
     domain: "controlled_marker", action: "recognition", stage: "started",
@@ -4022,7 +4085,8 @@ export function mountWorkflowIncisionController(root: HTMLElement) {
   const state = createState(root);
   activeState = state;
   // Collection is always local and bounded. `developer=1` only reveals export UI.
-  const diagnostics = new MarkerRunDiagnostics(() => sourceState.planning2d?.getFrameState());
+  const diagnostics = new MarkerRunDiagnostics(() => sourceState.planning2d?.getFrameState(),
+    (image, file) => prepareMarkerPhoto(file, image));
   markerDiagnostics.set(state, diagnostics);
   void diagnostics.captureClientModule("workflow_incision_controller", import.meta.url);
   renderState.workflowPhotoOverlay = true;
