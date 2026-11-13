@@ -45,19 +45,3 @@ export function prepareImageSource(img: ImageLike, maxSide = MAX_IMAGE_SOURCE_DI
   g.drawImage(img, 0, 0, fit.width, fit.height);
   return { source: canvas, ...fit };
 }
-
-// Marker reads need the same raster path on accelerated and software canvases.
-// Keep the shared display/model source on its existing preparation path.
-export function prepareMarkerImageSource(img: ImageLike, maxSide = MAX_IMAGE_SOURCE_DIM): PreparedImageSource {
-  const fit = fitImageToMaxSide(img.naturalWidth || img.width, img.naturalHeight || img.height, maxSide);
-  if (!fit.scaled) return { source: img, ...fit };
-  const canvas = document.createElement("canvas");
-  canvas.width = fit.width;
-  canvas.height = fit.height;
-  const g = canvas.getContext("2d", { willReadFrequently: true });
-  if (!g) throw new Error("2d canvas context is required for marker source preparation");
-  g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = "high";
-  g.drawImage(img, 0, 0, fit.width, fit.height);
-  return { source: canvas, ...fit };
-}

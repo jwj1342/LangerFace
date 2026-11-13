@@ -1,4 +1,4 @@
-import { prepareImageSource, type PreparedImageSource } from "./imageSource.ts";
+import { prepareImageSource } from "./imageSource.ts";
 import { auditExportPayload } from "./exportPrivacy.ts";
 import {
   CANVAS_EXPORT_DIAGNOSTIC_EVENT,
@@ -666,7 +666,6 @@ export class MarkerRunDiagnostics {
   private initialIdentity = serviceIdentity();
   imported: DiagnosticRun | null = null;
   private getFrame: () => FrameIdentity | null | undefined;
-  private prepareSource: (image: HTMLImageElement, file: File) => PreparedImageSource | Promise<PreparedImageSource>;
   private observedPointers = new Set<number>();
   private lastInteractionSample = 0;
   private interactionEvents: Array<Record<string, Json>> = [];
@@ -675,11 +674,8 @@ export class MarkerRunDiagnostics {
   private interactionTimers = new Set<ReturnType<typeof setTimeout>>();
   private viewportTimer: ReturnType<typeof setTimeout> | null = null;
   private interactionOptions: AddEventListenerOptions = { capture: true, passive: true };
-  constructor(getFrame: () => FrameIdentity | null | undefined,
-    prepareSource: (image: HTMLImageElement, file: File) => PreparedImageSource | Promise<PreparedImageSource>
-      = image => prepareImageSource(image)) {
+  constructor(getFrame: () => FrameIdentity | null | undefined) {
     this.getFrame = getFrame;
-    this.prepareSource = prepareSource;
     document.addEventListener("change", this.onFile, true);
     document.addEventListener("cancel", this.onFile, true);
     window.addEventListener(CANVAS_EXPORT_DIAGNOSTIC_EVENT, this.onExport as EventListener);
@@ -963,7 +959,7 @@ export class MarkerRunDiagnostics {
       const image = new Image();
       image.src = url;
       await image.decode();
-      const prepared = await this.prepareSource(image, file);
+      const prepared = prepareImageSource(image);
       const canvas = document.createElement("canvas");
       canvas.width = prepared.width; canvas.height = prepared.height;
       const context = canvas.getContext("2d", { willReadFrequently: true });
