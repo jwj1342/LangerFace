@@ -11,7 +11,7 @@
       "完整局部轮廓"
     ],
     "status": "candidate",
-    "sourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
+    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
     "changeSlug": "repeated-supported-contained-local-pigment",
     "previous": {
@@ -299,15 +299,25 @@
     "note": "相对锁定master仅本人肿物检测、原安全测试与发布登记；共享UI、诊断记录器、RSTL和资产与master完全相同。"
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
+    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
+    "evaluationKind": "explicit_known_failure_research_submission",
+    "effectResult": "partial-failed",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr4a-research-candidate-20261114",
-    "sourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
-    "note": "操作者已直接要求在效果未达标时提交正式研发候选；不把此请求写成算法效果通过。限定接受的登记语义待独立审查；最终正文通读仍待。"
+    "recordedAt": "2026-11-14T02:33:40.799Z",
+    "scope": "操作者本轮直接要求效果未达标仍提交正式研发候选；只接受该已知失败候选进入代码评审，不表示算法效果、手机真机、整组或医学通过。",
+    "knownFailures": [
+      "MO004回传压缩图固定5点10mm全部拒识，原图同条件成功；历史真实手机实际RGBA尚缺",
+      "原图MO004扫描范围敏感性仍开放",
+      "MK002、MK003鼻翼及其他边界精度/跨落点问题未整组验收",
+      "0.104.2/3/4缩图候选已否决并恢复0.104.1，不进入活动产品"
+    ],
+    "recordedAtMeaning": "记录当前可核验直接请求的时间，不冒充原消息发送时刻"
   },
   "editorSaveConfirmation": {
     "status": "unconfirmed",
     "reason": "尚无本次最终组合源码的操作者编辑器全部保存事实；不沿用远端旧确认。",
-    "sourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1"
+    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016"
   },
   "history": [
     {
@@ -2564,7 +2574,7 @@
     ],
     "sourceDigest": "fb2c0a23d6a37df3df7864c0ea522326df0e5a8e843bd400f3366160d64699e1",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
+    "runtimeSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "algorithmVersion": "0.104.1-candidate.1",
     "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
     "note": "登记范围包含诊断服务，故兼容修复递增PATCH；没有布局、控件、检测算法或RSTL变化；本次限定继续已确认，不代签新一轮完整人工效果。 本次只组合肿物算法；UI源码与master逐文件相同，版本保持。"
@@ -3756,10 +3766,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "bd37f234bfdc65b2dc6831926d0d06888bf63fa098e7f08de7015c9c8a2d3a37",
-    "currentSourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
-    "capturedAt": "2026-11-14T02:24:11.203Z",
-    "reason": "Integrate already-published UI/CI updates without changing lesion 0.104.1 algorithm bytes."
+    "previousSourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
+    "currentSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
+    "capturedAt": "2026-11-14T02:33:40.799Z",
+    "reason": "Wire existing lesion candidate safety suites into default npm test and CI; no algorithm changes."
   },
   "integrationHistory": [
     {
@@ -3937,7 +3947,7 @@
   ],
   "automatedValidation": {
     "status": "integration_validation_in_progress",
-    "sourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
+    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr4a-research-candidate-20261114",
     "note": "肿物核心与785286a相同，旧实测保留其边界；整合后的测试/构建另行执行。"
   },
@@ -3960,6 +3970,14 @@
     "note": "本轮为本地兼容修复候选；原恢复包和旧登记保留，未生成当前指纹的正式发布恢复包。开发测试须核已提交HEAD与现有backup回退点；不得PR/发布。"
   },
   "sourceFingerprintHistory": [
+    {
+      "encoding": "UTF-8",
+      "normalization": "CRLF-to-LF-only",
+      "previousSourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
+      "currentSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
+      "capturedAt": "2026-11-14T02:33:40.799Z",
+      "reason": "Wire existing lesion candidate safety suites into default npm test and CI; no algorithm changes."
+    },
     {
       "encoding": "UTF-8",
       "normalization": "CRLF-to-LF-only",
@@ -4309,8 +4327,9 @@
     ],
     "finalPayloadHumanRead": "pending",
     "ci": "not_submitted",
-    "integratedSourceDigest": "5929ea8c0b868c2c6897dcc96e1c4f8cdd7f251b9207a0fcd530abbcc4e41ff1",
+    "integratedSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
-    "assetDigest": "9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249"
+    "assetDigest": "9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249",
+    "defaultCiSafetyEntry": "npm run test:lesion-candidate-safety"
   }
 }
