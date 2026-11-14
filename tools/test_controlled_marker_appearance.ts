@@ -17,6 +17,26 @@ assert.equal(assigned.length, 9, 'repeated peaks cannot consume the supplemental
 assert.ok(!assigned.some(p => p.x === 0 && p.y === 0), 'the click itself is not a fabricated foreground feature');
 assert.deepEqual(geometry.pigmentAnchors([], { x: 0, y: 0 }), []);
 const a = square(10, 20, 20);
+const compactProposal = (boundary: MarkerPoint[], anchorX: number, context: number, rankScore: number) => ({
+    candidate: {
+        boundary, center: geometry.polygonCentroid(boundary), major: 10, ratio: 1, angle: 0,
+        score: rankScore, rankScore, anchor: { x: anchorX, y: 20 }, context,
+    },
+    evidence: { interiorSupport: 1, outerContinuation: 0, sectorContinuation: Array(8).fill(0) },
+});
+const compactPrimary = compactProposal(a, 10, 24, 10);
+const compactRepeated = compactProposal(a, 20, 32, 9);
+const compactUnpairedNeighbor = compactProposal(square(40, 20, 10), 40, 24, 8);
+assert.ok(geometry.selectCompactPigmentProposal([compactPrimary, compactRepeated]),
+    'the same object supported at separate anchors remains eligible');
+assert.equal(geometry.selectCompactPigmentProposal([compactPrimary]), null,
+    'one unsupported object cannot become a recovery');
+assert.equal(geometry.selectCompactPigmentProposal([
+    compactPrimary, compactRepeated, compactUnpairedNeighbor,
+]), null, 'a distinct object without its own repeated support still vetoes recovery');
+assert.ok(geometry.selectCompactPigmentProposal([
+    compactPrimary, compactRepeated, compactProposal(square(11, 20, 20), 30, 24, 8),
+]), 'near-overlapping estimates of one object are not separate objects');
 near(geometry.convexIntersectionArea(a, a), 400);
 near(geometry.convexIntersectionArea(a, a.slice().reverse()), 400);
 near(geometry.convexIntersectionArea(a, [...a.slice(2), ...a.slice(0, 2)]), 400);
@@ -47,6 +67,85 @@ assert.equal(geometry.selectCompleteBodyCandidate([sameAnchorSmall, sameAnchorLa
     'same-anchor scale changes must not become a new body');
 const localReference = { ok: true, geometry_mode: 'dark_component', boundary: square(10, 10, 8),
     center: { x: 14, y: 14 }, area_px: 64 } as any;
+const normalizedFragment = { ...localReference, boundary: square(16, 16, 8),
+    center: { x: 20, y: 20 }, warnings: ['brightness_normalized_recovery'] };
+const repeatedSmallBody = (boundary: MarkerPoint[], anchorX: number, complete = true) => ({
+    boundary, score: 100, scanComplete: complete, evidence: { anchor: { x: anchorX, y: 20 }, context: 24 },
+});
+const repeatedBodyA = repeatedSmallBody(square(13, 13, 14), 12);
+const repeatedBodyB = repeatedSmallBody(square(13.2, 13, 14), 28);
+assert.ok(geometry.findNormalizedFragmentConflict([repeatedBodyA, repeatedBodyB], normalizedFragment),
+    'separate windows can expose a larger body around an accepted normalized fragment');
+assert.equal(geometry.findNormalizedFragmentConflict([repeatedBodyA], normalizedFragment), null,
+    'one proposal cannot establish a repeated body conflict');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, { ...repeatedBodyB, evidence: repeatedBodyA.evidence },
+], normalizedFragment), null, 'same-anchor scale repeats are not independent source windows');
+assert.ok(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, { ...repeatedBodyB, scanComplete: false },
+], normalizedFragment), 'incomplete larger bodies remain counterevidence; they never certify a new outline');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, repeatedSmallBody(square(14.5, 13, 14), 28),
+], normalizedFragment), null, 'unstable body outlines cannot broaden the fragment');
+assert.ok(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, repeatedBodyB, repeatedSmallBody(square(40, 40, 14), 40),
+], normalizedFragment), 'an unrelated object cannot erase an already evidenced local conflict');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedSmallBody(square(40, 40, 14), 12), repeatedSmallBody(square(40.2, 40, 14), 28),
+], normalizedFragment), null, 'an unrelated repeated body cannot reject the local target');
+assert.equal(geometry.findNormalizedFragmentConflict([
+    repeatedBodyA, repeatedSmallBody(square(13.2, 13, 14), 20),
+], normalizedFragment), null, 'a source-window gap below twelve pixels cannot certify a conflict');
+const fragmentReference = { ...normalizedFragment, boundary: square(93, 93, 14),
+    center: { x: 100, y: 100 }, area_px: 196 };
+const evidenceImage = { width: 240, height: 240, data: new Uint8ClampedArray(0) };
+const completeFragmentBody = (size: number, context: number, anchorX: number, dx = 0) => ({
+    boundary: square(100 - size / 2 + dx, 100 - size / 2, size), score: 6,
+    scanComplete: true, evidence: { diameter: size, context, anchor: { x: anchorX, y: 96 } },
+});
+const supportedBodyA = completeFragmentBody(30, 24, 92);
+const supportedBodyB = completeFragmentBody(30, 32, 108);
+const supportedBank = [supportedBodyA, supportedBodyB, completeFragmentBody(24, 24, 100)];
+const bankBefore = structuredClone(supportedBank);
+const recoveredBody = geometry.selectCompleteFragmentBody(supportedBank, fragmentReference, evidenceImage);
+assert.ok(recoveredBody, 'a complete corroborated body may replace a known conflicting fragment');
+near(geometry.polygonArea(recoveredBody.boundary), 900);
+assert.equal((recoveredBody.evidence.fragmentBodySupport as any).kind, 'cross_context_and_distinct_anchor');
+assert.deepEqual(supportedBank, bankBefore, 'selection does not mutate the proposal bank');
+assert.equal(geometry.selectCompleteFragmentBody([], fragmentReference, evidenceImage), null);
+for (const counterexample of [
+    [...supportedBank, { ...supportedBodyB, scanComplete: false }],
+    supportedBank.map(body => ({ ...body, evidence: { ...body.evidence, context: 24 } })),
+    supportedBank.map(body => ({ ...body, evidence: { ...body.evidence, anchor: { x: 100, y: 96 } } })),
+    [...supportedBank, completeFragmentBody(30, 24, 137, 45)],
+    [...supportedBank, completeFragmentBody(30, 24, 97, 5)],
+    [...supportedBank, completeFragmentBody(30, 24, 97, 5), completeFragmentBody(30, 32, 113, 5)],
+    [...supportedBank, completeFragmentBody(30, 24, 97, 2)],
+    [...supportedBank, completeFragmentBody(30, 24, 92, 2), completeFragmentBody(30, 32, 108, 2)],
+    [...supportedBank, completeFragmentBody(34, 24, 100)],
+    [...supportedBank, completeFragmentBody(45, 24, 100)],
+]) assert.equal(geometry.selectCompleteFragmentBody(counterexample, fragmentReference, evidenceImage), null,
+    'incomplete, contradictory, unpaired outer extent and insufficient support cannot be filtered away');
+assert.ok(geometry.selectCompleteFragmentBody(
+    [...supportedBank, completeFragmentBody(30, 24, 97, 1)], fragmentReference, evidenceImage),
+    'a minor unpaired edge drift within five percent does not veto a corroborated body');
+assert.equal(geometry.selectCompleteFragmentBody(supportedBank, fragmentReference,
+    { ...evidenceImage, width: 120 }), null, 'a clipped background cannot certify a new accepted body');
+const extensionCore = Array.from({ length: 100 }, (_, i) => ({
+    u: i < 40 ? 0 : 2, v: 0, c: [0, 0, 0] as [number, number, number],
+}));
+const extensionResiduals = extensionCore.map((_, i) =>
+    [i < 76 ? 5 : 0, 0, 0] as [number, number, number]);
+assert.ok(extensionResiduals.filter(v => v[0] >= 2).length / 100 >= .7,
+    'the whole core can pass even when the newly added region is weak');
+assert.equal(geometry.fragmentExtensionEvidence(extensionCore, extensionResiduals,
+    v => v[0], 5, { x: 0, y: 0 }, 1, square(-1, -1, 2)), null,
+    'old dark pixels must not supply the added region support');
+const supportedExtension = extensionResiduals.map((v, i) =>
+    [i < 82 ? 5 : 0, v[1], v[2]] as [number, number, number]);
+assert.equal(geometry.fragmentExtensionEvidence(extensionCore, supportedExtension,
+    v => v[0], 5, { x: 0, y: 0 }, 1, square(-1, -1, 2))?.addedCoreSupport, .7,
+    'support uses the added region denominator and the same field projection');
 const remoteShadow = bodyCandidate(square(100, 100, 40), 1000);
 const enclosingIncomplete = { ...bodyCandidate(square(5, 5, 30), 200), scanComplete: false };
 assert.deepEqual(geometry.associateBodyCandidates([remoteShadow, fullBodyA], localReference), [fullBodyA],
@@ -86,6 +185,105 @@ assert.ok(directional.boundary[1].x < constrained.boundary[1].x,
     'weakly supported sectors retain the conservative inward shrink');
 assert.ok(directional.boundary[2].x > constrained.boundary[2].x,
     'strongly supported sectors preserve more of a locally evidenced edge');
+const associatedBaseline = { ...localReference,
+    diagnostics: { filled_candidate_route: 'validated_legacy_filled_candidate' } } as any;
+const isolatedPigment = compactProposal(square(8, 8, 12), 12, 64, 10);
+const enclosingMaterial = square(5, 5, 18);
+assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    isolatedPigment, enclosingMaterial, { x: 14, y: 14 }), true,
+    'an already associated local object may survive inside a complete larger body');
+for (const reference of [
+    { ...associatedBaseline, ok: false, boundary: [], area_px: 0 },
+    { ...associatedBaseline, diagnostics: { filled_candidate_route: 'validated_recovered_pixel_boundary' } },
+    { ...associatedBaseline, boundary: square(7, 10, 8) },
+]) assert.equal(geometry.preserveAssociatedPigmentCandidate(reference,
+    isolatedPigment, enclosingMaterial, { x: 14, y: 14 }), false,
+    'rejected, other-source and incompletely contained baselines retain the original result');
+assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    isolatedPigment, square(10, 10, 10), { x: 14, y: 14 }), false,
+    'a partial or different body cannot corroborate the complete local outline');
+assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    isolatedPigment, enclosingMaterial, { x: 21, y: 14 }), false,
+    'a neighboring object cannot replace the clicked target');
+for (const evidence of [
+    { ...isolatedPigment.evidence, outerContinuation: .01 },
+    { ...isolatedPigment.evidence, sectorContinuation: [0, 0, 0, .01, 0, 0, 0, 0] },
+    { ...isolatedPigment.evidence, sectorContinuation: [0, 0] },
+]) assert.equal(geometry.preserveAssociatedPigmentCandidate(associatedBaseline,
+    { ...isolatedPigment, evidence }, enclosingMaterial, { x: 14, y: 14 }), false,
+    'an outward continuation or missing sector preserves the original selection');
+const relativeBaseline = { ...associatedBaseline, boundary: square(12, 12, 4), area_px: 16,
+    diagnostics: { filled_candidate_route: 'relative_color_filled_candidate' } } as any;
+const repeatedRecovery = { proposal: isolatedPigment, support: {
+    kind: 'separate_anchors' as const, anchor: { x: 12, y: 12 }, context: 64,
+    peerAnchor: { x: 24, y: 12 }, peerContext: 48, overlapIou: 1,
+} };
+const corroborate = geometry.corroborateContainedPigmentCandidate;
+assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), repeatedRecovery,
+    'repeated independent support can corroborate an existing local outline beyond the tiny baseline ratio');
+for (const reference of [
+    { ...relativeBaseline, ok: false },
+    { ...relativeBaseline, geometry_mode: 'enclosed_region' },
+    associatedBaseline,
+    { ...relativeBaseline, boundary: square(7, 12, 4) },
+    { ...relativeBaseline, boundary: [] },
+]) assert.equal(corroborate(reference, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), null);
+for (const evidence of [
+    { ...isolatedPigment.evidence, outerContinuation: .01 },
+    { ...isolatedPigment.evidence, sectorContinuation: [0, 0, .01, 0, 0, 0, 0, 0] },
+    { ...isolatedPigment.evidence, sectorContinuation: [] },
+]) assert.equal(corroborate(relativeBaseline, { ...isolatedPigment, evidence }, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), null);
+assert.equal(corroborate(relativeBaseline, isolatedPigment, square(10, 10, 10),
+    { x: 14, y: 14 }, () => repeatedRecovery), null, 'partial enclosing body is insufficient');
+assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 21, y: 14 }, () => repeatedRecovery), null, 'the clicked object must be inside the local outline');
+assert.equal(corroborate(relativeBaseline, isolatedPigment, isolatedPigment.candidate.boundary,
+    { x: 14, y: 14 }, () => repeatedRecovery), null, 'the enclosing body must be strictly larger');
+for (const recovery of [null, { ...repeatedRecovery,
+    proposal: compactProposal(square(9, 8, 12), 12, 64, 10) }]) {
+    assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+        { x: 14, y: 14 }, () => recovery), null,
+        'missing or equal-area shifted recovery cannot replace the existing outline');
+}
+assert.equal(corroborate(relativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => { throw new Error('optional recovery unavailable'); }), null,
+    'an optional recovery error preserves the prior selection');
+let rejectedRecoveryCalls = 0;
+assert.equal(corroborate(associatedBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => { rejectedRecoveryCalls++; return repeatedRecovery; }), null);
+assert.equal(rejectedRecoveryCalls, 0, 'ineligible sources never run the extra recovery');
+const acceptedLocal = { ...relativeBaseline, boundary: isolatedPigment.candidate.boundary,
+    area_px: 144, diagnostics: { filled_candidate_route: 'localized_pigment_envelope' } } as any;
+const largerRelativeBaseline = { ...relativeBaseline, boundary: square(10, 10, 8), area_px: 64 };
+assert.equal(corroborate(largerRelativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery), null,
+    'a ratio at most four cannot bypass an unsuccessful original association');
+assert.equal(corroborate(largerRelativeBaseline, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery, acceptedLocal), repeatedRecovery,
+    'an already associated local outline retains independent corroboration');
+const gradualFallback = { ...relativeBaseline, ok: false, boundary: [], area_px: 0,
+    failure_code: 'unstable_enclosure', rejected_boundary: relativeBaseline.boundary,
+    rejected_geometry_mode: 'dark_component', rejected_reasons: ['gradual_shading_edge'],
+    diagnostics: { filled_candidate_route: 'reject_unverified_filled_fallback' } } as any;
+assert.equal(corroborate(gradualFallback, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery, acceptedLocal), repeatedRecovery,
+    'an already accepted identical local outline can survive a larger material replacement');
+for (const reference of [
+    { ...gradualFallback, failure_code: 'scan_range_too_small' },
+    { ...gradualFallback, rejected_reasons: ['not_enclosed_within_scan'] },
+    { ...gradualFallback, rejected_reasons: ['gradual_shading_edge', 'noncompact_or_thin'] },
+    { ...gradualFallback, rejected_boundary: square(7, 12, 4) },
+]) assert.equal(corroborate(reference, isolatedPigment, enclosingMaterial,
+    { x: 14, y: 14 }, () => repeatedRecovery, acceptedLocal), null);
+for (const local of [undefined, { ...acceptedLocal, ok: false },
+    { ...acceptedLocal, boundary: square(9, 8, 12) }]) {
+    assert.equal(corroborate(gradualFallback, isolatedPigment, enclosingMaterial,
+        { x: 14, y: 14 }, () => repeatedRecovery, local), null,
+        'a rejected input needs the same previously accepted local outline');
+}
 const tinyRecoveredBoundary = Array.from({ length: 32 }, (_, index) => {
     const angle = 2 * Math.PI * index / 32;
     return { x: 30 + Math.cos(angle) * 6, y: 40 + Math.sin(angle) * 5 };
@@ -118,6 +316,7 @@ function image(kind: string) {
         const noise = ((state >>> 24) / 255 - .5) * 3, dx = x - 160, dy = y - 160, r = Math.hypot(dx, dy);
         let color = [205, 175, 149];
         if (kind === 'solid' && r <= 18 || kind === 'hollow' && r >= 14 && r <= 18) color = [110, 70, 50];
+        if (kind === 'small-solid' && r <= 8) color = [110, 70, 50];
         if (kind === 'body' && r <= 36) color = r <= 5 ? [110, 70, 50] : [185, 144, 121];
         if (kind === 'hair' && Math.abs(dx + .4 * dy) < 2) color = [35, 30, 27];
         if (kind === 'arc' && r >= 32 && r <= 36 && Math.atan2(dy, dx) > -.3 && Math.atan2(dy, dx) < 2.7) color = [110, 70, 50];
@@ -130,7 +329,35 @@ function image(kind: string) {
 }
 
 const seed = { x: 160, y: 160 }, options = { roiRadius: 100, analysisRoiRadius: 36, scanDiameterMm: 20 };
+const smallOutline = Array.from({ length: 64 }, (_, i) => ({
+    x: 160 + 8 * Math.cos(i * Math.PI / 32), y: 160 + 8 * Math.sin(i * Math.PI / 32),
+}));
+const normalizedSmall = { ...normalizedFragment, boundary: smallOutline, center: seed,
+    area_px: geometry.polygonArea(smallOutline), scan: { radius_px: 36 } } as any;
+for (const kind of ['small-solid', 'blank', 'hair', 'hollow']) {
+    const result = await geometry.rejectNormalizedFragmentConflict(image(kind), seed,
+        { ...options, roiRadius: 36 }, normalizedSmall);
+    assert.equal(result, normalizedSmall, `${kind}: no repeated filled-body evidence cannot veto a local result`);
+}
 const blank = image('blank');
+const alternateSmall = { ...normalizedSmall,
+    warnings: ['color_difference_fragment_neighborhood_consensus_recovered'] };
+for (const kind of ['small-solid', 'blank', 'hair', 'hollow']) {
+    assert.equal(await geometry.rejectNormalizedFragmentConflict(image(kind), seed,
+        { ...options, roiRadius: 36 }, alternateSmall, false), alternateSmall,
+        `${kind}: conflict-only recheck preserves an isolated local result`);
+}
+const alternateUnavailable = { ...alternateSmall,
+    warnings: [...alternateSmall.warnings, 'appearance_refinement_unavailable'] };
+assert.equal(await refineAppearanceCandidate(blank, seed,
+    { ...options, roiRadius: 36 }, alternateUnavailable), alternateUnavailable,
+    'unavailable alternate recovery cannot enter the conflict-only recheck');
+const unavailableFragment = { ...normalizedSmall, warnings: [
+    'brightness_normalized_recovery', 'appearance_refinement_unavailable',
+] };
+assert.equal(await refineAppearanceCandidate(blank, seed,
+    { ...options, roiRadius: 36 }, unavailableFragment), unavailableFragment,
+    'a prior unavailable result must be preserved by the new wrapper');
 const baseline = detectControlledMarkerWithProfile('small-lesion-boundary-candidate', blank, seed, options);
 for (const invalid of [{ ...blank, data: new Uint8ClampedArray(0) }, { ...blank, width: 0 }])
     assert.equal(await refineAppearanceCandidate(invalid, seed, options, baseline), baseline);
