@@ -359,6 +359,34 @@ def _extend_forehead_lower_long_arc(
         normalized = np.clip(np.abs(laterals) / half_width, 0.0, 1.0)
         arch = 0.055 * face_height * (1.0 - normalized**2.4)
         out[:, :2] += arch[:, None] * axis
+    return _recenter_forehead_curve(out, landmarks_px, anchor, lateral_axis)
+
+
+def _recenter_forehead_curve(
+    points: np.ndarray,
+    landmarks_px: np.ndarray,
+    anchor: np.ndarray,
+    lateral_axis: np.ndarray,
+) -> np.ndarray:
+    """Center an expanded forehead arc on the observed facial midline."""
+    if len(points) < 2:
+        return points
+    pair_centers: list[float] = []
+    for left_index, right_index in ((33, 263), (234, 454)):
+        if len(landmarks_px) <= right_index:
+            continue
+        center = 0.5 * (landmarks_px[left_index, :2] + landmarks_px[right_index, :2])
+        pair_centers.append(float((center - anchor) @ lateral_axis))
+    if not pair_centers:
+        return points
+    target = float(np.median(pair_centers))
+    lateral = (points[:, :2] - anchor) @ lateral_axis
+    current = 0.5 * (float(np.min(lateral)) + float(np.max(lateral)))
+    shift = target - current
+    if not np.isfinite(shift) or abs(shift) <= 1e-6:
+        return points
+    out = points.copy()
+    out[:, :2] += shift * lateral_axis
     return out
 
 
@@ -406,7 +434,7 @@ def _extend_forehead_bridge(
         out[:, :2] += arch[:, None] * axis
     if face_height > 1e-9:
         out[:, :2] -= 0.100 * layer_rank * face_height * axis
-    return out
+    return _recenter_forehead_curve(out, landmarks_px, anchor, lateral_axis)
 
 
 def _forehead_bridge_ranks(

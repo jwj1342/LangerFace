@@ -410,14 +410,16 @@ assert.match(workerRuntime, /sourceImageRgba: request.mode === "yolo-only" \? un
   "YOLO-only centerlines must not use image-supported endpoint recovery");
 assert.doesNotMatch(analysisRuntime, /if \(!pipeline.detectionId\) throw/,
   "YOLO photo detection must succeed without a server detection id");
-assert.match(workerRuntime, /keepTargetWrinkleLines\(request\.lines, detectionLandmarks\)/,
-  "YOLO evidence must keep only the three target regions before display or caching");
+assert.match(workerRuntime, /const visibleLines = keepFaceRegionWrinkleLines\(adaptedLines, detectionLandmarks\);/,
+  "YOLO centerlines inside the face must be displayed without additional regional filtering");
+assert.match(workerRuntime, /const guidanceLines = keepTargetWrinkleLines\(adaptedLines, detectionLandmarks\)/,
+  "RSTL refinement must still select anatomical guidance separately");
 assert.match(workerRuntime, /async function seedYoloEvidence[\s\S]*cachedYoloDetection/,
   "browser and server detections must share the same refinement cache path");
 assert.match(workerRuntime, /isYoloGuidedRstlSeed\(seed\)/,
   "YOLO guidance must restrict the set of RSTL curves passed to refinement");
 assert.match(workerRuntime,
-  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: visibleLines\.filter/,
+  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: guidanceLines\.filter/,
   "forehead and glabellar evidence plus direct nose-dorsum lines must be cached separately");
 assert.match(workerRuntime,
   /const forehead = refineChannel\(\s*foreheadSeeds,\s*cachedYolo\.foreheadEvidence,\s*"forehead",?\s*\);[\s\S]*const glabellar = refineChannel\(\s*glabellarSeeds,\s*cachedYolo\.glabellarEvidence,\s*"glabellar",?\s*\)/,
@@ -535,6 +537,8 @@ assert.match(workerRuntime, /Comlink\.expose\(api\)/,
 assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*totalMs/,
   "the worker must report detection timings for reproducible performance regression");
 assert.match(workerRuntime, /minimumLineLengthPx: 20/);
+assert.match(workerRuntime, /minimumLineLengthPxByClass: \{ frown: 16 \}/,
+  "short glabellar lines use the reviewed lower extraction threshold");
 assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
 assert.match(workerRuntime,
   /options: yoloGuidedV9RstlRefinementOptions\(request\.faceWidthPx\)/,

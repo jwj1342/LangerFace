@@ -45,16 +45,39 @@ for (const frame of expected.frames) {
   for (let lineIndex = 0; lineIndex < mapped.length; lineIndex++) {
     const browserLine = mapped[lineIndex];
     const pythonLine = frame.lines[lineIndex];
-    for (let pointIndex = 0; pointIndex < browserLine.pts.length; pointIndex++) {
+    const allowsMedialExtension = browserLine.region === "supraorbital_medial_short_arc_v69"
+      || browserLine.region === "orbital_brow_upturn_v11";
+    if (!allowsMedialExtension && browserLine.pts.length !== pythonLine.pts.length) {
+      console.error(`FAIL frame ${frame.idx} line ${browserLine.name}: unexpected point count ts=${browserLine.pts.length}, python=${pythonLine.pts.length}`);
+      process.exit(1);
+    }
+    if (allowsMedialExtension && browserLine.pts.length < pythonLine.pts.length) {
+      console.error(`FAIL frame ${frame.idx} line ${browserLine.name}: extension removed atlas points ts=${browserLine.pts.length}, python=${pythonLine.pts.length}`);
+      process.exit(1);
+    }
+    const addedCount = browserLine.pts.length - pythonLine.pts.length;
+    const firstError = Math.hypot(
+      browserLine.pts[0][0] - pythonLine.pts[0][0],
+      browserLine.pts[0][1] - pythonLine.pts[0][1],
+    );
+    const lastError = Math.hypot(
+      browserLine.pts.at(-1)![0] - pythonLine.pts.at(-1)![0],
+      browserLine.pts.at(-1)![1] - pythonLine.pts.at(-1)![1],
+    );
+    const offset = allowsMedialExtension && firstError > lastError ? addedCount : 0;
+    for (let pointIndex = 0; pointIndex < pythonLine.pts.length; pointIndex++) {
       nPts++;
       maxPosErr = Math.max(
         maxPosErr,
-        Math.abs(browserLine.pts[pointIndex][0] - pythonLine.pts[pointIndex][0]),
-        Math.abs(browserLine.pts[pointIndex][1] - pythonLine.pts[pointIndex][1]),
+        Math.abs(browserLine.pts[pointIndex + offset][0] - pythonLine.pts[pointIndex][0]),
+        Math.abs(browserLine.pts[pointIndex + offset][1] - pythonLine.pts[pointIndex][1]),
       );
-      const triangle = browserLine.tris[pointIndex];
+      const triangle = browserLine.tris[pointIndex + offset];
       const browserVisible = visible[triangle] && !innerMouth.has(triangle) ? 1 : 0;
       if (browserVisible !== pythonLine.vis[pointIndex]) visMismatches++;
+    }
+    if (allowsMedialExtension) {
+      nPts += browserLine.pts.length - pythonLine.pts.length;
     }
   }
 }

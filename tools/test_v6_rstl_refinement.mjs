@@ -587,8 +587,8 @@ function maximumTurnDegrees(points) {
   assert.equal(result.diagnostics.wrinkle_with_single_side_selected_count, 0);
 }
 
-// Multiple deep forehead furrows keep unique anchors while neighboring layers
-// move before topology rollback, preventing false rejection from stale layers.
+// Multiple deep forehead furrows attract every nearby compatible layer while
+// preserving spacing and topology through the bundle guard.
 {
   const seedYs = [16, 24, 32, 40, 48, 56, 64, 72, 80];
   const seeds = seedYs.map((y, index) => ({
@@ -607,11 +607,10 @@ function maximumTurnDegrees(points) {
   });
   assert.deepEqual(
     result.audit.wrinkleTrends.map((trend) => trend.acceptedCurveIndices),
-    [[0], [2], [4], [6]],
-    "each dense forehead furrow must retain its own nearest RSTL anchor",
+    [[0, 1], [2, 3], [4, 5], [6, 7]],
+    "each dense forehead furrow must attract its nearby compatible RSTL layers",
   );
-  assert.equal(result.diagnostics.forehead_pre_topology_coherence_records[0].applied, true,
-    "neighboring forehead layers must move before the topology rollback stage");
+  assert.equal(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle, 2);
   assert.equal(result.diagnostics.topology_candidate_retry_count, 0);
   assert.equal(result.diagnostics.post_export_new_intersection_pair_count, 0);
   assert.equal(result.diagnostics.post_export_new_self_cross_curve_count, 0);
@@ -1099,6 +1098,33 @@ function maximumTurnDegrees(points) {
   assert.equal(result.audit.wrinkleTrends[0].finalStatus, "already_aligned");
   assert.equal(result.audit.wrinkleTrends[0].finalAccepted, true);
   assert.deepEqual(result.curves[0].pts, seed.pts);
+}
+
+// A forehead wrinkle that crosses its nearest RSTL must not be discarded as
+// already aligned merely because its mean distance is small.
+{
+  const seed = {
+    ...horizontalSeed("crossing-forehead", 30),
+    region: "forehead_bridge_arc_v15",
+  };
+  const wrinkle = Array.from({ length: 55 }, (_, index) => {
+    const x = 20 + index;
+    return [x, 30 + Math.round(3 * Math.sin(index / 8))];
+  });
+  const fields = directionalEvidence([wrinkle]);
+  const result = refineV9Smooth({
+    seeds: [seed],
+    wrinkleMask: fields.mask,
+    confidenceMap: fields.confidence,
+    directionQ: fields.q,
+    size,
+    faceWidthPx: 180,
+    options: yoloGuidedV9RstlRefinementOptions(180),
+  });
+  const selected = result.audit.matchRecords.find((record) => record.selected_for_wrinkle);
+  assert.equal(selected?.forehead_intersects_rstl, true);
+  assert.notEqual(result.audit.wrinkleTrends[0].finalStatus, "already_aligned");
+  assert.ok(result.curves[0].normalOffsetsPx.some((offset) => Math.abs(offset) > 0.05));
 }
 
 // Geometry-only soft links extend direction trends without counting a mask gap

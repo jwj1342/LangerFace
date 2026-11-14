@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   isCrowFeetWrinkleLine,
+  keepFaceRegionWrinkleLines,
   keepTargetWrinkleLines,
   removeCrowFeetWrinkleLines,
   selectNoseDorsumWrinkleLines,
@@ -58,6 +59,23 @@ assert.deepEqual(selectNoseDorsumWrinkleLines([shiftedNose], shiftedLandmarks)
 assert.deepEqual(keepTargetWrinkleLines(lines, []).map((line) => line.id),
   ["forehead", "frown"], "missing nose landmarks do not admit generic wrinkles");
 
+const faceRegionLandmarks = Array.from({ length: 468 }, () => [0, 0] as [number, number]);
+const faceOvalIndices = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+  400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
+  54, 103, 67, 109,
+];
+for (const [index, landmarkIndex] of faceOvalIndices.entries()) {
+  const angle = -Math.PI / 2 + (index / faceOvalIndices.length) * Math.PI * 2;
+  faceRegionLandmarks[landmarkIndex] = [55 + 50 * Math.cos(angle), 55 + 50 * Math.sin(angle)];
+}
+const faceLines = [
+  { id: "inside-face", class: "forehead", points: [[40, 50], [50, 50], [60, 50]] as [number, number][] },
+  { id: "shirt", class: "forehead", points: [[20, 115], [40, 115], [60, 115]] as [number, number][] },
+];
+assert.deepEqual(keepFaceRegionWrinkleLines(faceLines, faceRegionLandmarks).map((line) => line.id),
+  ["inside-face"], "centerlines outside the face silhouette are removed");
+
 const photoLandmarks = Array.from({ length: 468 }, () => [0, 0] as [number, number]);
 for (const [index, x, y] of [
   [33, 153.8644, 547.7607], [263, 670.5616, 530.0320],
@@ -82,8 +100,31 @@ for (const scale of [0.5, 1, 2]) {
     ["nose-root-boundary"], "small nose-root boundary differences are tolerated at every scale");
 }
 const outsideTolerance = { ...photoLines[0], points: photoLines[0].points.map(([x]) =>
-  [x, 474] as [number, number]) };
+  [x, 445] as [number, number]) };
 assert.deepEqual(selectNoseDorsumWrinkleLines([outsideTolerance], photoLandmarks), [],
-  "lines beyond the narrow boundary tolerance remain excluded");
+  "lines well above the nose root remain excluded");
+
+const noseRootLandmarks = Array.from({ length: 468 }, () => [0, 0] as [number, number]);
+for (const [index, x, y] of [
+  [33, 60, 550], [263, 510, 550], [234, 0, 650], [454, 754.23, 650],
+  [168, 283.85, 595.65], [6, 290, 675], [195, 290, 745], [5, 290, 800],
+]) noseRootLandmarks[index] = [x, y];
+const noseRootLines = [
+  { id: "detected-nose-root", class: "wrinkle", points: Array.from({ length: 42 }, (_, i) =>
+    [267.2 + i * 93.6 / 41, 544.8 + i * 7.2 / 41] as [number, number]) },
+  { id: "eye-region", class: "wrinkle", points: Array.from({ length: 42 }, (_, i) =>
+    [430 + i * 93.6 / 41, 544.8 + i * 7.2 / 41] as [number, number]) },
+  { id: "nose-root-too-high", class: "wrinkle", points: Array.from({ length: 42 }, (_, i) =>
+    [267.2 + i * 93.6 / 41, 520 + i * 7.2 / 41] as [number, number]) },
+];
+for (const scale of [0.5, 1, 2]) {
+  const scaledLandmarks = noseRootLandmarks.map(([x, y]) => [x * scale, y * scale]);
+  const scaledLines = noseRootLines.map((line) => ({ ...line,
+    points: line.points.map(([x, y]) => [x * scale, y * scale] as [number, number]),
+  }));
+  assert.deepEqual(selectNoseDorsumWrinkleLines(scaledLines, scaledLandmarks)
+    .map((line) => line.id), ["detected-nose-root"],
+  "the detected nose-root line survives at every scale without admitting eye-region lines");
+}
 
 console.log("crow-feet wrinkle filtering tests passed");

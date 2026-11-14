@@ -15,6 +15,10 @@ assert.equal(skinColorMatchesReferences([35, 25, 20], skinReferences), false, "�
 assert.equal(skinColorMatchesReferences([40, 70, 190], skinReferences), false, "蓝色背景应被拒绝");
 assert.equal(skinColorMatchesReferences([107, 88, 89], [[149, 103, 93], [167, 121, 115]]), false,
   "截图中的灰棕色刘海不能匹配露出的皮肤");
+assert.equal(skinColorMatchesReferences([65, 32, 16], skinReferences, true), true,
+  "静态照片中侧光造成的深色皮肤应保持可见");
+assert.equal(skinColorMatchesReferences([65, 32, 16], skinReferences), false,
+  "摄像头路径仍应拒绝无法确认的深色像素");
 assert.equal(skinColorMatchesReferences(null, skinReferences), true, "空采样应安全降级为不裁剪");
 assert.equal(skinColorMatchesReferences([180, 120, 96], []), true, "无参考色时应安全降级");
 

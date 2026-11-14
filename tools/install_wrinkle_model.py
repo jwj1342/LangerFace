@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "web" / "compat" / "personalized" / "model"
-METADATA_PATH = MODEL_DIR / "wrinkle-yolov8s-seg-640.json"
+METADATA_PATH = MODEL_DIR / "wrinkle-yolov8s-seg-1024.json"
 CHUNK_BYTES = 12 * 1024 * 1024
 
 
@@ -59,7 +59,7 @@ def main() -> int:
         "--revision",
         default=os.environ.get("LANGERFACE_HF_MODEL_REVISION") or hf.get("revision") or "main",
     )
-    parser.add_argument("--filename", default=hf.get("filename") or "wrinkle-yolov8s-seg-640.onnx")
+    parser.add_argument("--filename", default=hf.get("filename") or "wrinkle-yolov8s-seg-1024.onnx")
     parser.add_argument("--source", type=Path, help="Install from a local ONNX file instead of Hugging Face")
     args = parser.parse_args()
 

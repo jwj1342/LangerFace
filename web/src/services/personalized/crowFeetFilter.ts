@@ -14,9 +14,56 @@ const NOSE_ROOT = 168;
 const NOSE_BRIDGE = 6;
 const NOSE_LOWER_BRIDGE = 195;
 const NOSE_TIP = 5;
+const FACE_OVAL = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+  400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
+  54, 103, 67, 109,
+] as const;
+
+// The MediaPipe oval stops near the visible forehead skin on high-angle
+// clinical photos. Keep a larger forehead-only margin so long horizontal
+// forehead wrinkles are not rejected as outside-face lines.
+const FOREHEAD_REGION_EXTENSION_RATIO = 0.08;
 
 function finitePoint(point: readonly number[] | undefined): point is readonly [number, number] {
   return Boolean(point) && Number.isFinite(point?.[0]) && Number.isFinite(point?.[1]);
+}
+
+function pointInPolygon(point: Point2, polygon: readonly Point2[]): boolean {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const [x, y] = polygon[index];
+    const [previousX, previousY] = polygon[previous];
+    const intersects = ((y > point[1]) !== (previousY > point[1]))
+      && point[0] < (previousX - x) * (point[1] - y) / (previousY - y) + x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+/** Keep a wrinkle only when its centerline is supported by the MediaPipe face silhouette. */
+export function keepFaceRegionWrinkleLines<T extends WrinkleLineForRegionFilter>(
+  lines: readonly T[],
+  landmarks: readonly (readonly number[])[],
+): T[] {
+  const oval = FACE_OVAL
+    .map((index) => landmarks[index])
+    .filter((point): point is readonly [number, number] => finitePoint(point));
+  if (oval.length !== FACE_OVAL.length) return [...lines];
+  const minY = Math.min(...oval.map((point) => point[1]));
+  const maxY = Math.max(...oval.map((point) => point[1]));
+  const centerY = (minY + maxY) / 2;
+  const foreheadExtension = (maxY - minY) * FOREHEAD_REGION_EXTENSION_RATIO;
+  const polygon = oval.map(([x, y]) => [
+    x,
+    y < centerY ? y - foreheadExtension * (centerY - y) / Math.max(1, centerY - minY) : y,
+  ] as Point2);
+  return lines.filter((line) => {
+    if (line.points.length === 0) return false;
+    const insideCount = line.points.filter((point) => pointInPolygon(point, polygon)).length;
+    const middle = line.points[Math.floor(line.points.length / 2)];
+    return insideCount / line.points.length >= 0.8 && pointInPolygon(middle, polygon);
+  });
 }
 
 /**
@@ -96,8 +143,8 @@ export function selectNoseDorsumWrinkleLines<T extends WrinkleLineForRegionFilte
   const halfWidth = faceWidth * 0.09;
   // Allow small landmark/decode differences without admitting eye-region lines.
   const boundaryTolerance = faceWidth * 0.005;
-  const withinBridge = ([x, y]: Point2): boolean => {
-    if (y < upperY - faceWidth * 0.035 - boundaryTolerance
+  const withinBridge = ([x, y]: Point2, extraWidth = 0): boolean => {
+    if (y < upperY - faceWidth * 0.07 - boundaryTolerance
         || y > lowerY + faceWidth * 0.02 + boundaryTolerance) return false;
     let centerX = axis[0][0];
     for (let index = 1; index < axis.length; index += 1) {
@@ -109,7 +156,7 @@ export function selectNoseDorsumWrinkleLines<T extends WrinkleLineForRegionFilte
       centerX = previous[0] + (next[0] - previous[0]) * fraction;
       break;
     }
-    return Math.abs(x - centerX) <= halfWidth + boundaryTolerance;
+    return Math.abs(x - centerX) <= halfWidth + boundaryTolerance + extraWidth;
   };
   return lines.filter((line) => {
     if (line.class !== "wrinkle" || line.anatomicalClass === "crow_feet"
@@ -120,7 +167,15 @@ export function selectNoseDorsumWrinkleLines<T extends WrinkleLineForRegionFilte
     const meanY = ys.reduce((sum, value) => sum + value, 0) / ys.length;
     const spanX = Math.max(...xs) - Math.min(...xs);
     const spanY = Math.max(...ys) - Math.min(...ys);
-    return line.points.every(withinBridge)
+    const endPointCount = Math.ceil(line.points.length * 0.1);
+    const insideCount = line.points.filter((point) => withinBridge(point)).length;
+    const tipsStayNearBridge = line.points.every((point, index) =>
+      withinBridge(point)
+        || ((index < endPointCount || index >= line.points.length - endPointCount)
+          && withinBridge(point, faceWidth * 0.01)));
+    return withinBridge([meanX, meanY])
+      && insideCount / line.points.length >= 0.9
+      && tipsStayNearBridge
       && spanX >= Math.max(faceWidth * 0.025, spanY * 1.5);
   }).sort((left, right) => {
     const meanY = (line: T) => line.points.reduce((sum, point) => sum + point[1], 0)

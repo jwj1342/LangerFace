@@ -48,6 +48,7 @@ for await (const line of readline.createInterface({ input: process.stdin, crlfDe
     const extracted = extractFineWrinkleLines(detection.classMasks, image.width, image.height, {
       minimumLineLengthPx: 20, resampleSpacingPx: 1, maximumSkeletonIterations: 96,
       sourceImageRgba: undefined,
+      classes: Object.keys(detection.classMasks),
     });
     const done = performance.now();
     process.stdout.write(JSON.stringify({ ok: true, width: image.width, height: image.height,
