@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
-import { WorkbenchFrame, WorkbenchLayout, WorkbenchSidebar } from "./WorkbenchLayout";
-
-const MOBILE_WORKFLOW_LAYOUT_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
+import { WorkbenchFrame } from "./WorkbenchLayout";
+import { narrowTouchWorkflowViewportActive, subscribeWorkflowViewport } from "../services/workflowViewport";
 
 interface WorkflowLayoutProps {
   liveRail: ReactNode;
@@ -12,47 +12,59 @@ interface WorkflowLayoutProps {
 }
 
 export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail }: WorkflowLayoutProps) {
-  const [mobileViewport, setMobileViewport] = useState(() => (
-    typeof window !== "undefined" && window.matchMedia(MOBILE_WORKFLOW_LAYOUT_QUERY).matches
-  ));
+  const [mobileViewport, setMobileViewport] = useState(narrowTouchWorkflowViewportActive);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [rails] = useState(() => {
+    const rail = (label: string, className: string) => {
+      const host = document.createElement("aside");
+      host.className = `sidebar ${className}`;
+      host.setAttribute("aria-label", label);
+      return host;
+    };
+    return {
+      live: rail("实时 RSTL 操作台", "workflow-live-rail live-workbench"),
+      incision: rail("切口规划操作台", "workflow-incision-rail incision-workbench"),
+    };
+  });
 
   useEffect(() => {
-    const media = window.matchMedia(MOBILE_WORKFLOW_LAYOUT_QUERY);
-    const syncViewport = () => setMobileViewport(media.matches);
+    const syncViewport = () => setMobileViewport(narrowTouchWorkflowViewportActive());
     syncViewport();
-    media.addEventListener("change", syncViewport);
-    return () => media.removeEventListener("change", syncViewport);
+    return subscribeWorkflowViewport(syncViewport);
   }, []);
 
-  if (mobileViewport) {
-    return (
-      <WorkbenchFrame workspace="workflow">
-        {stage}
-        <div className="workflow-mobile-operation-pane" aria-label="移动端操作台">
-          <div className="workflow-mobile-recovery-slot" />
-          {mobileOperations}
-          <WorkbenchSidebar aria-label="实时 RSTL 操作台" className="workflow-live-rail live-workbench">
-            {liveRail}
-          </WorkbenchSidebar>
-          <WorkbenchSidebar aria-label="切口规划操作台" className="workflow-incision-rail incision-workbench">
-            {incisionRail}
-          </WorkbenchSidebar>
-        </div>
-      </WorkbenchFrame>
-    );
-  }
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    const root = pane?.parentElement;
+    const stageNode = root?.querySelector(":scope > .stage");
+    if (!pane || !root || !stageNode) throw new Error("工作流布局缺少画布或操作台容器");
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const preserveFocus = focused && (rails.live.contains(focused) || rails.incision.contains(focused));
+    // Portal targets remain identical. Moving only these owned containers keeps
+    // controller bindings, photo state and desktop keyboard order intact.
+    if (mobileViewport) {
+      if (rails.live.parentElement !== pane) pane.append(rails.live, rails.incision);
+    } else {
+      if (rails.live.parentElement !== root) root.insertBefore(rails.live, stageNode);
+      if (rails.incision.parentElement !== root) root.append(rails.incision);
+    }
+    if (preserveFocus && focused !== document.activeElement) focused.focus({ preventScroll: true });
+  }, [mobileViewport, rails]);
+
+  useLayoutEffect(() => () => {
+    rails.live.remove();
+    rails.incision.remove();
+  }, [rails]);
 
   return (
-    <WorkbenchLayout
-      secondarySidebar={incisionRail}
-      secondarySidebarClassName="workflow-incision-rail incision-workbench"
-      secondarySidebarLabel="切口规划操作台"
-      sidebarClassName="workflow-live-rail live-workbench"
-      sidebarLabel="实时 RSTL 操作台"
-      stage={stage}
-      workspace="workflow"
-    >
-      {liveRail}
-    </WorkbenchLayout>
+    <WorkbenchFrame workspace="workflow" data-workflow-mobile={String(mobileViewport)}>
+      {stage}
+      <div ref={paneRef} className="workflow-mobile-operation-pane" aria-label="移动端操作台">
+        <div className="workflow-mobile-recovery-slot" />
+        {mobileViewport ? mobileOperations : null}
+      </div>
+      {createPortal(liveRail, rails.live, "workflow-live")}
+      {createPortal(incisionRail, rails.incision, "workflow-incision")}
+    </WorkbenchFrame>
   );
 }

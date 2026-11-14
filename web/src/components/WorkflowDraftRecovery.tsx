@@ -12,13 +12,12 @@ import {
   type WorkflowDraftSession,
 } from "../services/workflowDraftSession";
 import { useLiveStore } from "../stores/liveStore";
+import { narrowTouchWorkflowViewportActive, subscribeWorkflowViewport } from "../services/workflowViewport";
 import { Button } from "./ui/button";
 
 interface WorkflowDraftRecoveryProps {
   mobilePortalSelector?: string;
 }
-
-const MOBILE_WORKFLOW_MEDIA_QUERY = "(max-width: 560px) and (pointer: coarse) and (hover: none)";
 
 export function WorkflowDraftRecovery({ mobilePortalSelector }: WorkflowDraftRecoveryProps = {}) {
   const sourceKind = useLiveStore((state) => state.snapshot?.source.kind || null);
@@ -33,12 +32,13 @@ export function WorkflowDraftRecovery({ mobilePortalSelector }: WorkflowDraftRec
   }, []);
 
   useEffect(() => {
-    if (!mobilePortalSelector || typeof window.matchMedia !== "function") return;
-    const media = window.matchMedia(MOBILE_WORKFLOW_MEDIA_QUERY);
-    const sync = () => setMobileTarget(media.matches ? document.querySelector(mobilePortalSelector) : null);
+    if (!mobilePortalSelector) return;
+    const sync = () => {
+      const target = document.querySelector(".workflow-workbench")?.querySelector(mobilePortalSelector);
+      setMobileTarget(narrowTouchWorkflowViewportActive() && target?.isConnected ? target : null);
+    };
     sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    return subscribeWorkflowViewport(sync);
   }, [mobilePortalSelector]);
 
   if (!draft || sourceKind === "image") return null;

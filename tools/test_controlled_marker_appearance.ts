@@ -8,6 +8,14 @@ const square = (x: number, y: number, size: number): MarkerPoint[] => [
     { x, y }, { x: x + size, y }, { x: x + size, y: y + size }, { x, y: y + size },
 ];
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} != ${expected}`);
+const distantPeaks = Array.from({ length: 8 }, (_, i) => ({ x: 100 + i * 20, y: 100 }));
+const nearPeak = { x: 8, y: 4 };
+const assigned = geometry.pigmentAnchors([...distantPeaks, nearPeak], { x: 0, y: 0 });
+assert.deepEqual(assigned.slice(0, 8), distantPeaks, 'preserve the original strong-feature search');
+assert.ok(assigned.includes(nearPeak), 'a near-click image feature survives distant stronger peaks');
+assert.equal(assigned.length, 9, 'repeated peaks cannot consume the supplemental budget');
+assert.ok(!assigned.some(p => p.x === 0 && p.y === 0), 'the click itself is not a fabricated foreground feature');
+assert.deepEqual(geometry.pigmentAnchors([], { x: 0, y: 0 }), []);
 const a = square(10, 20, 20);
 near(geometry.convexIntersectionArea(a, a), 400);
 near(geometry.convexIntersectionArea(a, a.slice().reverse()), 400);
@@ -37,6 +45,18 @@ const sameAnchorSmall = { ...bodyCandidate(square(10, 10, 8), 100), evidence: { 
 const sameAnchorLarge = { ...bodyCandidate(square(10, 10, 12), 90), evidence: { anchor: { x: 20, y: 20 } } };
 assert.equal(geometry.selectCompleteBodyCandidate([sameAnchorSmall, sameAnchorLarge]), sameAnchorSmall,
     'same-anchor scale changes must not become a new body');
+const localReference = { ok: true, geometry_mode: 'dark_component', boundary: square(10, 10, 8),
+    center: { x: 14, y: 14 }, area_px: 64 } as any;
+const remoteShadow = bodyCandidate(square(100, 100, 40), 1000);
+const enclosingIncomplete = { ...bodyCandidate(square(5, 5, 30), 200), scanComplete: false };
+assert.deepEqual(geometry.associateBodyCandidates([remoteShadow, fullBodyA], localReference), [fullBodyA],
+    'a remote shadow must not win or veto an already supported local object');
+assert.deepEqual(geometry.associateBodyCandidates([enclosingIncomplete], localReference), [enclosingIncomplete],
+    'a larger body containing the local fragment must retain its incomplete-scan veto');
+assert.deepEqual(geometry.associateBodyCandidates([remoteShadow], localReference), [],
+    'no related body is not evidence that the scan is incomplete');
+assert.deepEqual(geometry.associateBodyCandidates([remoteShadow], { ...localReference, ok: false }), [remoteShadow],
+    'an unsupported reference cannot suppress independent body discovery');
 const baselineBoundary = square(100, 100, 20);
 const expandedBoundary = square(94, 94, 32);
 const constrained = geometry.constrainAppearanceExpansion({

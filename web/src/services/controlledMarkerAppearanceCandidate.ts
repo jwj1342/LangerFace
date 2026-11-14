@@ -53,7 +53,8 @@ function lab(r: number, g: number, b: number): Vec {
 const norm = (v: readonly number[]) => Math.hypot(...v);
 const clip = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 function quantile(values: number[], p = .5): number {
-    const a = values.slice().sort((a, b) => a - b);
+    const a = values.some(v => !Number.isFinite(v) || Object.is(v, -0))
+        ? values.slice().sort((a, b) => a - b) : Float64Array.from(values).sort();
     if (!a.length)
         return 0;
     const x = (a.length - 1) * p;
@@ -117,6 +118,7 @@ class Patch {
     height: number;
     values: Float64Array;
     labValues: Float64Array;
+    materialValues: Float64Array;
     anchors: Point[] = [];
     constructor(cv: CV, image: Image, seed: Point, radius: number, materialMode = true) {
         this.x0 = Math.max(0, Math.floor(seed.x - radius - 196));
@@ -126,6 +128,7 @@ class Patch {
         this.values = new Float64Array(this.width * this.height * 3);
         this.labValues = this.values;
         const material = new Float64Array(this.values.length);
+        this.materialValues = material;
         const gx0 = Math.ceil(this.x0 / 4) * 4, gy0 = Math.ceil(this.y0 / 4) * 4;
         const gw = Math.ceil((this.x0 + this.width - gx0) / 4), gh = Math.ceil((this.y0 + this.height - gy0) / 4);
         const scores = new Float64Array(gw * gh);
@@ -193,6 +196,10 @@ class Patch {
         if (materialMode)
             this.values = material;
     }
+    materialView(): Patch {
+        // Reuse the same preprocessed pixels for material and Lab passes.
+        return Object.assign(Object.create(Patch.prototype), this, { values: this.materialValues });
+    }
     color(x: number, y: number): Vec {
         const i = ((y - this.y0) * this.width + x - this.x0) * 3;
         return [this.values[i], this.values[i + 1], this.values[i + 2]];
@@ -212,6 +219,9 @@ function outline(center: Point, major: number, ratio: number, angle: number): Po
     const ct = Math.cos(angle), st = Math.sin(angle);
     return Array.from({ length: 96 }, (_, i) => { const t = i * 2 * Math.PI / 96, u = major * Math.cos(t), v = major * ratio * Math.sin(t); return { x: center.x + ct * u - st * v, y: center.y + st * u + ct * v }; });
 }
+// Cache image-independent radial bins; cap memory for long-running sessions.
+const ellipseBinCache = new Map<string, Uint8Array>();
+let ellipseBinCacheBytes = 0;
 function ellipse(patch: Patch, image: Image, anchor: Point, context: number, materialMode = true): Ellipse | null {
     const field = fit(patch.samples(image, anchor, context, 1, 0, .65, .95, materialMode ? 3 : 2), materialMode ? 4 : 5);
     if (!field)
@@ -228,15 +238,40 @@ function ellipse(patch: Patch, image: Image, anchor: Point, context: number, mat
             points.push({ x: p.u, y: p.v, value: clip(distance(residual(field, p), field) - 2, -2, 4) });
         }
     let best: Ellipse | null = null;
+    const key = [context, x0 - anchor.x, y0 - anchor.y,
+        Math.min(image.width - 1, Math.ceil(anchor.x + context)) - x0,
+        Math.min(image.height - 1, Math.ceil(anchor.y + context)) - y0].join(':');
+    let bins = ellipseBinCache.get(key);
+    const fresh = !bins;
+    if (!bins && points.length * 450 <= 8 * 1024 * 1024) {
+        const bytes = points.length * 450;
+        while (ellipseBinCacheBytes + bytes > 8 * 1024 * 1024) {
+            const oldest = ellipseBinCache.keys().next().value;
+            if (oldest === undefined) break;
+            const old = ellipseBinCache.get(oldest);
+            if (!old) break;
+            ellipseBinCacheBytes -= old.byteLength;
+            ellipseBinCache.delete(oldest);
+        }
+        bins = new Uint8Array(bytes);
+    }
+    let combination = 0;
     for (const oy of [-.4, -.2, 0, .2, .4])
         for (const ox of [-.4, -.2, 0, .2, .4])
             for (const degrees of [0, 30, 60, 90, 120, 150])
                 for (const ratio of [.5, .7, 1]) {
                     const angle = degrees * Math.PI / 180, ct = Math.cos(angle), st = Math.sin(angle);
                     const sums = new Float64Array(9), counts = new Int32Array(9);
+                    let binIndex = combination++ * points.length;
                     for (const p of points) {
                         const dx = p.x - ox, dy = p.y - oy, u = ct * dx + st * dy, v = (-st * dx + ct * dy) / ratio;
-                        const index = Math.max(0, Math.ceil((Math.hypot(u, v) - .12) / .06 - 1e-10));
+                        let index: number;
+                        if (bins && !fresh) index = bins[binIndex];
+                        else {
+                            index = Math.max(0, Math.ceil((Math.hypot(u, v) - .12) / .06 - 1e-10));
+                            if (bins) bins[binIndex] = Math.min(9, index);
+                        }
+                        binIndex++;
                         if (index < 9) {
                             sums[index] += p.value;
                             counts[index]++;
@@ -258,6 +293,10 @@ function ellipse(patch: Patch, image: Image, anchor: Point, context: number, mat
                         best = { boundary, center, major, ratio, angle, score, anchor, context };
                     }
                 }
+    if (bins && fresh) {
+        ellipseBinCache.set(key, bins);
+        ellipseBinCacheBytes += bins.byteLength;
+    }
     return best;
 }
 function rank(patch: Patch, image: Image, c: Ellipse): number {
@@ -319,6 +358,129 @@ function segmentDistance(p: Point, a: Point, b: Point): number {
     const dx = b.x - a.x, dy = b.y - a.y, t = clip(((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
     return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
 }
+function signedArea(boundary: Point[]): number {
+    return boundary.reduce((sum, point, index) => {
+        const next = boundary[(index + 1) % boundary.length];
+        return sum + point.x * next.y - next.x * point.y;
+    }, 0) / 2;
+}
+function resampleClosedBoundary(boundary: Point[], count = 96): Point[] {
+    if (boundary.length < 3 || count < 8)
+        return boundary.slice();
+    const lengths = boundary.map((point, index) => {
+        const next = boundary[(index + 1) % boundary.length];
+        return Math.hypot(next.x - point.x, next.y - point.y);
+    });
+    const perimeter = lengths.reduce((sum, length) => sum + length, 0);
+    if (!(perimeter > 1e-6))
+        return boundary.slice();
+    const result: Point[] = [];
+    let segment = 0, segmentStart = 0;
+    for (let index = 0; index < count; index += 1) {
+        const target = perimeter * index / count;
+        while (segment < lengths.length - 1 && segmentStart + lengths[segment] < target) {
+            segmentStart += lengths[segment];
+            segment += 1;
+        }
+        const start = boundary[segment], end = boundary[(segment + 1) % boundary.length];
+        const ratio = lengths[segment] > 1e-9
+            ? (target - segmentStart) / lengths[segment] : 0;
+        result.push({
+            x: start.x + (end.x - start.x) * ratio,
+            y: start.y + (end.y - start.y) * ratio,
+        });
+    }
+    return result;
+}
+function boundaryDistance(point: Point, boundary: Point[]): number {
+    let best = Infinity;
+    for (let index = 0; index < boundary.length; index += 1)
+        best = Math.min(best, segmentDistance(point, boundary[index], boundary[(index + 1) % boundary.length]));
+    return best;
+}
+function boundarySelfIntersects(boundary: Point[]): boolean {
+    const turn = (a: Point, b: Point, c: Point) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const intersects = (a: Point, b: Point, c: Point, d: Point) => {
+        const ab = turn(a, b, c) * turn(a, b, d);
+        const cd = turn(c, d, a) * turn(c, d, b);
+        return ab < -1e-8 && cd < -1e-8;
+    };
+    for (let i = 0; i < boundary.length; i += 1)
+        for (let j = i + 2; j < boundary.length; j += 1) {
+            if (i === 0 && j === boundary.length - 1)
+                continue;
+            if (intersects(boundary[i], boundary[(i + 1) % boundary.length],
+                boundary[j], boundary[(j + 1) % boundary.length]))
+                return true;
+        }
+    return false;
+}
+/**
+ * 填补小而窄的内凹，保留大尺度的不规则轮廓。
+ * 这是最终候选的几何整理，不参与候选选择，也不能补出没有颜色证据的缺失区域。
+ */
+function regularizeAppearanceBoundary(boundary: Point[]): {
+    boundary: Point[];
+    repairedPoints: number;
+    areaRatio: number;
+    maxDisplacement: number;
+} {
+    if (boundary.length < 12)
+        return { boundary, repairedPoints: 0, areaRatio: 1, maxDisplacement: 0 };
+    const original = boundary.slice();
+    const originalArea = polygonArea(original);
+    const sampled = resampleClosedBoundary(original);
+    const orientation = signedArea(sampled) >= 0 ? 1 : -1;
+    let current = sampled;
+    let repairedPoints = 0;
+    for (let pass = 0; pass < 2; pass += 1) {
+        const next = current.map(point => ({ ...point }));
+        for (let index = 0; index < current.length; index += 1) {
+            const window = 6;
+            const previous = current[(index - window + current.length) % current.length];
+            const following = current[(index + window) % current.length];
+            const turn = ((current[index].x - previous.x) * (following.y - current[index].y)
+                - (current[index].y - previous.y) * (following.x - current[index].x)) * orientation;
+            if (turn >= -0.8)
+                continue;
+            const dx = following.x - previous.x, dy = following.y - previous.y;
+            const ratio = clip(((current[index].x - previous.x) * dx
+                + (current[index].y - previous.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+            const projection = { x: previous.x + dx * ratio, y: previous.y + dy * ratio };
+            const depth = Math.hypot(current[index].x - projection.x, current[index].y - projection.y);
+            if (depth < 0.35 || depth > 2.75)
+                continue;
+            const step = Math.min(0.9, depth * 0.68);
+            next[index] = {
+                x: current[index].x + (projection.x - current[index].x) * step / depth,
+                y: current[index].y + (projection.y - current[index].y) * step / depth,
+            };
+            repairedPoints += 1;
+        }
+        current = next;
+    }
+    if (!repairedPoints)
+        return { boundary, repairedPoints: 0, areaRatio: 1, maxDisplacement: 0 };
+    current = current.map((point, index, source) => {
+        const previous = source[(index - 1 + source.length) % source.length];
+        const next = source[(index + 1) % source.length];
+        return {
+            x: point.x * 0.82 + (previous.x + next.x) * 0.09,
+            y: point.y * 0.82 + (previous.y + next.y) * 0.09,
+        };
+    });
+    const area = polygonArea(current);
+    const areaRatio = area / Math.max(1, originalArea);
+    const maxDisplacement = Math.max(
+        ...current.map(point => boundaryDistance(point, original)),
+        ...sampled.map(point => boundaryDistance(point, current)),
+    );
+    if (areaRatio < 0.98 || areaRatio > 1.08 || maxDisplacement > 2
+        || boundarySelfIntersects(current)
+        || !Number.isFinite(areaRatio) || !Number.isFinite(maxDisplacement))
+        return { boundary, repairedPoints: 0, areaRatio: 1, maxDisplacement: 0 };
+    return { boundary: current, repairedPoints, areaRatio, maxDisplacement };
+}
 function hull(points: Point[]): Point[] {
     const p = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
     const cross = (a: Point, b: Point, c: Point) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
@@ -370,7 +532,7 @@ function transition(previous: Float64Array): {
     }
     return { value, index };
 }
-function star(patch: Patch, image: Image, c: Ellipse): {
+function star(patch: Patch, image: Image, c: Ellipse, mixedLight = false): {
     boundary: Point[];
     atMaximum: number;
 } | null {
@@ -401,7 +563,8 @@ function star(patch: Patch, image: Image, c: Ellipse): {
                 const dx = x - c.center.x, dy = y - c.center.y;
                 const p = { u: (Math.cos(c.angle) * dx + Math.sin(c.angle) * dy) / c.major,
                     v: (-Math.sin(c.angle) * dx + Math.cos(c.angle) * dy) / (c.major * c.ratio), c: patch.color(x, y) };
-                const rr = residual(field, p), projection = rr.reduce((s, v, k) => s + v / field.noise[k] * direction[k], 0);
+                const rr = residual(field, p), projection = mixedLight ? distance(rr, field)
+                    : rr.reduce((s, v, k) => s + v / field.noise[k] * direction[k], 0);
                 local = clip(projection - 1.5, -2, 4) * r / c.major;
             }
             cumulative += local;
@@ -473,9 +636,19 @@ function complete(starBoundary: Point[]): Point[] | null {
     const displacement = Math.max(...ellipseBoundary.map(p => Math.min(...b.map((q, i) => segmentDistance(p, q, b[(i + 1) % b.length]))))) / Math.sqrt(area / Math.PI);
     return displacement <= .30 ? ellipseBoundary : null;
 }
-function bodyEvidence(patch: Patch, image: Image, b: Point[]): Record<string, unknown> | null {
+function bodyEvidence(
+    patch: Patch,
+    image: Image,
+    b: Point[],
+    compactLab = false,
+    mixedLight = false,
+    supportedCompact = false,
+): Record<string, unknown> | null {
     const xs = b.map(p => p.x), ys = b.map(p => p.y), diameter = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    if (diameter < 40 || diameter > 160)
+    const localLab = compactLab || mixedLight;
+    // The 48px proposal context is not a bounding-box limit. Mixed-light peers
+    // may be slightly wider; the full background ring must still fit the patch.
+    if (diameter < (localLab ? 24 : 40) || diameter > (mixedLight ? 64 : localLab ? 48 : 160))
         return null;
     const reach = Math.ceil(diameter * .45), x0 = Math.max(0, Math.floor(Math.min(...xs)) - reach), y0 = Math.max(0, Math.floor(Math.min(...ys)) - reach);
     const x1 = Math.min(image.width, Math.ceil(Math.max(...xs)) + reach + 1), y1 = Math.min(image.height, Math.ceil(Math.max(...ys)) + reach + 1);
@@ -492,7 +665,9 @@ function bodyEvidence(patch: Patch, image: Image, b: Point[]): Record<string, un
         for (let x = x0; x < x1; x++) {
             if (x < patch.x0 || y < patch.y0 || x >= patch.x0 + patch.width || y >= patch.y0 + patch.height)
                 return null;
-            const p = { x: x + .5, y: y + .5 }, isInside = contains(p, b), d = Math.min(...b.map((q, i) => segmentDistance(p, q, b[(i + 1) % b.length])));
+            const p = { x: x + .5, y: y + .5 }, isInside = contains(p, b);
+            let d = Infinity;
+            for (let i = 0; i < b.length; i++) d = Math.min(d, segmentDistance(p, b[i], b[(i + 1) % b.length]));
             const color = patch.color(x, y);
             color[0] = patch.labValues[((y - patch.y0) * patch.width + x - patch.x0) * 3];
             count += Number(isInside);
@@ -511,23 +686,41 @@ function bodyEvidence(patch: Patch, image: Image, b: Point[]): Record<string, un
         return null;
     const residuals = core.map(p => residual(field, p));
     const delta = [0, 1, 2].map(k => quantile(residuals.map(v => v[k]))) as Vec;
-    const normalized = delta.slice(1).map((v, k) => v / field.noise[k + 1]), distance = norm(normalized);
-    if (delta[0] > -1.5 || distance < 5)
+    const normalized = delta.slice(1).map((v, k) => v / field.noise[k + 1]), chromaticDistance = norm(normalized);
+    if (!mixedLight && (delta[0] > -1.5 || chromaticDistance < 5))
         return null;
-    const projection = (v: Vec) => v[1] / field.noise[1] * normalized[0] / distance + v[2] / field.noise[2] * normalized[1] / distance;
-    const support = residuals.filter(v => projection(v) >= Math.max(.75, .4 * distance)).length / core.length;
-    const continuation = outer.filter(p => projection(residual(field, p)) >= Math.max(1.5, .5 * distance)).length / outer.length;
+    const projection = (v: Vec) => mixedLight ? norm(v.map((x, k) => x / field.noise[k]))
+        : v[1] / field.noise[1] * normalized[0] / chromaticDistance + v[2] / field.noise[2] * normalized[1] / chromaticDistance;
+    const strength = mixedLight ? quantile(residuals.map(projection)) : chromaticDistance;
+    const outerCutoff = mixedLight ? quantile(outer.map(p => projection(residual(field, p))), .9) : 1;
+    const support = residuals.filter(v => projection(v) >= (mixedLight ? outerCutoff : Math.max(.75, .4 * strength))).length / core.length;
+    const continuation = outer.filter(p => projection(residual(field, p)) >= Math.max(mixedLight ? 2.5 : 1.5, .5 * strength)).length / outer.length;
     const sectors = Array.from({ length: 8 }, () => [] as number[]);
     core.forEach((p, i) => sectors[Math.floor((Math.atan2(p.v, p.u) + Math.PI) * 4 / Math.PI) % 8].push(projection(residuals[i])));
-    const medians = sectors.map(v => v.length ? quantile(v) : -Infinity), weak = medians.map(v => v < 1);
+    const medians = sectors.map(v => v.length ? quantile(v) : -Infinity), weak = medians.map(v => v < outerCutoff);
     let longest = 0, current = 0;
     for (const w of [...weak, ...weak]) {
         current = w ? current + 1 : 0;
         longest = Math.max(longest, current);
     }
-    if (support < .7 || continuation > .2 || weak.filter(v => !v).length < 6 || longest > 2)
+    if (!mixedLight && (support < .7 || continuation > .2 || weak.filter(v => !v).length < 6 || longest > 2))
         return null;
-    return { diameter, area: count, deltaLAndLogRatios: delta, noise: field.noise, materialDistance: distance,
+    const highlightFraction = residuals.filter(v => v[0] >= 4).length / residuals.length;
+    const darkFraction = residuals.filter(v => v[0] <= -4).length / residuals.length;
+    // 小主体的新路径不能只靠一个暗核扩大：外围颜色证据要更完整，
+    // 内部还须同时出现亮、暗区域；均匀小痣和单个高光不走这条路径。
+    if (compactLab && (support < .88 || continuation > .06 || weak.some(Boolean)
+        || highlightFraction < .02 || darkFraction < .6))
+        return null;
+    // 无符号颜色距离同时保留亮面和暗面。背景也有纹理，不能把普通
+    // 固定阈值的尾部比例当作延伸；用独立外环90%分位校准内部支持。
+    if (mixedLight && (strength < 4 || support < .7 || weak.filter(v => !v).length < 7
+        || longest > 1 || highlightFraction < (supportedCompact ? .02 : .1) || darkFraction < .35))
+        return null;
+    return { diameter, area: count, ...(localLab ? { deltaLab: delta, highlightFraction, darkFraction }
+        : { deltaLAndLogRatios: delta }), noise: field.noise,
+        ...(mixedLight ? { normalizedResidualMedian: strength, backgroundQuantile: .9,
+            backgroundCutoff: outerCutoff, calibratedInteriorSupport: support } : { materialDistance: strength }),
         interiorSupport: support, outerContinuation: continuation, sectorMedianProjection: medians };
 }
 type BodyCandidate = {
@@ -537,6 +730,110 @@ type BodyCandidate = {
     scanComplete: boolean;
     incompleteBoundary?: Point[];
 };
+
+function associateBodyCandidates(bank: BodyCandidate[], reference?: ControlledMarkerDetection): BodyCandidate[] {
+    if (!reference?.ok || reference.geometry_mode !== 'dark_component'
+        || reference.boundary.length < 3 || !reference.center)
+        return bank;
+    const area = polygonArea(reference.boundary);
+    if (!(area > 0)) return bank;
+    // 扫描范围可以包含多个对象。远处阴影不能覆盖或否定已支持的局部对象；
+    // 包含局部碎片的更大主体仍保留，不能绕过原有扫描完整性检查。
+    return bank.filter(candidate => contains(reference.center!, candidate.boundary)
+        || convexIntersectionArea(reference.boundary, candidate.boundary) / area >= .5);
+}
+
+function refineCompactLabBody(cv: CV, image: Image, seed: Point, radius: number,
+    reference: ControlledMarkerDetection): ControlledMarkerDetection {
+    const route = String(reference.diagnostics?.filled_candidate_route || '');
+    if (!reference.ok || reference.geometry_mode !== 'dark_component' || !reference.center
+        || reference.boundary.length < 3 || reference.area_px < 64 || reference.area_px > 1600
+        || !['localized_pigment_envelope', 'material_body_envelope'].includes(route))
+        return reference;
+    // 固定局部尺度跟随已有对象，不随操作者扩大扫描圈而扩大前景模型。
+    // 全部候选仍须在原扫描圈内；这里不改变原有大主体或笔圈的门槛。
+    const patch = new Patch(cv, image, reference.center, 48, false);
+    const anchors = patch.anchors.filter(p => Math.hypot(p.x - reference.center!.x,
+        p.y - reference.center!.y) <= 28).slice(0, 8);
+    const candidates: BodyCandidate[] = [];
+    for (const anchor of anchors) {
+        const proposal = ellipse(patch, image, anchor, 32, false);
+        if (!proposal) continue;
+        const radial = star(patch, image, proposal);
+        if (!radial || radial.atMaximum > .05) continue;
+        const boundary = complete(radial.boundary);
+        if (!boundary || boundary.some(p => p.x < 0 || p.y < 0
+            || p.x >= image.width || p.y >= image.height
+            || Math.hypot(p.x - seed.x, p.y - seed.y) > .95 * radius)) continue;
+        const evidence = bodyEvidence(patch, image, boundary, true);
+        const ratio = polygonArea(boundary) / reference.area_px;
+        if (!evidence || ratio < 1.8 || ratio > 6
+            || convexIntersectionArea(reference.boundary, boundary) / reference.area_px < .85)
+            continue;
+        candidates.push({ boundary, evidence: { ...evidence, anchor, context: 32,
+            previousAreaPx: reference.area_px, appearanceSpace: 'Lab' }, scanComplete: true,
+            score: Number(evidence.interiorSupport) * (1 - Number(evidence.outerContinuation)) });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    const selected = candidates[0];
+    const compactResult = selected
+        ? appearanceResult(reference, selected.boundary, seed, 'compact_mixed_light_body', selected.evidence)
+        : reference;
+    if (selected && route !== 'material_body_envelope') return compactResult;
+    // Unsigned residuals can also include ordinary shading around a dark body.
+    // Use this recovery only for the local-pigment fragment path, not an already
+    // supported material-body envelope with its own background/expansion checks.
+    const supportedCompact = route === 'material_body_envelope' && !!selected;
+    if (route !== 'localized_pigment_envelope' && !supportedCompact) return compactResult;
+    const mixedPatch = supportedCompact ? new Patch(cv, image, compactResult.center!, 64, false) : patch;
+    const mixedAnchors = supportedCompact
+        ? mixedPatch.anchors.filter(p => Math.hypot(
+            p.x - compactResult.center!.x, p.y - compactResult.center!.y) <= 40).slice(0, 12)
+        : anchors;
+    const mixed: BodyCandidate[] = [];
+    for (const anchor of mixedAnchors) {
+        const proposal = ellipse(mixedPatch, image, anchor, 48, false);
+        if (!proposal) continue;
+        const radial = star(mixedPatch, image, proposal, true);
+        if (!radial || radial.atMaximum > .05) continue;
+        const boundary = complete(radial.boundary);
+        if (!boundary || boundary.some(p => p.x < 0 || p.y < 0
+            || p.x >= image.width || p.y >= image.height)) continue;
+        const evidence = bodyEvidence(mixedPatch, image, boundary, false, true, supportedCompact);
+        const ratio = polygonArea(boundary) / reference.area_px;
+        if (!evidence || ratio < 1.8 || ratio > 6
+            || convexIntersectionArea(reference.boundary, boundary) / reference.area_px < .85) continue;
+        mixed.push({ boundary, evidence: { ...evidence, anchor, context: 48,
+            previousAreaPx: reference.area_px, appearanceSpace: 'background-calibrated-Lab-norm' },
+            scanComplete: boundary.every(p => Math.hypot(p.x - seed.x, p.y - seed.y) <= .95 * radius),
+            score: Number(evidence.calibratedInteriorSupport) });
+    }
+    const supported = mixed.filter(candidate => mixed.some(peer => {
+        if (peer === candidate) return false;
+        const a = candidate.evidence.anchor as Point, b = peer.evidence.anchor as Point;
+        const intersection = convexIntersectionArea(candidate.boundary, peer.boundary);
+        return Math.hypot(a.x - b.x, a.y - b.y) >= 12 && intersection
+            / (polygonArea(candidate.boundary) + polygonArea(peer.boundary) - intersection)
+            >= (supportedCompact ? .9 : .75);
+    })).sort((a, b) => b.score - a.score);
+    const whole = supported[0];
+    if (!whole) return compactResult;
+    if (supportedCompact && (polygonArea(whole.boundary) < 1.15 * compactResult.area_px
+        || convexIntersectionArea(compactResult.boundary, whole.boundary) / compactResult.area_px < .85)) {
+        return compactResult;
+    }
+    const rejectedDiagnostics = { ...reference.diagnostics,
+        filled_candidate_route: 'rejected_incomplete_mixed_light_body', appearance_evidence: whole.evidence };
+    if (!whole.scanComplete) return { ...reference, ok: false, failure_code: 'scan_range_too_small',
+        center: null, boundary: [], area_px: 0, bbox: null, geometry_mode: null, seed_relation: null,
+        marker_area_px: 0, marker_bbox: null, confidence: 0, rejected_boundary: whole.boundary,
+        rejected_geometry_mode: 'dark_component', rejected_reasons: ['appearance_candidate_outside_scan_roi'],
+        warnings: [...reference.warnings, 'appearance_candidate_outside_scan_roi'],
+        diagnostics: rejectedDiagnostics };
+    return appearanceResult(reference, whole.boundary, seed,
+        supportedCompact ? 'compact_supported_mixed_light_body' : 'calibrated_mixed_light_body',
+        whole.evidence);
+}
 
 function selectCompleteBodyCandidate(bank: BodyCandidate[]): BodyCandidate | null {
     const complete = bank.filter(candidate => candidate.scanComplete);
@@ -581,10 +878,10 @@ function selectCompleteBodyCandidate(bank: BodyCandidate[]): BodyCandidate | nul
         ? medoid : top;
 }
 
-function materialWholeBodyCandidate(cv: CV, image: Image, seed: Point, radius: number): BodyCandidate | null {
+function materialWholeBodyCandidate(cv: CV, image: Image, seed: Point, radius: number, reference?: ControlledMarkerDetection, prepared?: Patch): BodyCandidate | null {
     if (!Number.isFinite(radius) || radius < 12 || radius > 400 || image.data.length !== image.width * image.height * 4)
         return null;
-    const patch = new Patch(cv, image, seed, radius), anchors: Point[] = [], bank: BodyCandidate[] = [];
+    const patch = prepared ?? new Patch(cv, image, seed, radius), anchors: Point[] = [], bank: BodyCandidate[] = [];
     for (const pool of [patch.anchors, patch.anchors.slice().sort((a, b) => Math.hypot(a.x - seed.x, a.y - seed.y) - Math.hypot(b.x - seed.x, b.y - seed.y))]) {
         const limit = anchors.length < 4 ? 4 : 8;
         for (const a of pool) {
@@ -612,8 +909,8 @@ function materialWholeBodyCandidate(cv: CV, image: Image, seed: Point, radius: n
             const score = Math.min(8, Number(evidence.materialDistance)) * Math.sqrt(Number(evidence.area)) * Number(evidence.interiorSupport) * (1 - Number(evidence.outerContinuation));
             bank.push({ boundary: b, evidence: { ...evidence, anchor, context }, score, scanComplete: b.every(p => Math.hypot(p.x - seed.x, p.y - seed.y) <= .95 * radius) });
         }
-    bank.sort((a, b) => b.score - a.score);
-    const selected = selectCompleteBodyCandidate(bank);
+    const associated = associateBodyCandidates(bank, reference).sort((a, b) => b.score - a.score);
+    const selected = selectCompleteBodyCandidate(associated);
     if (!selected)
         return null;
     const center = polygonCentroid(selected.boundary);
@@ -621,7 +918,7 @@ function materialWholeBodyCandidate(cv: CV, image: Image, seed: Point, radius: n
     // An unrelated shadow outside the scan cannot veto a complete lesion.
     // Reject a smaller inside fragment only when the supported larger outside
     // body contains it, shares its centre and is substantially larger.
-    const clipped = bank.find(c => {
+    const clipped = associated.find(c => {
         if (c.scanComplete || polygonArea(c.boundary) < 1.5 * selectedArea)
             return false;
         const cc = polygonCentroid(c.boundary);
@@ -630,20 +927,14 @@ function materialWholeBodyCandidate(cv: CV, image: Image, seed: Point, radius: n
     });
     return clipped ? { ...selected, scanComplete: false, incompleteBoundary: clipped.boundary } : selected;
 }
-function localizedPigmentCandidate(cv: CV, image: Image, seed: Point, radius: number): {
+function localizedPigmentCandidate(cv: CV, image: Image, seed: Point, radius: number, prepared?: Patch): {
     candidate: Ellipse;
     evidence: Record<string, unknown>;
 } | null {
     if (!Number.isFinite(radius) || radius < 12 || radius > 400 || image.data.length !== image.width * image.height * 4)
         return null;
-    const patch = new Patch(cv, image, seed, radius, false), anchors: Point[] = [];
-    for (const a of patch.anchors) {
-        if (anchors.some(p => Math.hypot(a.x - p.x, a.y - p.y) < 12))
-            continue;
-        anchors.push(a);
-        if (anchors.length === 8)
-            break;
-    }
+    const patch = prepared ?? new Patch(cv, image, seed, radius, false);
+    const anchors = pigmentAnchors(patch.anchors, seed);
     let best: {
         candidate: Ellipse;
         evidence: Record<string, unknown>;
@@ -684,6 +975,21 @@ function localizedPigmentCandidate(cv: CV, image: Image, seed: Point, radius: nu
                         diameter: 2 * c.major, axisRatio: c.ratio, anchor: c.anchor, context: c.context, rankScore: c.rankScore } };
         }
     return best;
+}
+function pigmentAnchors(peaks: Point[], seed: Point): Point[] {
+    const anchors: Point[] = [];
+    // 保留原来的强对比候选，再给点击附近的真实图像特征留少量席位。
+    // 扫描圈变大带入远处强阴影时，不能挤掉原来可识别的小目标。
+    for (const pool of [peaks, peaks.slice().sort((a, b) => Math.hypot(a.x - seed.x, a.y - seed.y)
+        - Math.hypot(b.x - seed.x, b.y - seed.y))]) {
+        const limit = anchors.length < 8 ? 8 : 12;
+        for (const anchor of pool) {
+            if (anchors.some(p => Math.hypot(anchor.x - p.x, anchor.y - p.y) < 12)) continue;
+            anchors.push(anchor);
+            if (anchors.length >= limit) break;
+        }
+    }
+    return anchors;
 }
 import type { ControlledMarkerDetection, ControlledMarkerOptions, MarkerImageData, MarkerPoint } from './controlledMarkerDetection.ts';
 import { loadMarkerOpenCv } from './controlledMarkerOpenCvRuntime.ts';
@@ -779,20 +1085,58 @@ function validAppearanceInput(image: MarkerImageData, seed: MarkerPoint, radius:
         && Number.isFinite(radius) && radius >= 12 && radius <= 400;
 }
 function appearanceResult(baseline: ControlledMarkerDetection, boundary: Point[], seed: Point, route: string, evidence: Record<string, unknown>): ControlledMarkerDetection {
-    const xs = boundary.map(p => p.x), ys = boundary.map(p => p.y);
+    const regularized = regularizeAppearanceBoundary(boundary);
+    const acceptedBoundary = regularized.repairedPoints > 0 && contains(seed, regularized.boundary)
+        ? regularized.boundary : boundary;
+    const xs = acceptedBoundary.map(p => p.x), ys = acceptedBoundary.map(p => p.y);
     const bbox = { x: Math.min(...xs), y: Math.min(...ys),
         width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
-    const area = polygonArea(boundary);
+    const area = polygonArea(acceptedBoundary);
     const diagnostics = { ...baseline.diagnostics, filled_candidate_route: route,
-        appearance_evidence: evidence, appearance_previous_failure: baseline.failure_code };
-    return { ...baseline, ok: true, failure_code: null, boundary, center: meanBoundary(boundary), area_px: area, bbox,
-        geometry_mode: 'dark_component', seed_relation: contains(seed, boundary) ? 'enclosed'
-            : Math.min(...boundary.map((p, i) => segmentDistance(seed, p, boundary[(i + 1) % boundary.length]))) <= 3 ? 'on_marker' : 'near_marker',
+        appearance_evidence: evidence, appearance_previous_failure: baseline.failure_code,
+        ...(regularized.repairedPoints > 0 && acceptedBoundary === regularized.boundary ? {
+            appearance_boundary_regularization: 'bounded_local_concavity',
+            appearance_boundary_repaired_points: regularized.repairedPoints,
+            appearance_boundary_area_ratio: Number(regularized.areaRatio.toFixed(3)),
+            appearance_boundary_max_displacement_px: Number(regularized.maxDisplacement.toFixed(3)),
+        } : {}) };
+    return { ...baseline, ok: true, failure_code: null, boundary: acceptedBoundary, center: meanBoundary(acceptedBoundary), area_px: area, bbox,
+        geometry_mode: 'dark_component', seed_relation: contains(seed, acceptedBoundary) ? 'enclosed'
+            : Math.min(...acceptedBoundary.map((p, i) => segmentDistance(seed, p, acceptedBoundary[(i + 1) % acceptedBoundary.length]))) <= 3 ? 'on_marker' : 'near_marker',
         marker_area_px: Math.round(area), marker_bbox: bbox,
         confidence: baseline.ok ? baseline.confidence : .6, candidate_count: Math.max(1, baseline.candidate_count + 1),
         warnings: [...baseline.warnings, route], rejected_boundary: undefined, rejected_geometry_mode: undefined,
         rejected_reasons: undefined, diagnostics };
 }
+/**
+ * An independently isolated pigment object may correct a concave pixel
+ * recovery that contains extra neighbouring skin. This is selection of an
+ * existing image-supported proposal, not circular completion of a boundary.
+ * Rejected inputs and incomplete-body checks retain their existing behavior.
+ */
+function isolatedPigmentRecovery(
+    baseline: ControlledMarkerDetection,
+    candidate: Ellipse,
+    evidence: Record<string, unknown>,
+): boolean {
+    if (!baseline.ok || baseline.geometry_mode !== 'dark_component'
+        || baseline.diagnostics?.filled_candidate_route !== 'validated_recovered_pixel_boundary'
+        || !baseline.warnings.includes('small_recovered_pixel_boundary_preserved')
+        || baseline.boundary.length < 3)
+        return false;
+    const oldArea = polygonArea(baseline.boundary);
+    const area = polygonArea(candidate.boundary);
+    const ratio = area / Math.max(1, oldArea);
+    const sectors = evidence.sectorContinuation;
+    return ratio >= .4 && ratio <= .8
+        && oldArea / Math.max(1, polygonArea(hull(baseline.boundary))) < .9
+        && Number(evidence.interiorSupport) >= .9
+        && evidence.outerContinuation === 0
+        && Array.isArray(sectors) && sectors.length === 8 && sectors.every(v => v === 0)
+        && contains(candidate.center, baseline.boundary)
+        && convexIntersectionArea(baseline.boundary, candidate.boundary) / Math.max(1, area) >= .8;
+}
+
 function pigmentAssociated(baseline: ControlledMarkerDetection, boundary: Point[]): boolean {
     if (!baseline.ok)
         return true;
@@ -847,7 +1191,8 @@ export async function refineAppearanceCandidate(image: MarkerImageData, seed: Ma
         return baseline;
     try {
         const cv = await loadMarkerOpenCv();
-        const pigment = localizedPigmentCandidate(cv, image, seed, radius);
+        const prepared = new Patch(cv, image, seed, radius, false);
+        const pigment = localizedPigmentCandidate(cv, image, seed, radius, prepared);
         let result = baseline;
         if (pigment && pigmentAssociated(baseline, pigment.candidate.boundary)) {
             const constrained = constrainAppearanceExpansion(
@@ -858,9 +1203,17 @@ export async function refineAppearanceCandidate(image: MarkerImageData, seed: Ma
                 : pigment.evidence;
             result = appearanceResult(baseline, constrained.boundary, seed, 'localized_pigment_envelope', evidence);
         }
-        const body = materialWholeBodyCandidate(cv, image, seed, radius);
-        if (!body)
-            return result;
+        const body = materialWholeBodyCandidate(cv, image, seed, radius, result, prepared.materialView());
+        if (!body) {
+            const refined = refineCompactLabBody(cv, image, seed, radius, result);
+            // Keep the original body association and every rejection first.
+            // Only an otherwise unchanged accepted pixel recovery is eligible.
+            if (refined === baseline && pigment
+                && isolatedPigmentRecovery(baseline, pigment.candidate, pigment.evidence))
+                return appearanceResult(baseline, pigment.candidate.boundary, seed,
+                    'isolated_pigment_recovery', pigment.evidence);
+            return refined;
+        }
         // A uniform small mole must not be swallowed by a nearby broad colour
         // patch. A legacy fragment's centre is not an independent object label.
         const preserveUniform = pigment && Number(pigment.evidence.interiorSupport) >= .95;
@@ -870,7 +1223,7 @@ export async function refineAppearanceCandidate(image: MarkerImageData, seed: Ma
             if (!contains(pigmentCenter, body.boundary)
                 || Math.hypot(pigmentCenter.x - center.x, pigmentCenter.y - center.y) > .4 * Math.sqrt(polygonArea(body.boundary) / Math.PI)
                 || polygonArea(body.boundary) > 2 * polygonArea(pigment.candidate.boundary))
-                return result;
+                return refineCompactLabBody(cv, image, seed, radius, result);
         }
         if (!body.scanComplete) {
             const rejected = body.incompleteBoundary ?? body.boundary;
@@ -904,7 +1257,15 @@ export async function refineAppearanceCandidate(image: MarkerImageData, seed: Ma
         const evidence = constrained.cap
             ? { ...body.evidence, appearance_expansion_cap: constrained.cap }
             : body.evidence;
-        return appearanceResult(baseline, constrained.boundary, seed, 'material_body_envelope', evidence);
+        const materialResult = appearanceResult(baseline, constrained.boundary, seed, 'material_body_envelope', evidence);
+        // A complete broad proposal can lose the supported object when its
+        // area cap shrinks around a displaced centre. Preserve the evaluated
+        // local object only after the unchanged completeness checks above.
+        const refined = refineCompactLabBody(cv, image, seed, radius, materialResult);
+        if (refined.ok && result.ok && result.center
+            && !contains(result.center, materialResult.boundary))
+            return result;
+        return refined;
     }
     catch {
         // A failed optional refinement cannot discard an already evaluated result.
@@ -913,5 +1274,6 @@ export async function refineAppearanceCandidate(image: MarkerImageData, seed: Ma
 }
 export const __appearanceGeometryForTests = {
     polygonArea, polygonCentroid, convexIntersectionArea, selectCompleteBodyCandidate,
-    constrainAppearanceExpansion,
+    constrainAppearanceExpansion, associateBodyCandidates, pigmentAnchors,
+    regularizeAppearanceBoundary,
 };
