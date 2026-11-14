@@ -5693,9 +5693,13 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83 = (
             "supraorbitalMedialCurveToVerticalV83" in constraints
         )
-        _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE = (
-            str(reference.get("atlasVersion")) in {"8.1.86", "8.1.96"}
-        )
+        atlas_version = str(reference.get("atlasVersion") or "")
+        try:
+            _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE = (
+                tuple(map(int, atlas_version.split("."))) >= (8, 1, 86)
+            )
+        except ValueError:
+            _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE = False
         _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84 = (
             "orbitalBrowTemporalBlueExtensionV84" in constraints
         )
