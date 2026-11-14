@@ -290,8 +290,15 @@
     "sourceDigest": "f78164e8779e3372e11393a4e807e69c1a5b6ec41135711fc6b52d8f77aee550"
   },
   "archive": {
-    "status": "pending",
-    "reason": "正在组合本地肿物0.104.1与已合入远端UI/CI改动；完成源码身份重算后生成同指纹恢复包。"
+    "status": "verified",
+    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
+    "manifestPath": "local_outputs/recovery-packages/肿物局部修复-0.104.1-正式PR候选-20261114/manifest.json",
+    "manifestSha256": "3b13b05bd5ac52d5bf63aeb0597554a580bc4e5d9cf757c9aeaa99d5b33466f8",
+    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+    "verifiedAt": "2026-11-14T02:40:02.280Z",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr4a-research-candidate-20261114",
+    "note": "263 copies individually verified by byte length and SHA-256; no inherited package.",
+    "limitations": "磁盘恢复包不含编辑器未保存缓冲、依赖安装、Git对象、构建产物；1项既有视频fixture仅指纹，基线仓库保留获取方式。当前登记差额由后续Git提交恢复，不改冻结包。"
   },
   "scopeBoundaryReview": {
     "status": "not_required",
@@ -3946,10 +3953,10 @@
     }
   ],
   "automatedValidation": {
-    "status": "integration_validation_in_progress",
+    "status": "passed_default_and_targeted",
     "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr4a-research-candidate-20261114",
-    "note": "肿物核心与785286a相同，旧实测保留其边界；整合后的测试/构建另行执行。"
+    "note": "默认npm test(含类型、旧相邻及隐私回归)与新增接入的六项原肿物安全套件exit0；另7项专项exit0，扫描3直径x9落点x3重复共81次。仅工程覆盖，不表示真实图、手机或医学全部通过；当前浏览器契约另列PR实得结果。"
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
@@ -4315,7 +4322,7 @@
     "limits": "不得复用已试验版本；原0.104.1只是明确回退基线，原手机拒识及其他旧失败保留。"
   },
   "publicationPreparation20261114": {
-    "status": "LOCAL_PREPARATION",
+    "status": "AWAITING_FINAL_PAYLOAD_READ_AND_EDITOR_SAVE",
     "sourceHead": "785286a8e927cf465fcc2ccfc6d8d3756699ab22",
     "base": "e51a54487dfb846bcfc7fa637858d2661fdea1f7",
     "purpose": "按操作者直接要求提交已知仍有失败的研发候选，不宣称手机或整组修复。",
