@@ -12,6 +12,11 @@ export type VisibilityPredicate = (point: Vec3 | undefined) => boolean;
 export const EXTENDED_FOREHEAD_REGIONS = new Set([
   "forehead_lower_long_arc_v13",
   "forehead_bridge_arc_v15",
+  // Medial upper endpoints are generated above the original seed arcs and
+  // must use the forehead skin/head-envelope gate instead of the generic
+  // photo hair clip, which otherwise removes the newly added points.
+  "supraorbital_medial_short_arc_v69",
+  "orbital_brow_upturn_v11",
 ]);
 
 export const WRINKLE_PHOTO_SHA256 =
@@ -99,7 +104,11 @@ function median(values: readonly number[]): number {
  * 采样颜色是否属于「脸上可见皮肤」。参考色取自可信的中面部关键点。
  * 三个拒绝条件：与所有参考色都远、明显偏暗（头发阴影）、色度过低（灰白发）。
  */
-export function skinColorMatchesReferences(rgb: Rgb | null, referenceRgbs: Rgb[] | null | undefined): boolean {
+export function skinColorMatchesReferences(
+  rgb: Rgb | null,
+  referenceRgbs: Rgb[] | null | undefined,
+  allowStaticShadowSkin = false,
+): boolean {
   if (!rgb || !referenceRgbs?.length) return true;
   const sample = rgbToLab(rgb);
   const references = referenceRgbs.map(rgbToLab);
@@ -109,9 +118,16 @@ export function skinColorMatchesReferences(rgb: Rgb | null, referenceRgbs: Rgb[]
   )));
   const sampleChroma = Math.hypot(sample[1], sample[2]);
   const referenceLightness = median(references.map((reference) => reference[0]));
-  const tooDark = sample[0] < referenceLightness * 0.52 && distance > 10;
-  const achromaticHair = sampleChroma < Math.max(5, referenceChroma * 0.70) && distance > 10;
-  return !tooDark && !achromaticHair && distance <= 26;
+  // Dark, chromatic skin can be much darker than the central reference on a
+  // side-lit face. Keep the camera path strict, while allowing this static
+  // photo case without admitting grey hair or background pixels.
+  const darkChromaticSkin = allowStaticShadowSkin &&
+    sampleChroma >= Math.max(12, referenceChroma * 0.45) &&
+    sample[0] >= referenceLightness * 0.20;
+  const tooDark = sample[0] < referenceLightness * (darkChromaticSkin ? 0.20 : 0.52) && distance > 10;
+  const achromaticHair = sampleChroma < Math.max(5, referenceChroma * (allowStaticShadowSkin ? 0.45 : 0.70)) && distance > 10;
+  const maxDistance = darkChromaticSkin ? 100 : 26;
+  return !tooDark && !achromaticHair && distance <= maxDistance;
 }
 
 /** 头部椭圆包络：外推的额头线必须落在这个椭圆内，否则会画到脸外。 */
@@ -130,6 +146,109 @@ export function buildHeadVisibility(landmarks: Vec3[] | null | undefined): Visib
     if (!point) return false;
     const dx = (point[0] - cx) / rx, dy = (point[1] - cy) / ry;
     return dx * dx + dy * dy <= 1;
+  };
+}
+
+/** Strict facial silhouette used to stop atlas lines at the actual jaw/face edge. */
+export function buildFaceHullVisibility(landmarks: Vec3[] | null | undefined, insetPx = 0): VisibilityPredicate {
+  const points = (landmarks || []).filter((point): point is Vec3 => Boolean(point)
+    && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+  if (points.length < 3) return () => false;
+  const sorted = points.map((point) => [point[0], point[1]] as [number, number])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: [number, number], a: [number, number], b: [number, number]): number =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower.at(-1)!, point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  const upper: [number, number][] = [];
+  for (let index = sorted.length - 1; index >= 0; index--) {
+    const point = sorted[index];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper.at(-1)!, point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  return (point) => {
+    if (!point || hull.length < 3) return false;
+    for (let index = 0; index < hull.length; index++) {
+      const next = hull[(index + 1) % hull.length];
+      const edgeLength = Math.hypot(next[0] - hull[index][0], next[1] - hull[index][1]);
+      if (cross(hull[index], next, [point[0], point[1]]) / Math.max(1, edgeLength) < insetPx) return false;
+    }
+    return true;
+  };
+}
+
+/** Use MediaPipe's ordered face oval for a pose-stable facial silhouette. */
+export function buildFaceOvalVisibility(landmarks: Vec3[] | null | undefined, insetPx = 0): VisibilityPredicate {
+  const ovalIndices = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
+    397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132,
+    93, 234, 127, 162, 21, 54, 103, 67, 109];
+  const polygon: Vec3[] = ovalIndices.flatMap((index) => {
+    const point = landmarks?.[index];
+    return point && Number.isFinite(point[0]) && Number.isFinite(point[1]) ? [point] : [];
+  });
+  if (polygon.length < ovalIndices.length) return buildFaceHullVisibility(landmarks, insetPx);
+  const pointInPolygon = (x: number, y: number): boolean => {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const a = polygon[i], b = polygon[j];
+      if ((a[1] > y) !== (b[1] > y)
+          && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+    }
+    return inside;
+  };
+  return (point) => {
+    if (!point || !pointInPolygon(point[0], point[1])) return false;
+    if (!(insetPx > 0)) return true;
+    let nearest = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const lengthSquared = dx * dx + dy * dy;
+      const t = lengthSquared > 0
+        ? Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / lengthSquared))
+        : 0;
+      nearest = Math.min(nearest, Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dy)));
+    }
+    return nearest >= insetPx;
+  };
+}
+
+/** Compare the lower chin to skin on the same person's central chin. */
+export function buildChinAppearanceVisibility(
+  image: ImageData | null,
+  landmarks: Vec3[] | null | undefined,
+  pixelScale = 1,
+): VisibilityPredicate {
+  const lip = landmarks?.[17];
+  const chin = landmarks?.[152];
+  if (!image || !lip || !chin) return () => false;
+  const chinHeight = chin[1] - lip[1];
+  if (!(chinHeight > 0)) return () => false;
+  const sample = (x: number, y: number): Lab | null => {
+    const rgb = meanPatch(image, image.width, image.height, x * pixelScale, y * pixelScale, 2);
+    return rgb ? rgbToLab(rgb) : null;
+  };
+  // Sample only the upper/middle chin, before the lower contour can reach a
+  // support object in an oblique photo.
+  const reference = [0.15, 0.25, 0.35]
+    .map((fraction) => sample(
+      lip[0] + (chin[0] - lip[0]) * fraction,
+      lip[1] + chinHeight * fraction,
+    ))
+    .filter((value): value is Lab => Boolean(value));
+  if (!reference.length) return () => false;
+  return (point) => {
+    if (!point) return false;
+    // Apply the appearance gate through the entire lower-face band. This keeps
+    // support objects from being accepted simply because they are laterally
+    // outside the central chin reference.
+    if (point[1] < lip[1] + chinHeight * 0.25) return true;
+    const color = sample(point[0], point[1]);
+    return Boolean(color && Math.min(...reference.map((value) => labDistance(color, value))) <= 30);
   };
 }
 
@@ -190,7 +309,7 @@ export function buildForeheadSkinVisibility(
         ? rightReferences
         : leftReferences.concat(rightReferences);
     const color = samplePatch(point[0], point[1]);
-    return color ? skinColorMatchesReferences(color, references) : !failClosed;
+    return color ? skinColorMatchesReferences(color, references, !failClosed) : !failClosed;
   };
 }
 

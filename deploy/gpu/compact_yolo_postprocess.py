@@ -3,11 +3,11 @@ import math
 
 import numpy as np
 
-CLASS_COUNT = 3
+CLASS_NAMES = ('wrinkled',)
 MASK_CHANNELS = 32
 INPUT_SIZE = 640
 MASK_THRESHOLD = 0.5
-CONFIDENCE_THRESHOLD = 0.07
+CONFIDENCE_THRESHOLD = 0.10
 
 
 def _iou(first, second):
@@ -23,7 +23,8 @@ def _iou(first, second):
 
 
 def _decode_and_nms(prediction):
-    scores = prediction[4:4 + CLASS_COUNT]
+    class_count = prediction.shape[0] - 4 - MASK_CHANNELS
+    scores = prediction[4:4 + class_count]
     class_ids = np.argmax(scores, axis=0)
     maximum_scores = scores[class_ids, np.arange(scores.shape[1])]
     anchors = np.flatnonzero(np.isfinite(maximum_scores) &
@@ -48,7 +49,7 @@ def _decode_and_nms(prediction):
             'classId': class_id,
             'score': score,
             'box': box,
-            'coefficients': prediction[4 + CLASS_COUNT:, anchor].astype(np.float64),
+            'coefficients': prediction[4 + class_count:, anchor].astype(np.float64),
         })
     candidates.sort(key=lambda item: -item['score'])
     kept = []
@@ -63,8 +64,11 @@ def _decode_and_nms(prediction):
 
 
 def compact_class_masks(outputs):
-    prediction = next(value.reshape(39, 8400) for value in outputs
-                      if tuple(value.shape) == (1, 39, 8400))
+    prediction_value = next(value for value in outputs
+                            if len(value.shape) == 3 and value.shape[0] == 1
+                            and value.shape[1] >= 37 and value.shape[2] == 8400)
+    class_count = int(prediction_value.shape[1] - 4 - MASK_CHANNELS)
+    prediction = prediction_value.reshape(4 + class_count + MASK_CHANNELS, 8400)
     prototype = next(value.reshape(32, 160, 160) for value in outputs
                      if tuple(value.shape) == (1, 32, 160, 160))
     candidates, detections = _decode_and_nms(prediction)
@@ -76,7 +80,7 @@ def compact_class_masks(outputs):
     exponential = np.exp(logits[~positive])
     probabilities[~positive] = exponential / (1 + exponential)
     instances = probabilities.reshape(-1, 160, 160)
-    masks = np.zeros((CLASS_COUNT, INPUT_SIZE, INPUT_SIZE), dtype=np.uint8)
+    masks = np.zeros((class_count, INPUT_SIZE, INPUT_SIZE), dtype=np.uint8)
 
     for detection, instance in zip(detections, instances):
         x0 = max(0, min(INPUT_SIZE - 1, math.floor(detection['box'][0])))
@@ -107,6 +111,7 @@ def compact_class_masks(outputs):
     } for item in detections]
     return {
         'masks': masks,
+        'classes': list(CLASS_NAMES if class_count == 1 else ('forehead', 'frown', 'wrinkle')),
         'candidateCount': len(candidates),
         'detectionCount': len(detections),
         'detections': compact_detections,

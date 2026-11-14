@@ -103,6 +103,22 @@ function countRenderedComponents(mask, width, height) {
   assert.deepEqual(wrinkle, beforeWrinkle, "source class masks must not be mutated");
 }
 
+{
+  const width = 48;
+  const height = 32;
+  const frown = new Uint8Array(width * height);
+  paintRect(frown, width, 14, 10, 35, 12);
+  const result = extractFineWrinkleLines(
+    { forehead: new Uint8Array(width * height), frown, wrinkle: new Uint8Array(width * height) },
+    width,
+    height,
+    { minimumLineLengthPx: 20, minimumLineLengthPxByClass: { frown: 16 }, outputMode: "summary" },
+  );
+  assert.equal(result.summary.lineCountByClass.frown, 1,
+    "a short glabellar line is retained by the class-specific threshold");
+  assert.equal(result.validation.passed, true);
+}
+
 // The sparse rendered-pixel path must agree with a full-frame 8-neighbor
 // reference for empty, edge-touching, overlapping, and dense input masks.
 {
@@ -221,6 +237,31 @@ function countRenderedComponents(mask, width, height) {
   assert.equal(result.summary.recoveredForeheadEndpointCount, 0);
   assert.equal(result.summary.recoveredForeheadEndpointLengthPx, 0);
   assert.equal(result.validation.passed, true);
+}
+
+// Adjacent YOLO instances must retain two centerlines even when their union is connected.
+{
+  const width = 96, height = 64;
+  const upper = new Uint8Array(width * height);
+  const lower = new Uint8Array(width * height);
+  paintRect(upper, width, 12, 22, 66, 26);
+  paintRect(lower, width, 34, 27, 78, 31);
+  const merged = Uint8Array.from(upper, (value, index) => value || lower[index] ? 1 : 0);
+  const combined = extractFineWrinkleLines({ forehead: merged }, width, height, {
+    classes: ["forehead"], outputMode: "summary",
+  });
+  const separate = extractFineWrinkleLines({ forehead: merged }, width, height, {
+    classes: ["forehead"], instanceMasks: [
+      { className: "forehead", mask: upper },
+      { className: "forehead", mask: lower },
+    ], outputMode: "summary",
+  });
+  assert.equal(combined.lines.length, 1);
+  assert.equal(separate.lines.length, 2);
+  assert.equal(new Set(separate.lines.map((line) => line.sourceComponentId)).size, 2);
+  assert.ok(separate.lines.every((line) => Math.max(...line.points.map((point) => point[1]))
+    - Math.min(...line.points.map((point) => point[1])) < 5));
+  assert.equal(separate.validation.passed, true);
 }
 
 console.log("automatic fine wrinkle line extraction tests passed");

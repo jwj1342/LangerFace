@@ -130,42 +130,42 @@ export function loop(): void {
   let hulls: HandMask[] = [];
   if (sourceKind === "image") {
     if (!sourceState.imageDetectionComplete) {
-      sourceState.imageDetectionComplete = true;
-      const detectionStartedAt = performance.now();
-      const outcome = detectStaticImageWithRetries(
-        modelState.imageLandmarker as StaticImageDetector | null,
-        source,
-      );
-      recordMetricSample("source.imageFaceDetectionMs", performance.now() - detectionStartedAt, {
-        attempts: outcome.attempts,
-      });
-      sourceState.imageDetectionAttempts = outcome.attempts;
-      const result = outcome.result;
-      const imageFaces = result?.faceLandmarks || [];
-      sourceState.imageCacheLM = imageFaces.length === 1 ? toPixels(imageFaces[0], width, height) : null;
-      sourceState.planning2d?.setDetection({
-        sourceRevision: sourceState.planning2d.sourceRevision(),
-        status: sourceState.imageCacheLM ? "ready" : "failed",
-        landmarks: sourceState.imageCacheLM,
-        attempts: outcome.attempts,
-        reason: sourceState.imageCacheLM
-          ? ""
-          : imageFaces.length > 1
-            ? "multiple_faces"
+      const imageDetector = modelState.imageLandmarker as StaticImageDetector | null;
+      if (imageDetector) {
+        sourceState.imageDetectionComplete = true;
+        const detectionStartedAt = performance.now();
+        const outcome = detectStaticImageWithRetries(imageDetector, source);
+        recordMetricSample("source.imageFaceDetectionMs", performance.now() - detectionStartedAt, {
+          attempts: outcome.attempts,
+        });
+        sourceState.imageDetectionAttempts = outcome.attempts;
+        const result = outcome.result;
+        const imageFaces = result?.faceLandmarks || [];
+        sourceState.imageCacheLM = imageFaces.length === 1 ? toPixels(imageFaces[0], width, height) : null;
+        sourceState.planning2d?.setDetection({
+          sourceRevision: sourceState.planning2d.sourceRevision(),
+          status: sourceState.imageCacheLM ? "ready" : "failed",
+          landmarks: sourceState.imageCacheLM,
+          attempts: outcome.attempts,
+          reason: sourceState.imageCacheLM
+            ? ""
+            : imageFaces.length > 1
+              ? "multiple_faces"
+              : outcome.error
+                ? "detection_error"
+                : "no_face",
+        });
+        updateFaceExpression(result?.faceBlendshapes);
+        sourceState.imageHulls = detectHands(timeMs, width, height);
+        if (!sourceState.imageCacheLM) {
+          countMetric("faceLandmarker.noFaceImage");
+          if (outcome.error) logWarn("静态图片检测失败。", outcome.error);
+          setMsg(imageFaces.length > 1
+            ? "检测到多张人脸。请上传仅包含一位受试者的照片。"
             : outcome.error
-              ? "detection_error"
-              : "no_face",
-      });
-      updateFaceExpression(result?.faceBlendshapes);
-      sourceState.imageHulls = detectHands(timeMs, width, height);
-      if (!sourceState.imageCacheLM) {
-        countMetric("faceLandmarker.noFaceImage");
-        if (outcome.error) logWarn("静态图片检测失败。", outcome.error);
-        setMsg(imageFaces.length > 1
-          ? "检测到多张人脸。请上传仅包含一位受试者的照片。"
-          : outcome.error
-            ? `图片检测失败（已尝试 ${outcome.attempts} 次）。请重新上传；若仍失败，请换一张正面清晰的照片。`
-            : `未检测到人脸（已尝试 ${outcome.attempts} 次）。请换用正面、清晰、光线充足的照片后重新上传。`);
+              ? `图片检测失败（已尝试 ${outcome.attempts} 次）。请重新上传；若仍失败，请换一张正面清晰的照片。`
+              : `未检测到人脸（已尝试 ${outcome.attempts} 次）。请换用正面、清晰、光线充足的照片后重新上传。`);
+        }
       }
     } else if (renderState.handOcc && sourceState.imageHulls === null) {
       sourceState.imageHulls = detectHands(timeMs, width, height);

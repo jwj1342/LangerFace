@@ -4,7 +4,7 @@ export const LATEST_WRINKLE_REFINEMENT_PROFILE =
   "v9-regional-smooth-7.2";
 
 export const YOLO_GUIDED_WRINKLE_REFINEMENT_PROFILE =
-  "v9-regional-smooth-7.2-yolo-guided-forehead-groups-glabellar-direct-nose";
+  "v9-regional-smooth-7.2-yolo-forehead-trajectory-1.7-generalized-glabellar-hybrid-nose1";
 
 /** Shared V9 profile used by the deployed live page and the controlled experiment. */
 export function latestV9RstlRefinementOptions(
@@ -14,6 +14,7 @@ export function latestV9RstlRefinementOptions(
   return {
     twoSidedNearestMatching: true,
     foreheadNearestSingleCurveMatching: true,
+    foreheadMultiCurveAttraction: true,
     regionalNearestSingleCurveMatching: true,
     regionalCandidateFamilyFiltering: true,
     nearestSingleCurveMatching: false,
@@ -27,6 +28,7 @@ export function latestV9RstlRefinementOptions(
     softLinkTurnDegrees: 18,
     softLinkTangentSpanPx: Math.round(faceWidthPx * 0.020),
     globalLengthAwareMatching: true,
+    foreheadMinimumMatchScore: 0.005,
     adherenceRetryAttempts: 10,
     shortWrinkleQuantizationTolerance: true,
     shortWrinkleMaximumLengthRatio: 0.12,
@@ -117,10 +119,14 @@ export function yoloGuidedV9RstlRefinementOptions(
     // than the shared profile even after the neighboring forehead layers move
     // coherently. These allowances remain guarded by final adherence and zero
     // new intersections, and are intentionally local to YOLO-guided photos.
-    curvatureFairingForeheadMaximumAddedSignChanges: 5,
+    curvatureFairingForeheadMaximumAddedSignChanges: 8,
     curvatureFairingForeheadRecoveryTurnSlackDegrees: 3,
-    curvatureFairingForeheadMaximumP90AdherencePx: 4.5,
-    foreheadAdherenceP90ThresholdPx: 4.5,
+    curvatureFairingForeheadMaximumTurnDegrees: 16,
+    curvatureFairingForeheadCompositeMaximumTurnDegrees: 24,
+    curvatureFairingForeheadMaximumMeanAdherencePx: Math.max(6, faceWidthPx * 0.015),
+    curvatureFairingForeheadMaximumP90AdherencePx: Math.max(12, faceWidthPx * 0.030),
+    foreheadAdherenceMeanThresholdPx: Math.max(6, faceWidthPx * 0.015),
+    foreheadAdherenceP90ThresholdPx: Math.max(12, faceWidthPx * 0.030),
     foreheadBundleMinimumSpacingRatio: 0.55,
     foreheadBundleMaximumSpacingRatio: 1.85,
     // Real-image ablations showed that widening adherence is the primary fix;

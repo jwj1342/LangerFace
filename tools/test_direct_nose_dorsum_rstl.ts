@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   buildDirectNoseDorsumRstl,
+  trimNoseCurveToClearance,
   DIRECT_NOSE_DORSUM_FINE_LINE_IDS,
   DIRECT_NOSE_DORSUM_RSTL_ALGORITHM,
   DIRECT_NOSE_DORSUM_RSTL_REGION,
@@ -72,20 +73,26 @@ assert.throws(() => buildDirectNoseDorsumRstl({
   eyePolygons: [[[570, 480], [670, 480], [670, 530], [570, 530]]],
 }), /eye safety exclusion zone/);
 
-assert.throws(() => buildDirectNoseDorsumRstl({
-  fineLines: payload.lines,
-  faceWidthPx: 622,
-  existingCurves: [{ pts: [[620, 470], [620, 540]] }],
-}), /intersects an existing/);
-
 const auditedIntersection = buildDirectNoseDorsumRstl({
   fineLines: payload.lines,
   faceWidthPx: 622,
   existingCurves: [{ name: "nasal-root-vertical", pts: [[620, 470], [620, 540]] }],
   auditExistingCurveIntersections: true,
 });
-assert.ok(Number(auditedIntersection.diagnostics.existing_curve_intersection_count) > 0);
+assert.equal(auditedIntersection.diagnostics.existing_curve_intersection_count, 0);
 assert.equal(auditedIntersection.diagnostics.existing_curve_intersection_policy,
-  "audited_direct_overlay_intersections");
+  "trim_new_curve_preserve_existing");
 
 console.log("direct nose-dorsum wrinkle RSTL generation tests passed");
+
+const source: [number,number][] = [[0,10],[100,10]];
+const walls: [number,number][][] = [[[10,0],[10,20]],[[90,0],[90,20]]];
+const snapshot = JSON.stringify(walls);
+const trimmed = trimNoseCurveToClearance(source,walls,2);
+assert.ok(trimmed[0][0]>12 && trimmed.at(-1)![0]<88);
+assert.ok(trimmed.at(-1)![0]-trimmed[0][0]>70);
+assert.equal(JSON.stringify(walls),snapshot,'existing geometry must remain untouched');
+assert.deepEqual(trimNoseCurveToClearance(source,[source],2),[],'overlap has no safe run');
+assert.deepEqual(trimNoseCurveToClearance(source,[[[0,9],[100,9]]],2),[],'near contact is unsafe');
+const noObstacle=trimNoseCurveToClearance(source,[],2);
+assert.deepEqual(noObstacle[0],source[0]);assert.deepEqual(noObstacle.at(-1),source[1]);

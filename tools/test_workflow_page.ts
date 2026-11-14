@@ -1156,9 +1156,12 @@ assert.match(mobileControls, /min="0"[\s\S]*?max="50"/,
 {
   const editFunction = controllerAst.statements.find((statement: any) =>
     ts.isFunctionDeclaration(statement) && statement.name?.text === "handleMobileEditCommand");
+  const clearCandidateFunction = controllerAst.statements.find((statement: any) =>
+    ts.isFunctionDeclaration(statement) && statement.name?.text === "clearActiveCandidateAfterMobileEdit");
   const rollbackEditFunction = controllerAst.statements.find((statement: any) =>
     ts.isFunctionDeclaration(statement) && statement.name?.text === "rollbackMobileCandidateEditPreview");
   assert.ok(editFunction);
+  assert.ok(clearCandidateFunction);
   assert.ok(rollbackEditFunction);
   for (const mobile of [false, true]) {
     let applied = 0;
@@ -1170,6 +1173,7 @@ assert.match(mobileControls, /min="0"[\s\S]*?max="50"/,
     const previewTransactions = new WeakMap();
     const handle = runInNewContext(ts.transpileModule(`(() => {
       ${rollbackEditFunction.getText(controllerAst)}
+      ${clearCandidateFunction.getText(controllerAst)}
       ${editFunction.getText(controllerAst)}
       return handleMobileEditCommand;
     })()`, {
@@ -1187,6 +1191,7 @@ assert.match(mobileControls, /min="0"[\s\S]*?max="50"/,
         state.mobileEditPreviewFrame = null;
       },
       applyMobileCandidateEdit: () => { applied += 1; },
+      markCandidatePendingReview: () => {},
       workflowDiagnosticSnapshot: () => ({ geometry_revision: 0, workflow_request_id: 0, source_revision: 1, candidate: null, display: null }),
       observeWorkflowDiagnostic(_state: any, event: any) { diagnosticEvents.push(event); },
       diagnosticEditPending: pendingEdits,
@@ -1229,7 +1234,7 @@ assert.match(mobileControls, /min="0"[\s\S]*?max="50"/,
     assert.equal(blocked, 1);
   }
 }
-assert.match(controller, /else if \(diagnosticPending\)[\s\S]*?stage: "committed"[\s\S]*?diagnosticEditPending\.delete\(state\)/,
+assert.match(controller, /if \(changed \|\| previewPending\)[\s\S]*?else if \(diagnosticPending\)[\s\S]*?stage: "committed"[\s\S]*?diagnosticEditPending\.delete\(state\)/,
   "a pointer-up after an already-rendered preview still closes the diagnostic action");
 assert.match(controller, /state\.edit\.angle_offset_deg = Math\.max\(-35,[\s\S]*?state\.edit\.length_scale = Math\.max\(1,[\s\S]*?state\.edit\.width_scale = Math\.max\(1,/,
   "workflow clamps the two mobile-only adjustment dimensions before applying the existing candidate editor");
@@ -1663,6 +1668,7 @@ const changeManualScan = runInNewContext(
   `(function(state, detail) { switch(detail.command) { ${controller.slice(manualScanStart, manualScanEnd)} } return state; })`,
   {
     scheduleOverlayDraw() {},
+    scheduleScanDiameterPublish() {},
     CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM: 5,
     CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM: 60,
   },

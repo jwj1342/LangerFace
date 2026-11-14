@@ -153,7 +153,7 @@ for (const rel of ["web/src/services/pipelineSource.ts"]) {
     `${rel} keeps video uploads available from the merged workflow`);
   assert.match(source, /if \(!isImage && !isVideo\) \{[\s\S]*?return;[\s\S]*?const startedAt/,
     `${rel} rejects unsupported files before stopping or replacing the active source`);
-  assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await Promise\.all\(\[modelReady, decoded\]\)/,
+  assert.match(source, /const modelReady = ensureImageReady\(\)\.then[\s\S]*?const decoded = img\.decode\(\)\.then[\s\S]*?await decoded[\s\S]*?await modelReady/,
     `${rel} overlaps image decoding with cached static-model initialization while timing both stages`);
   assert.doesNotMatch(source, /await ensureReady\(\);\s*if \(imageFile\) await ensureImageReady\(\)/,
     `${rel} does not initialize the shared model twice in the image branch`);

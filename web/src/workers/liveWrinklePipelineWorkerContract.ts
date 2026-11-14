@@ -14,6 +14,7 @@ export interface LiveWrinkleWorkerRequest {
   mode: "full" | "yolo-only";
   includeFingerprint?: boolean;
   cacheForRefinement?: boolean;
+  debugUnfilteredPreview?: boolean;
 }
 
 export interface LiveWrinkleWorkerEvidence {
@@ -39,6 +40,7 @@ export interface LiveWrinklePrecomputedRequest {
   landmarks: Array<[number, number, number]>;
   detectorVersion: string;
   cacheForRefinement?: boolean;
+  debugUnfilteredPreview?: boolean;
   timings: LiveWrinkleWorkerTimings;
 }
 

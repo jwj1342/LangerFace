@@ -156,6 +156,38 @@ def test_forehead_bridge_v15_has_the_reviewed_arch_and_even_layer_offsets():
     )
 
 
+def test_forehead_bridge_recenters_against_face_midline_pairs():
+    landmarks = np.full((455, 3), [50.0, 50.0, 0.0], dtype=float)
+    landmarks[0] = [50.0, 40.0, 0.0]
+    landmarks[2] = [60.0, 40.0, 0.0]
+    landmarks[4] = [70.0, 40.0, 0.0]
+    landmarks[9] = [60.0, 50.0, 0.0]
+    landmarks[10] = [60.0, 30.0, 0.0]
+    # The local anchor is biased right, while the two bilateral pairs define
+    # the observed facial midline at x=50.
+    landmarks[33] = [40.0, 40.0, 0.0]
+    landmarks[263] = [60.0, 40.0, 0.0]
+    landmarks[234] = [42.0, 60.0, 0.0]
+    landmarks[454] = [58.0, 60.0, 0.0]
+    triangles = np.array([[0, 2, 4]])
+    points = np.array(
+        [
+            [0.0, 1.0, 0.0],
+            [0.0, 0.5, 0.5],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=float,
+    )
+
+    mapped = map_atlas(
+        Atlas(system="rstl", lines=[AtlasLine("biased", "forehead_bridge_arc_v15", points)]),
+        landmarks,
+        triangles,
+    )[0].pts
+
+    assert np.isclose(0.5 * (mapped[:, 0].min() + mapped[:, 0].max()), 50.0)
+
+
 def test_personalized_forehead_lines_skip_runtime_expansion_contract():
     fixture = json.loads(RUNTIME_EXPANSION_FIXTURE.read_text(encoding="utf-8"))
     atlas = Atlas.load(str(RUNTIME_EXPANSION_FIXTURE))

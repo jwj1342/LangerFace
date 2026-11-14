@@ -179,7 +179,7 @@ includesAll(render2d, [
 ], "2D render overlay support");
 assert.match(
   render2d,
-  /strokeWidthForDisplay\(2\.4, W\)/,
+  /function wrinkleStrokeWidthForFace[\s\S]*?strokeWidthForDisplay\(2\.4, sourceWidth\)/,
   "wrinkle evidence strokes must use a stable on-screen width across source resolutions",
 );
 
@@ -220,7 +220,7 @@ assert.doesNotMatch(
 );
 includesAll(foreheadVisibility, [
   "skinColorMatchesReferences",
-  "distance <= 26",
+  "const maxDistance = darkChromaticSkin ? 100 : 26",
   "achromaticHair",
   "0.54 * faceWidth",
   "0.46 * faceHeight",

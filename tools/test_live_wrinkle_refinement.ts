@@ -43,8 +43,8 @@ const waitUntil = async (predicate: () => boolean, message: string): Promise<voi
 
 const emptyYoloOutputs = () => ({
   prediction: {
-    dims: [1, 39, 1],
-    data: new Float32Array(39),
+    dims: [1, 39, 100],
+    data: new Float32Array(3900),
     dispose() {},
   },
   prototype: {
@@ -309,7 +309,7 @@ assert.doesNotMatch(analysisRuntime,
   "responsive canvas dimensions must not change the wrinkle algorithm input");
 assert.match(analysisRuntime, /workingRgbaSha256[\s\S]*landmarksSha256[\s\S]*standardRstlSha256/,
   "the debug snapshot must expose privacy-safe reproducibility fingerprints");
-assert.match(analysisRuntime, /expandForehead: RSTL_STANDARD_CONTRACT\.expandForehead/,
+assert.match(analysisRuntime, /\.\.\.RSTL_STANDARD_MAPPING_OPTIONS/,
   "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
 assert.match(analysisRuntime, /from "\.\/personalized\/v6RstlRefinementV9\.ts"/,
   "the deployed live page must gate results with the latest V9 algorithm identifier");
@@ -330,7 +330,7 @@ assert.match(analysisRuntime,
   /applyWrinkleGuidedRefinement[\s\S]*updateStatus\("refining"\)[\s\S]*wrinkleWorkerInstance\(\)\.refine\(\{/,
   "refinement must start only from the explicit refinement action");
 assert.match(analysisRuntime,
-  /applyWrinkleGuidedRefinement[\s\S]*if \(state\.autoRefinedLines\) \{[\s\S]*replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)[\s\S]*return;[\s\S]*updateStatus\("refining"\)/,
+  /applyWrinkleGuidedRefinement[\s\S]*if \(state\.autoRefinedLines\?\.length && state\.diagnostics && state\.audit\)[\s\S]*replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)[\s\S]*updateStatus\("applied"\)[\s\S]*return;[\s\S]*updateStatus\("refining"\)/,
   "restoring and reapplying must reuse the cached refinement without rerunning the worker");
 assert.match(analysisRuntime,
   /updateLiveWrinkleTracking[\s\S]*mode: "yolo-only"/,
@@ -410,30 +410,32 @@ assert.match(workerRuntime, /sourceImageRgba: request.mode === "yolo-only" \? un
   "YOLO-only centerlines must not use image-supported endpoint recovery");
 assert.doesNotMatch(analysisRuntime, /if \(!pipeline.detectionId\) throw/,
   "YOLO photo detection must succeed without a server detection id");
-assert.match(workerRuntime, /removeCrowFeetWrinkleLines\(request\.lines, detectionLandmarks\)/,
-  "YOLO guidance must remove eye-corner evidence before caching generic wrinkles");
+assert.match(workerRuntime, /const visibleLines = keepFaceRegionWrinkleLines\(adaptedLines, detectionLandmarks\);/,
+  "YOLO centerlines inside the face must be displayed without additional regional filtering");
+assert.match(workerRuntime, /const guidanceLines = keepTargetWrinkleLines\(/,
+  "RSTL refinement must still select anatomical guidance separately");
 assert.match(workerRuntime, /async function seedYoloEvidence[\s\S]*cachedYoloDetection/,
   "browser and server detections must share the same refinement cache path");
 assert.match(workerRuntime, /isYoloGuidedRstlSeed\(seed\)/,
   "YOLO guidance must restrict the set of RSTL curves passed to refinement");
 assert.match(workerRuntime,
-  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: selectNoseDorsumWrinkleLines/,
+  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: guidanceLines\.filter/,
   "forehead and glabellar evidence plus direct nose-dorsum lines must be cached separately");
 assert.match(workerRuntime,
-  /const forehead = refineChannel\(\s*foreheadSeeds,\s*cachedYolo\.foreheadEvidence,\s*"forehead",?\s*\);[\s\S]*const glabellar = refineChannel\(\s*glabellarSeeds,\s*cachedYolo\.glabellarEvidence,\s*"glabellar",?\s*\)/,
+  /const glabellar = refineChannel\(\s*glabellarSeeds,\s*cachedYolo\.glabellarEvidence,\s*"glabellar"[\s\S]*const forehead = cachedYolo\.foreheadEvidence && foreheadSeeds\.length[\s\S]*refineForeheadTrajectories/,
   "forehead and glabellar evidence must be refined independently");
 assert.match(workerRuntime,
-  /cachedYolo\.noseDorsumLines\.length \? buildDirectNoseDorsumRstl/,
+  /cachedYolo\.noseDorsumLines\.length[\s\S]*?const noseHybrid = refineNoseHybrid[\s\S]*?lines:cachedYolo\.noseDorsumLines/,
   "YOLO nose-dorsum lines must use the reviewed direct RSTL path");
 assert.match(workerRuntime,
-  /const visibilityPlan = directNose\?\.curves\.length \?[\s\S]*buildNoseRootIntersectionVisibilityPlan/,
-  "YOLO direct nose curves must use the established intersection visibility plan");
+  /const directNose = noseHybrid\.direct[\s\S]*directNose\?\.curves\.map/,
+  "YOLO direct nose curves must be appended through the reviewed hybrid path");
 assert.match(workerRuntime,
-  /visibilityPlan\?\.hiddenCurves[\s\S]*curve\.hiddenPointRuns = record\.hiddenPointRuns/,
-  "YOLO direct nose intersections must locally hide the preserved RSTL points");
+  /eyePolygons:\[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR\]/,
+  "YOLO direct nose refinement must receive both eye contours for its geometry guard");
 assert.match(workerRuntime,
-  /noseRootIntersectionVisibility: visibilityPlan \?[\s\S]*noseRootVisibilityDiagnostic\(visibilityPlan\)/,
-  "YOLO refinement audit must retain the nose-root visibility result");
+  /nose_bridge_evidence_line_count: cachedYolo\.noseDorsumLines\.length/,
+  "YOLO refinement audit must retain the direct nose evidence count");
 assert.equal(YOLO_GUIDED_RSTL_SCOPE, "yolo_forehead_glabellar_with_direct_nose");
 assert.equal(isYoloGuidedRstlSeed({ region: "forehead_bridge_arc_v15" }), true);
 assert.equal(isYoloGuidedRstlSeed({ region: "orbital_brow_upturn_v11" }), true);
@@ -520,21 +522,23 @@ assert.match(workerRuntime,
 assert.match(workerRuntime,
   /async refine[\s\S]*cachedFullDetection[\s\S]*refineV6/,
   "the worker must expose refinement as a separate operation over cached detection evidence");
-assert.match(workerRuntime, /new YoloWrinkleOnnx\([\s\S]*YOLO_WRINKLE_CONFIDENCE/,
+assert.match(workerRuntime, /requestedWrinkleConfidence\(\)[\s\S]*new YoloWrinkleOnnx\(/,
   "the worker must use the same released YOLO model and confidence threshold");
 assert.match(workerRuntime, /WRINKLE_V10_ENDPOINT/,
   "the worker must request per-image V10 evidence from the unified provider");
-assert.match(workerRuntime, /buildDirectNoseDorsumRstl/,
+assert.match(workerRuntime, /const noseHybrid = refineNoseHybrid[\s\S]*const directNose = noseHybrid\.direct/,
   "nasal-dorsum wrinkles must generate direct RSTL curves");
 assert.doesNotMatch(workerRuntime, /noseLines\.length\s*!==\s*3|鼻背纹应生成 3 条/,
   "live direct generation must follow the current image instead of requiring three nose wrinkles");
-assert.match(workerRuntime, /buildNoseRootIntersectionVisibilityPlan/,
-  "direct nasal RSTL must retain the reviewed intersection visibility rule");
+assert.match(workerRuntime, /eyePolygons:\[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR\]/,
+  "direct nasal RSTL must retain the reviewed eye geometry guard");
 assert.match(workerRuntime, /Comlink\.expose\(api\)/,
   "the wrinkle pipeline must be exposed from a real Web Worker boundary");
 assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*totalMs/,
   "the worker must report detection timings for reproducible performance regression");
 assert.match(workerRuntime, /minimumLineLengthPx: 20/);
+assert.match(workerRuntime, /minimumLineLengthPxByClass: \{ frown: 16 \}/,
+  "short glabellar lines use the reviewed lower extraction threshold");
 assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
 assert.match(workerRuntime,
   /options: yoloGuidedV9RstlRefinementOptions\(request\.faceWidthPx\)/,
@@ -542,14 +546,14 @@ assert.match(workerRuntime,
 assert.match(workerRuntime,
   /reconcileYoloGuidedAuditAfterGlobalGuard\([\s\S]*globalGuard\.rolledBackCurveIndices/,
   "the worker must reconcile channel audits after merged-geometry rollback");
-assert.match(workerClientRuntime, /new Worker\(new URL/);
+assert.match(workerClientRuntime, /const workerUrl = new URL[\s\S]*new Worker\(workerUrl/);
 assert.match(workerClientRuntime, /api\.detect[\s\S]*Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
   "the full-resolution input must be transferred without a main-thread copy or resize");
 assert.match(workerClientRuntime, /seedYoloEvidence[\s\S]*api\.seedYoloEvidence/,
   "server image centerlines must seed the same worker refinement cache");
 assert.match(analysisRuntime,
-  /STATIC_WRINKLE_MAXIMUM_SIZE\s*=\s*1280/,
-  "static server refinement must retain the reviewed 1280px coordinate ceiling");
+  /STATIC_WRINKLE_MAXIMUM_SIZE\s*=\s*LIVE_YOLO_INPUT_SIZE/,
+  "static refinement must share the released YOLO working-size ceiling");
 assert.match(analysisRuntime,
   /VITE_SERVER_COMPUTE[\s\S]*sourceState\.imageFile[\s\S]*detectServerImageWrinkles/,
   "static server detection must upload original encoded bytes for deterministic server decoding");

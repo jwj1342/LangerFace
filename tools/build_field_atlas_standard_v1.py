@@ -143,6 +143,7 @@ _LATERAL_CANTHUS_RED_ENDPOINT_REFLOW_V80 = False
 _SUPRAORBITAL_LATERAL_SHORT_ARC_REMOVAL_V81 = False
 _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82 = False
 _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83 = False
+_SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE = False
 _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84 = False
 _ORBITAL_BROW_TEMPORAL_ENDPOINT_FAN_V88 = False
 _ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89 = False
@@ -201,6 +202,13 @@ _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_CONTROLS_V83 = {
           (0.39323775, 0.13522177), (0.39223393, 0.11288267)),
     174: ((0.39384753, 0.17575120), (0.40852032, 0.16193886),
           (0.40717084, 0.13925278), (0.40654285, 0.11741626)),
+}
+_SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE_CONTROLS = {
+    index: tuple(
+        (x, y + 0.008 if point_index >= 2 and index < 174 else y)
+        for point_index, (x, y) in enumerate(controls)
+    )
+    for index, controls in _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_CONTROLS_V83.items()
 }
 _ORBITAL_BROW_TEMPORAL_SOURCE_ORDER_V84 = (105, 106, 154, 107, 155, 108, 109)
 _ORBITAL_BROW_TEMPORAL_SOURCE_INDICES_V84 = frozenset(
@@ -1317,7 +1325,11 @@ def _reshape_supraorbital_medial_curve_to_vertical_v83(
                 f"{curves[index].region}"
             )
         controls = np.asarray(
-            _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_CONTROLS_V83[index],
+            (
+                _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE_CONTROLS[index]
+                if _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE
+                else _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_CONTROLS_V83[index]
+            ),
             dtype=np.float64,
         )
         points = _sample_by_normalized_arclength_v72(
@@ -5453,6 +5465,7 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         global _SUPRAORBITAL_LATERAL_SHORT_ARC_REMOVAL_V81
         global _SUPRAORBITAL_MEDIAL_BLUE_GUIDE_REFLOW_V82
         global _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83
+        global _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE
         global _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84
         global _ORBITAL_BROW_TEMPORAL_ENDPOINT_FAN_V88
         global _ORBITAL_BROW_TEMPORAL_SPOON_RETURN_V89
@@ -5680,6 +5693,13 @@ def build(canonical: CanonicalFaceModel, reference: dict) -> Atlas:
         _SUPRAORBITAL_MEDIAL_CURVE_TO_VERTICAL_V83 = (
             "supraorbitalMedialCurveToVerticalV83" in constraints
         )
+        atlas_version = str(reference.get("atlasVersion") or "")
+        try:
+            _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE = (
+                tuple(map(int, atlas_version.split("."))) >= (8, 1, 86)
+            )
+        except ValueError:
+            _SUPRAORBITAL_MEDIAL_CROSSING_CLEARANCE = False
         _ORBITAL_BROW_TEMPORAL_BLUE_EXTENSION_V84 = (
             "orbitalBrowTemporalBlueExtensionV84" in constraints
         )

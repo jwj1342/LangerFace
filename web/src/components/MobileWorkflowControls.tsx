@@ -9,6 +9,7 @@ import {
   subscribeWorkflowLayerVisibility,
   workflowLayerVisibilitySnapshot,
 } from "../services/mobileWorkflowVisibility";
+import { setWrinkleDisplayMode } from "../services/liveWrinkleAnalysis";
 import { useIncisionStore } from "../stores/incisionStore";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
@@ -33,7 +34,8 @@ function writeWrinkleDisplayMode(mode: WrinkleDisplayMode) {
   const select = document.querySelector<HTMLSelectElement>("#wrinkleDisplayMode");
   if (!select) return;
   select.value = mode;
-  select.dispatchEvent(new Event("change", { bubbles: true }));
+  // Keep the legacy control state in sync without dispatching a second redraw.
+  setWrinkleDisplayMode(mode, { redraw: false });
 }
 
 export function MobileWorkflowControls() {

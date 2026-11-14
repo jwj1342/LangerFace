@@ -120,8 +120,8 @@ assert.match(liveRender, /lineIndicesForDensity/,
   "the React live page must keep symmetric line-density selection");
 
 const modelParts = [0, 1, 2, 3].map((index) =>
-  new URL(`model/wrinkle-yolov8s-seg-640.onnx.part${String(index).padStart(2, "0")}`, assets));
-const metadata = JSON.parse(await readFile(new URL("model/wrinkle-yolov8s-seg-640.json", assets), "utf8"));
+  new URL(`model/wrinkle-yolov8s-seg-1024.onnx.part${String(index).padStart(2, "0")}`, assets));
+const metadata = JSON.parse(await readFile(new URL("model/wrinkle-yolov8s-seg-1024.json", assets), "utf8"));
 const modelInstalled = await access(modelParts[0]).then(() => true, () => false);
 let bytes = metadata.onnx_bytes;
 if (modelInstalled) {
@@ -132,9 +132,9 @@ if (modelInstalled) {
     bytes += payload.byteLength;
     hash.update(payload);
   }
-  assert.equal(bytes, 47_346_561);
+  assert.equal(bytes, metadata.onnx_bytes);
   assert.equal(hash.digest("hex").toUpperCase(),
-    "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C");
+    metadata.onnx_sha256.toUpperCase());
 }
 assert.equal(metadata.hugging_face.visibility, "private");
 
