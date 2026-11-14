@@ -322,9 +322,13 @@
     "recordedAtMeaning": "记录当前可核验直接请求的时间，不冒充原消息发送时刻"
   },
   "editorSaveConfirmation": {
-    "status": "unconfirmed",
-    "reason": "尚无本次最终组合源码的操作者编辑器全部保存事实；不沿用远端旧确认。",
-    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016"
+    "status": "confirmed",
+    "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
+    "confirmedAt": "2026-11-14T04:39:48.127Z",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr4a-research-candidate-20261114",
+    "operatorStatement": "补充：已保存文件",
+    "confirmationKind": "current_operator_direct_reply",
+    "recordedAtMeaning": "本次直接回复的记录时刻；磁盘与已审候选一致，不以Git干净代签用户事实"
   },
   "history": [
     {
@@ -4322,7 +4326,7 @@
     "limits": "不得复用已试验版本；原0.104.1只是明确回退基线，原手机拒识及其他旧失败保留。"
   },
   "publicationPreparation20261114": {
-    "status": "AWAITING_FINAL_PAYLOAD_READ_AND_EDITOR_SAVE",
+    "status": "READY_FOR_AUTHORIZED_NON_DRAFT_PR",
     "sourceHead": "785286a8e927cf465fcc2ccfc6d8d3756699ab22",
     "base": "e51a54487dfb846bcfc7fa637858d2661fdea1f7",
     "purpose": "按操作者直接要求提交已知仍有失败的研发候选，不宣称手机或整组修复。",
@@ -4332,11 +4336,20 @@
       "MK002、MK003鼻翼及其他边界精度/跨落点问题未整组验收",
       "0.104.2/3/4缩图候选已否决并恢复0.104.1，不进入活动产品"
     ],
-    "finalPayloadHumanRead": "pending",
+    "finalPayloadHumanRead": "not_performed; technical reading explicitly delegated to expert AI by operator",
     "ci": "not_submitted",
     "integratedSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
     "assetDigest": "9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249",
-    "defaultCiSafetyEntry": "npm run test:lesion-candidate-safety"
+    "defaultCiSafetyEntry": "npm run test:lesion-candidate-safety",
+    "technicalPayloadReview": {
+      "status": "completed_in_declared_scope",
+      "reviewedSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
+      "independentAgentReview": true,
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr4a-research-candidate-20261114",
+      "limitations": "已知手机及真实边界失败仍开放；AI审查不代签操作者人工通读、真机或医学验收"
+    },
+    "editorSaveFactRecordedAt": "2026-11-14T04:39:48.127Z",
+    "submissionScope": "一份正式综合PR，暂不合并；原范围后续必要修复可沿同分支增补同一PR，每次重核当前Head CI。"
   }
 }
