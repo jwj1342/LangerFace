@@ -1,6 +1,30 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
+import { captureMarkerIdentity } from "../../tools/marker_runtime_identity.mts";
+
+async function assertSourceRuntime(page: Page) {
+  const expected = captureMarkerIdentity(undefined);
+  const proof = await page.evaluate(async () => {
+    const response = await fetch("/__runtime-identity.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`Source runtime identity returned ${response.status}`);
+    const path = "/src/services/controlledMarkerDetectionProfile.ts";
+    const module = await import(path);
+    return { identity: await response.json(),
+      profile: module.CONTROLLED_MARKER_DETECTOR_PROFILE,
+      version: module.CONTROLLED_MARKER_DETECTOR_VERSION };
+  });
+  expect(proof.identity.mode).toBe("development");
+  for (const key of ["profile", "implementationVersion", "releaseName", "sourceDigest",
+    "algorithmDigest", "assetDigest", "head", "branch", "worktreeId"] as const) {
+    expect(proof.identity[key], `source runtime ${key}`).toBe(expected[key]);
+  }
+  expect(proof.profile).toBe(expected.profile);
+  expect(proof.version).toBe(expected.implementationVersion);
+  await test.info().attach("source-runtime-identity", {
+    body: JSON.stringify(proof), contentType: "application/json",
+  });
+}
 
 test.describe.configure({ mode: "serial" });
 test.use({
@@ -255,7 +279,8 @@ test("workflow wheel assertion detects a locked narrow fallback root", async ({ 
   }
 });
 
-test("narrow mouse layout preserves the original canvas and real refine quality", async ({ browser, baseURL }) => {
+test("narrow mouse layout preserves the original canvas and real refine quality",
+  { tag: "@source-contract" }, async ({ browser, baseURL }) => {
   const context = await browser.newContext({
     baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
   });
@@ -263,6 +288,7 @@ test("narrow mouse layout preserves the original canvas and real refine quality"
     const page = await context.newPage();
     await page.goto("/app/workflow?developer=1");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    await assertSourceRuntime(page);
     const result = await page.evaluate(async () => {
       const fitPath = "/src/services/liveCanvasFit.ts";
       const statePath = "/src/services/liveState.ts";
@@ -306,12 +332,14 @@ test("narrow mouse layout preserves the original canvas and real refine quality"
     expect(result.hidden).toBe(true);
     expect(result.afterScrollAndFocusBox).toEqual(result.originalBox);
     expect(result.quality).toEqual(result.originalQuality);
+    await assertSourceRuntime(page);
   } finally {
     await context.close();
   }
 });
 
-test("width transitions retain desktop controls and layer state on fine pointers", async ({ browser, baseURL }) => {
+test("width transitions retain desktop controls and layer state on fine pointers",
+  { tag: "@source-contract" }, async ({ browser, baseURL }) => {
   const context = await browser.newContext({
     baseURL, viewport: { width: 900, height: 900 }, hasTouch: false, isMobile: false,
   });
@@ -319,6 +347,7 @@ test("width transitions retain desktop controls and layer state on fine pointers
     const page = await context.newPage();
     await page.goto("/app/workflow?developer=1");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
+    await assertSourceRuntime(page);
     await page.evaluate(async () => {
       const path = "/src/services/mobileWorkflowVisibility.ts";
       const visibility = await import(path);
@@ -368,6 +397,7 @@ test("width transitions retain desktop controls and layer state on fine pointers
     }
     await page.mouse.up();
     await expect.poll(() => page.locator("[data-workflow-boundary]").getAttribute("d")).toMatch(/^M /);
+    await assertSourceRuntime(page);
   } finally {
     await context.close();
   }
@@ -482,6 +512,7 @@ test("desktop workflow keeps the three-column shell while status text remains hi
         sourceOrder: Array.from(root.children).map((child) => {
           if (child.classList.contains("workflow-live-rail")) return "live";
           if (child.classList.contains("stage")) return "stage";
+          if (child.classList.contains("workflow-mobile-operation-pane")) return "mobile-pane";
           if (child.classList.contains("workflow-incision-rail")) return "incision";
           return "other";
         }),
@@ -494,7 +525,7 @@ test("desktop workflow keeps the three-column shell while status text remains hi
       };
     });
     expect(desktopLayout).toEqual({
-      sourceOrder: ["live", "stage", "incision"],
+      sourceOrder: ["live", "stage", "mobile-pane", "incision"],
       liveLeft: 0,
       liveWidth: 320,
       stageLeft: 320,
@@ -502,6 +533,22 @@ test("desktop workflow keeps the three-column shell while status text remains hi
       incisionLeft: 1120,
       incisionWidth: 320,
     });
+    const pane = page.locator(".workflow-workbench > .workflow-mobile-operation-pane");
+    await expect(pane).toHaveCount(1);
+    expect(await pane.evaluate((element) => ({
+      display: getComputedStyle(element).display,
+      boxes: element.getClientRects().length,
+      rails: element.querySelectorAll(".workflow-live-rail, .workflow-incision-rail").length,
+      recoverySlots: element.querySelectorAll(":scope > .workflow-mobile-recovery-slot").length,
+      visibleDescendants: Array.from(element.querySelectorAll<HTMLElement>("*"))
+        .filter((child) => {
+          const box = child.getBoundingClientRect();
+          return getComputedStyle(child).visibility !== "hidden" && box.width > 0 && box.height > 0;
+        }).length,
+    }))).toEqual({ display: "contents", boxes: 0, rails: 0, recoverySlots: 1, visibleDescendants: 0 });
+    const upload = page.locator("#uploadBtn");
+    await upload.scrollIntoViewIfNeeded();
+    await upload.click({ trial: true });
   } finally {
     await context.close();
   }

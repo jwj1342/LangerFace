@@ -32,7 +32,7 @@
     "verify:algorithm-release:pr": "node ../tools/check_algorithm_release_gate.mjs pr",
     "preview": "vite preview --host 127.0.0.1",
     "visual:react:parity": "node ../tools/capture_react_feature_parity.ts",
-    "test:browser": "npm run test:workflow-status && playwright test",
+    "test:browser": "node ../tools/run_browser_contract_suites.mjs",
     "test:workflow-status": "node ../tools/test_workflow_status_contract.mjs",
     "test:refinement-cache": "node ../tools/test_refinement_cache.mjs && node ../tools/test_polyline_match_window.mjs && node ../tools/test_curve_cross_window.mjs && node ../tools/test_self_cross_window.mjs && node ../tools/test_yolo_guard_cross_window.mjs",
     "test:skin-flow": "node ../tools/test_latest_frame_processor.ts && node ../tools/test_live_preview_cadence.ts && node ../tools/test_live_wrinkle_optical_flow.ts && node ../tools/test_wrinkle_gray_buffer.ts && node ../tools/test_temporal_wrinkle_stabilizer.ts && node ../tools/test_live_wrinkle_correction.ts && node ../tools/test_crow_feet_filter.ts",
