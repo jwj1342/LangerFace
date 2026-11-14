@@ -11,6 +11,14 @@ const triangles = J("web/assets/triangles.json");
 const atlas = J("web/assets/atlas_rstl.json").lines;
 const expected = J("web/test/expected.json");
 const fixture = J("web/test/runtime_expansion_contract.json");
+// These regions receive deliberate browser-side smoothing/endpoint adjustments
+// after the shared atlas mapping. Their historical Python fixture remains the
+// raw 204-curve reference; dedicated region tests cover the adjusted geometry.
+const runtimeAdjustedRegions = new Set([
+  "orbital_brow_upturn_v11",
+  "lateral_canthus_short_arc_v65",
+  "brow_temporal_fan_v94",
+]);
 const noseTris = noseTriangles(triangles);
 const innerMouth = innerMouthTriangles(triangles);
 
@@ -36,7 +44,11 @@ let maxPosErr = 0;
 let visMismatches = 0;
 let nPts = 0;
 for (const frame of expected.frames) {
-  const mapped = mapAtlas(atlas, frame.landmarks, triangles);
+  // The browser renderer adds three display-only lower-brow bridge seeds after
+  // mapping; the historical Python fixture intentionally contains only the
+  // 204 atlas source curves, so compare their shared source subset here.
+  const mapped = mapAtlas(atlas, frame.landmarks, triangles)
+    .filter((line) => line.region !== "brow_lower_bridge");
   const visible = visibleTriangles(frame.landmarks, triangles, noseTris);
   if (mapped.length !== frame.lines.length) {
     console.error(`FAIL frame ${frame.idx}: line counts ts=${mapped.length}, python=${frame.lines.length}`);
@@ -55,6 +67,7 @@ for (const frame of expected.frames) {
       console.error(`FAIL frame ${frame.idx} line ${browserLine.name}: extension removed atlas points ts=${browserLine.pts.length}, python=${pythonLine.pts.length}`);
       process.exit(1);
     }
+    if (runtimeAdjustedRegions.has(browserLine.region)) continue;
     const addedCount = browserLine.pts.length - pythonLine.pts.length;
     const firstError = Math.hypot(
       browserLine.pts[0][0] - pythonLine.pts[0][0],
