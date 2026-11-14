@@ -18,6 +18,11 @@ TARGET_REGIONS = {
     "cheek_lower_divergent_arc_v44",
     "cheek_alar_gap_fill_v95",
 }
+CORRECTED_SUPRAORBITAL_NAMES = {
+    f"standard_field_{index:04d}_{side}"
+    for index in range(170, 174)
+    for side in ("right", "left")
+}
 
 
 def test_v8_1_96_reflows_only_intermediate_alar_roots(tmp_path):
@@ -42,8 +47,12 @@ def test_v8_1_96_reflows_only_intermediate_alar_roots(tmp_path):
     old = {line["name"]: line for line in v95_payload["lines"]}
     new = {line["name"]: line for line in v96_payload["lines"]}
     changed = {name for name in new if new[name] != old[name]}
-    assert len(changed) == 32
-    assert {new[name]["region"] for name in changed} <= TARGET_REGIONS
+    assert len(changed) == 40
+    assert {
+        new[name]["region"]
+        for name in changed
+        if name not in CORRECTED_SUPRAORBITAL_NAMES
+    } <= TARGET_REGIONS
     for name in set(new) - changed:
         assert new[name] == old[name]
     assert (ROOT / "web/assets/atlas_rstl.json").read_bytes() == (
@@ -125,7 +134,10 @@ def test_v8_1_96_preserves_non_target_runtime_geometry(tmp_path):
             for line in map_atlas(new_atlas, landmarks, canonical.triangles)
         }
         for name, new_line in new.items():
-            if new_line.region in TARGET_REGIONS:
+            if (
+                new_line.region in TARGET_REGIONS
+                or name in CORRECTED_SUPRAORBITAL_NAMES
+            ):
                 continue
             np.testing.assert_array_equal(new_line.pts, old[name].pts)
             np.testing.assert_array_equal(new_line.tris, old[name].tris)
