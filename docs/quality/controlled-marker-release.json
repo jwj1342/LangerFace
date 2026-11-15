@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "fd45a12e0756c530cc299e34455c147379999f326bcf36e8eef1ceacd5f2aadd",
+    "sourceDigest": "b2dcbd884606445ca5e7a950ae593695be0674b9904b36b92adc6403cd41f77f",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -129,7 +129,7 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "fd45a12e0756c530cc299e34455c147379999f326bcf36e8eef1ceacd5f2aadd",
+    "sourceDigest": "b2dcbd884606445ca5e7a950ae593695be0674b9904b36b92adc6403cd41f77f",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#diagnostic-export-supplement-20261112",
     "note": "263份复制/继承项逐文件长度及SHA回读；登记收口差额另以提交和补充载荷恢复；原冻结包不改。",
     "previous": {
@@ -195,14 +195,14 @@
   },
   "operatorEvaluation": {
     "status": "accepted",
-    "sourceDigest": "fd45a12e0756c530cc299e34455c147379999f326bcf36e8eef1ceacd5f2aadd",
+    "sourceDigest": "b2dcbd884606445ca5e7a950ae593695be0674b9904b36b92adc6403cd41f77f",
     "scope": "操作者已实际查看当前 PR 版本并接受本次工程修改；该确认仅表示本次工程版本接受，不代表医学或临床验收。",
     "evidence": "操作者明确确认：实际看过当前版本，并接受这次修改；确认当前涉及文件均已保存，没有未保存的编辑器修改。",
     "confirmedAt": "2026-11-14T15:35:00Z"
   },
   "editorSaveConfirmation": {
     "status": "confirmed",
-    "sourceDigest": "fd45a12e0756c530cc299e34455c147379999f326bcf36e8eef1ceacd5f2aadd",
+    "sourceDigest": "b2dcbd884606445ca5e7a950ae593695be0674b9904b36b92adc6403cd41f77f",
     "confirmedAt": "2026-11-14T15:35:00Z",
     "evidence": "操作者明确确认：当前这次涉及的文件都已经保存到硬盘，没有未保存的编辑器修改。"
   },
