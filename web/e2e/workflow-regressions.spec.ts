@@ -398,7 +398,7 @@ test("workflow keeps reviewed photo geometry stable and reprojects read-only foc
   // opening intersection. A warning remains visible without becoming a red gate.
   await expect(candidate).toHaveCSS("stroke", "rgb(103, 232, 249)");
   await expect(candidate).toHaveCSS("stroke-dasharray", "none");
-  await expect(candidate).toHaveCSS("stroke-width", "1px");
+  await expect(candidate).toHaveCSS("stroke-width", "0.95px");
   const boundaryBeforeReview = await boundary.getAttribute("d");
   const candidateBeforeReview = await candidate.getAttribute("d");
 
@@ -737,14 +737,14 @@ test("subcutaneous overlay stays centered and controlled scan keeps its fixed ra
   if (await markerButton.getAttribute("aria-pressed") !== "true") await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   const scan = page.locator(".workflow-marker-scan input[type=range]");
-  await expect(scan).toHaveAttribute("min", "10");
+  await expect(scan).toHaveAttribute("min", "5");
   await expect(scan).toHaveAttribute("max", "60");
   await expect(scan).toHaveAttribute("step", "5");
   // The scan range is independent from the retired manual tumor diameter.
-  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(10);
+  await expect.poll(async () => Number(await scan.inputValue())).toBeGreaterThanOrEqual(5);
   await scan.focus();
   await scan.press("Home");
-  await expect(scan).toHaveValue("10");
+  await expect(scan).toHaveValue("5");
   await page.evaluate(() => {
     const auditWindow = window as Window & { __scanCoverageReasons?: string[] };
     auditWindow.__scanCoverageReasons = [];

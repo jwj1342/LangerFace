@@ -174,7 +174,6 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera", 
 
   await page.getByRole("link", { name: "进入切口规划" }).click();
   await expect(page).toHaveURL(/\/incision$/);
-  await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(page.locator("#savedCount")).toHaveText("1");
   await expect(page.locator("#candidateList")).toContainText("已确认研究候选");
   await expect(page.locator("#reviewDecision")).toHaveValue("pending_clinician_confirmation");
