@@ -747,8 +747,15 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const mapped = rawMapped;
   if (sample) sample.stages.rstlMapping = performance.now() - begin;
   const refineActive = isRefineActive();
+  // Keep the automatic-refinement baseline in the same coordinate state as
+  // the raw mapped frame. The display result may already include a committed
+  // live transport; writing that result back as the baseline would apply the
+  // same accepted displacement again on the next redraw.
+  const baselineDisplayLines = smooth0119EndpointDisplayLines(mapped, H);
   const allDisplayLines = smooth0119EndpointDisplayLines(getDisplayLines(mapped), H);
-  if (sourceState.sourceKind === "image" || sourceState.paused) setLatestAutoLines(allDisplayLines);
+  if (sourceState.sourceKind === "image" || sourceState.paused) {
+    setLatestAutoLines(baselineDisplayLines);
+  }
   const cheekExperimentLines = allDisplayLines.filter((line) =>
     TEMPORARY_CHEEK_EXPERIMENT_REGIONS.has(line.region));
   const params = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);

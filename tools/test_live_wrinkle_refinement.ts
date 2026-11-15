@@ -254,6 +254,11 @@ assert.doesNotMatch(renderRuntime, /WRINKLE_PHOTO_SHA256|sourceSpecificForeheadV
   "the shared RSTL renderer must not switch geometry visibility for one image hash");
 assert.match(renderRuntime, /ln\.hiddenPointRuns\?\.some/,
   "the deployed renderer must honor the latest nose-root intersection visibility gaps");
+assert.match(renderRuntime,
+  /const baselineDisplayLines = smooth0119EndpointDisplayLines\(mapped, H\);[\s\S]*?const allDisplayLines = smooth0119EndpointDisplayLines\(getDisplayLines\(mapped\), H\);[\s\S]*?setLatestAutoLines\(baselineDisplayLines\)/,
+  "redraws must preserve an untransported automatic baseline while rendering transported display lines");
+assert.doesNotMatch(renderRuntime, /setLatestAutoLines\(allDisplayLines\)/,
+  "already transported display lines must never become the next automatic baseline");
 
 const refineRuntime = fs.readFileSync(
   new URL("../web/src/services/liveRefine2d.ts", import.meta.url),
