@@ -816,7 +816,12 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const staticFrame = sourceState.sourceKind === "image" || sourceState.paused;
   if (!staticFrame) staticAtlasMapping.clear();
   const rawMapped = (staticFrame ? staticAtlasMapping.map : mapAtlas)(
-    atlasLines, lm, modelTriangles(), RSTL_STANDARD_MAPPING_OPTIONS,
+    atlasLines,
+    lm,
+    modelTriangles(),
+    staticFrame
+      ? RSTL_STANDARD_MAPPING_OPTIONS
+      : { ...RSTL_STANDARD_MAPPING_OPTIONS, runtimeMode: "live" },
   );
   // Apply the 0119 display correction after any frozen-frame/refinement
   // cache lookup as well. In image mode getDisplayLines() may return cached

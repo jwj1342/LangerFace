@@ -52,6 +52,8 @@ export interface VisibleTriangleOptions {
 
 export interface MapAtlasOptions {
   expandForehead?: boolean;
+  /** Use the lightweight mapping path for advancing video/camera frames. */
+  runtimeMode?: "static" | "live";
   /** Limit the display-only forehead bridge stack without changing the source atlas. */
   foreheadBridgeLineCount?: number;
   /** Move the bottom of the display-only bridge stack down by a face-height ratio. */
@@ -1359,6 +1361,7 @@ export function mapAtlas(
 ): MappedAtlasLine[] {
   const result: MappedAtlasLine[] = [];
   if (!Array.isArray(lines)) return result;
+  const liveRuntime = options.runtimeMode === "live";
   const bridgeRanks = foreheadBridgeRanks(
     lines,
     landmarksPx,
@@ -1436,6 +1439,7 @@ export function mapAtlas(
     );
   }
   separateBrowTails(result, landmarksPx);
+  if (liveRuntime) return result;
   // Extend the medial glabellar seed arcs only after every atlas line has
   // been mapped. This lets each candidate stop before the existing forehead
   // bridge or another RSTL line without changing the atlas source itself.
