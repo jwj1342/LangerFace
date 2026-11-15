@@ -922,7 +922,14 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       drawEntries.push({ line: ln, index: li, mask, action: localActionForPoints(ln.pts, dimRegions),
         selected: isSelected, partner: isPartner });
     }
-    const safeMasks = buildTopologySafeRstlMasks(displayLines, rawMasks);
+    // The topology guard is designed for the stable geometry of uploaded
+    // photos. Running its segment-intersection pass on every video/camera
+    // frame can monopolize the render loop and starve the live source from
+    // advancing. Live sources still use their normal visibility masks; the
+    // guard runs again when the source is a static image or a paused frame.
+    const safeMasks = sourceState.sourceKind === "image" || sourceState.paused
+      ? buildTopologySafeRstlMasks(displayLines, rawMasks)
+      : rawMasks;
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("rstlCrossDebugAll") === "1") {
       ctx.save();
       ctx.fillStyle = "#ff3030";
