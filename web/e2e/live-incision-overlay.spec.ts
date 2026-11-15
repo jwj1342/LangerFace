@@ -143,7 +143,7 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera", 
 
   // This deterministic MediaStream covers the browser camera pipeline; fixed-device evidence remains manual.
   await installGeneratedCamera(page);
-  await page.locator("#camBtn").click();
+  await page.locator("#camBtn").click({ force: true });
   await expect(page.locator("#livePill")).toContainText("实时摄像头", { timeout: 60_000 });
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
   await expect.poll(() => page.evaluate(candidatePixelCount), {

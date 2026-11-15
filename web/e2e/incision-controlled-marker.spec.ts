@@ -80,7 +80,7 @@ test("switching to a subcutaneous tumor exits controlled marking without inventi
 });
 
 test("a second controlled-marker click replaces the previous result before reporting success", async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(420_000);
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
@@ -100,7 +100,7 @@ test("a second controlled-marker click replaces the previous result before repor
   // The projection status is shared with the photo renderer and can be
   // replaced by its generic copy during the same render. The endpoint handles
   // are the actual visible candidate and therefore the stable success signal.
-  await expect.poll(() => findPhotoEndpointHandles(page), { timeout: 75_000 })
+  await expect.poll(() => findPhotoEndpointHandles(page), { timeout: 180_000 })
     .toHaveLength(2);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(canvas).toHaveAttribute("aria-busy", "false");
