@@ -507,10 +507,14 @@ export function refineForeheadTrajectories(input: {
       });
       curve.pts = curve.pts.map(([x, py], index) => {
         const raw = py + smoothedDisplacement[index];
+        // Keep each curve's original index while excluding the selected
+        // curve. Re-numbering after filter makes the last neighbour disappear
+        // and can accidentally reintroduce the selected curve as an obstacle
+        // when the selected curve is in the middle of the bundle.
         const neighbours = glabellarBaseline
-          .filter((_, index) => index !== match.curve)
-          .map((_, index) => index)
-          .map((index) => ({ index, value: baselineAt(index, x) }))
+          .map((candidate, index) => ({ candidate, index }))
+          .filter(({ index }) => index !== match.curve)
+          .map(({ index }) => ({ index, value: baselineAt(index, x) }))
           .filter((item): item is { index: number; value: number } => item.value !== null)
           .sort((a, b) => a.value - b.value);
         // Select the nearest baseline neighbour on either side of this curve,

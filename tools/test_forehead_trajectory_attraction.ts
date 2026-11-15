@@ -63,3 +63,29 @@ for(let x=220;x<=400;x+=2) {
 // geometry translated above the image remains an identity without evidence.
 const cropped = {...base, seeds:base.seeds.map(c=>({...c,pts:c.pts.map(([x,y]):Point=>[x,y-55])})),lines:[]};
 assert.deepEqual(refineForeheadTrajectories(cropped).curves,cropped.seeds,'off-image standard curves must not be clamped into the photo');
+
+// Glabellar neighbour bounds must use the original curve indices. Reordering
+// the same named bundle must therefore produce the same geometry after
+// restoring the result to name order; a filter-then-map implementation drops
+// the final neighbour and makes a selected middle curve order-dependent.
+const glabellarCurve = (name: string, x: number) => ({
+  name, region: 'orbital_brow_upturn_v11',
+  pts: Array.from({ length: 101 }, (_, i): Point => [x + .3 * Math.sin(i / 10), 10 + i]),
+});
+const glabellarEvidence = {
+  id: 'glabellar-reorder',
+  points: Array.from({ length: 61 }, (_, i): Point => [40 + 2 * Math.sin(i / 12), 30 + i]),
+};
+const orderedGlabellar = [glabellarCurve('glabellar-a', 30), glabellarCurve('glabellar-b', 40), glabellarCurve('glabellar-c', 50)];
+const canonicalGlabellar = (curves: Array<{ name: string; pts: Point[] }>) => curves
+  .map((item) => ({ name: item.name, pts: item.pts }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+const glabellarBaseline = refineForeheadTrajectories({
+  mode: 'glabellar', size: 128, seeds: orderedGlabellar, lines: [glabellarEvidence], fixedCurves: [],
+});
+const glabellarReordered = refineForeheadTrajectories({
+  mode: 'glabellar', size: 128, seeds: [orderedGlabellar[2], orderedGlabellar[0], orderedGlabellar[1]],
+  lines: [glabellarEvidence], fixedCurves: [],
+});
+assert.deepEqual(canonicalGlabellar(glabellarReordered.curves), canonicalGlabellar(glabellarBaseline.curves),
+  'glabellar neighbour bounds must be invariant to seed order');
