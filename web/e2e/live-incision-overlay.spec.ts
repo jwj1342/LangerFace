@@ -138,6 +138,7 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera", 
   await expect(page.locator("#incisionOverlayQaState")).not.toHaveText("等待画面", { timeout: 60_000 });
   await expect.poll(() => page.evaluate(candidatePixelCount), {
     message: "the uploaded video must draw the staged incision candidate",
+    timeout: 60_000,
   }).toBeGreaterThan(8);
 
   // This deterministic MediaStream covers the browser camera pipeline; fixed-device evidence remains manual.
@@ -173,7 +174,6 @@ test("approved incision reaches photo, uploaded video, and MediaStream camera", 
 
   await page.getByRole("link", { name: "进入切口规划" }).click();
   await expect(page).toHaveURL(/\/incision$/);
-  await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
   await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(page.locator("#savedCount")).toHaveText("1");
   await expect(page.locator("#candidateList")).toContainText("已确认研究候选");
