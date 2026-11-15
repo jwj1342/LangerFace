@@ -216,6 +216,35 @@ function extendMedialUpwardArc(
     }
     return topAtStart ? extension.concat(points) : points.concat(extension.reverse());
   };
+  // The obstacle geometry is unchanged throughout the stepped search and the
+  // binary refinement below. Reuse its segment lists instead of rebuilding the
+  // same arrays for every candidate length.
+  const otherSegments = otherLines.map((line) => lineSegments(line.pts));
+  const cellSize = Math.max(16, faceHeight * 0.05);
+  const obstacleGrid = new Map<string, Array<[Vec3, Vec3]>>();
+  const addToGrid = (segment: [Vec3, Vec3]) => {
+    const minX = Math.floor(Math.min(segment[0][0], segment[1][0]) / cellSize);
+    const maxX = Math.floor(Math.max(segment[0][0], segment[1][0]) / cellSize);
+    const minY = Math.floor(Math.min(segment[0][1], segment[1][1]) / cellSize);
+    const maxY = Math.floor(Math.max(segment[0][1], segment[1][1]) / cellSize);
+    for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) {
+      const key = `${x}:${y}`;
+      const bucket = obstacleGrid.get(key);
+      if (bucket) bucket.push(segment); else obstacleGrid.set(key, [segment]);
+    }
+  };
+  otherSegments.forEach(segments => segments.forEach(addToGrid));
+  const nearbySegments = (segment: [Vec3, Vec3]): Array<[Vec3, Vec3]> => {
+    const minX = Math.floor((Math.min(segment[0][0], segment[1][0]) - clearance) / cellSize);
+    const maxX = Math.floor((Math.max(segment[0][0], segment[1][0]) + clearance) / cellSize);
+    const minY = Math.floor((Math.min(segment[0][1], segment[1][1]) - clearance) / cellSize);
+    const maxY = Math.floor((Math.max(segment[0][1], segment[1][1]) + clearance) / cellSize);
+    const nearby = new Set<[Vec3, Vec3]>();
+    for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) {
+      for (const candidate of obstacleGrid.get(`${x}:${y}`) || []) nearby.add(candidate);
+    }
+    return [...nearby];
+  };
   const conflictsExisting = (candidate: Vec3[]): boolean => {
     // Only test segments introduced by this extension. Including the first
     // original segment made a valid continuation inherit unrelated atlas
@@ -224,8 +253,8 @@ function extendMedialUpwardArc(
     const addedSegments = topAtStart
       ? lineSegments(candidate).slice(0, addedCount)
       : lineSegments(candidate).slice(points.length - 1, points.length - 1 + addedCount);
-    return otherLines.some((line) => lineSegments(line.pts).some((segment) =>
-      addedSegments.some((added) => segmentsConflict(added, segment, clearance))));
+    return addedSegments.some((added) => nearbySegments(added).some((segment) =>
+      segmentsConflict(added, segment, clearance)));
   };
 
   // Find the first unsafe length before refining it. A single binary search
@@ -439,8 +468,9 @@ function bringBrowTurnsMedially(lines: MappedAtlasLine[], landmarks: Vec3[]): vo
   const top = Math.min(...prior.flatMap(points => points.map(p => p[1])));
   const bottoms = prior.map(points => Math.max(...points.map(p => p[1]))).sort((a, b) => a - b);
   const turnHeight = (bottoms[Math.floor(bottoms.length / 2)] ?? top) - top;
-  const conflict = (a: Vec3[], b: Vec3[]) => lineSegments(a).some(segment =>
-    lineSegments(b).some(other => segmentsConflict(segment, other, 0.25)));
+  const obstacleSegments = obstacles.map((line) => lineSegments(line.pts));
+  const conflict = (a: Vec3[], bSegments: Array<[Vec3, Vec3]>) => lineSegments(a).some(segment =>
+    bSegments.some(other => segmentsConflict(segment, other, 0.25)));
   // Validate the whole group at the same strength; never deform lines one by
   // one against already-moved neighbours or silently truncate their tails.
   for (const scale of [1, 0.85, 0.7, 0.55, 0.4, 0.25, 0]) {
@@ -454,9 +484,13 @@ function bringBrowTurnsMedially(lines: MappedAtlasLine[], landmarks: Vec3[]): vo
       const lowerTurn = scale * 0.22 * turnHeight * Math.sin(Math.PI * heightT) ** 2 * medialWeight;
       return [x, p[1] + lowerTurn, p[2]];
     }));
+    const priorSegments = prior.map((points) => lineSegments(points));
+    const candidateSegments = candidate.map((points) => lineSegments(points));
     const unsafe = candidate.some((points, i) =>
-      obstacles.some(obstacle => conflict(points, obstacle.pts) && !conflict(prior[i], obstacle.pts)) ||
-      candidate.slice(0, i).some((other, j) => conflict(points, other) && !conflict(prior[i], prior[j])));
+      obstacleSegments.some((segments, obstacleIndex) =>
+        conflict(points, segments) && !conflict(prior[i], segments)) ||
+      candidate.slice(0, i).some((_, j) =>
+        conflict(points, candidateSegments[j]) && !conflict(prior[i], priorSegments[j])));
     if (unsafe) continue;
     selected.forEach((line, i) => { line.pts = candidate[i]; });
     return;
@@ -567,6 +601,7 @@ function addLowerBrowBridge(lines: MappedAtlasLine[], landmarks: Vec3[], count =
     const step = width * 0.012;
     return Math.max(-0.3, Math.min(0.3, (at(line, x + step)[1] - at(line, x - step)[1]) / (2 * step)));
   };
+  const corridorLines = lines.filter(line => line.region !== "brow_lower_bridge");
   const ma = slope(ordered[0], left), mb = slope(ordered[1], right);
   for (const offset of Array.from({ length: 33 }, (_, i) => 0.012 - i * 0.00025)) {
     let pts: Vec3[] = Array.from({ length: 201 }, (_, i) => {
@@ -586,7 +621,7 @@ function addLowerBrowBridge(lines: MappedAtlasLine[], landmarks: Vec3[], count =
     const corridor = pts.map(p => {
       let clearance = width * offset * 3;
       const baseY = p[1] - offset * width;
-      for (const line of lines.filter(l => l.region !== "brow_lower_bridge")) for (let i = 1; i < line.pts.length; i++) {
+      for (const line of corridorLines) for (let i = 1; i < line.pts.length; i++) {
         const a = line.pts[i - 1], b = line.pts[i];
         if (p[0] < Math.min(a[0], b[0]) || p[0] > Math.max(a[0], b[0]) || Math.abs(b[0] - a[0]) < 1e-9) continue;
         const y = a[1] + (p[0] - a[0]) / (b[0] - a[0]) * (b[1] - a[1]);
@@ -617,10 +652,12 @@ function addLowerBrowBridge(lines: MappedAtlasLine[], landmarks: Vec3[], count =
         return [p[0], total / weight, p[2]];
       });
     });
-    const conflicts = (a: Vec3[], b: Vec3[]) => lineSegments(a).some(segment =>
-      lineSegments(b).some(other => segmentsConflict(segment, other, 0.75)));
-    if (pair.some((points, i) => lines.some(line => line.region !== "brow_lower_bridge" && conflicts(points, line.pts))
-      || pair.slice(0, i).some(other => conflicts(points, other)))) continue;
+    const corridorSegments = corridorLines.map(line => lineSegments(line.pts));
+    const pairSegments = pair.map(points => lineSegments(points));
+    const conflicts = (a: Vec3[], bSegments: Array<[Vec3, Vec3]>) => lineSegments(a).some(segment =>
+      bSegments.some(other => segmentsConflict(segment, other, 0.75)));
+    if (pair.some((points, i) => corridorSegments.some(segments => conflicts(points, segments))
+      || pair.slice(0, i).some((_, j) => conflicts(points, pairSegments[j])))) continue;
 
     const tris = pts.map(p => {
       let best = Infinity, tri = -1;
@@ -734,8 +771,10 @@ function regularizeCanthusArcs(lines: MappedAtlasLine[], tighten = 0.75): void {
     gap /= 21;
     if (!(gap > 0)) continue;
     const obstacles = lines.filter(line => !selected.includes(line));
-    const conflicts = (a: Vec3[], b: Vec3[]) => lineSegments(a).some(segment =>
-      lineSegments(b).some(other => segmentsConflict(segment, other, 0.75)));
+    const obstacleSegments = obstacles.map(line => lineSegments(line.pts));
+    const originalSegments = original.map(points => lineSegments(points));
+    const conflicts = (a: Vec3[], bSegments: Array<[Vec3, Vec3]>) => lineSegments(a).some(segment =>
+      bSegments.some(other => segmentsConflict(segment, other, 0.75)));
     for (const flatten of [0.28, 0.20, 0.12, 0]) {
       const centerAt = (t: number): Vec3 => {
         const p = mean(t);
@@ -748,9 +787,11 @@ function regularizeCanthusArcs(lines: MappedAtlasLine[], tighten = 0.75): void {
         const sign = dx < 0 ? -1 : 1, offset = (rank - 2) * gap;
         return [p[0] - sign * dy / len * offset, p[1] + sign * dx / len * offset, sample(rank, t)[2]];
       }));
-      const unsafe = candidate.some((pts, i) => obstacles.some(other =>
-        conflicts(pts, other.pts) && (other.region === "brow_lower_bridge" || !conflicts(original[i], other.pts)))
-        || candidate.slice(0, i).some(other => conflicts(pts, other)));
+      const candidateSegments = candidate.map(points => lineSegments(points));
+      const unsafe = candidate.some((pts, i) => obstacleSegments.some((segments, obstacleIndex) =>
+        conflicts(pts, segments) && (obstacles[obstacleIndex].region === "brow_lower_bridge"
+          || !conflicts(original[i], segments)))
+        || candidate.slice(0, i).some((_, j) => conflicts(pts, candidateSegments[j])));
       if (unsafe) continue;
       selected.forEach((line, i) => { line.pts = candidate[i]; });
       break;
@@ -759,8 +800,9 @@ function regularizeCanthusArcs(lines: MappedAtlasLine[], tighten = 0.75): void {
     const spaced = selected.map(line => line.pts);
     for (const fraction of [0.30, 0.20, 0.10]) {
       const lifted = spaced.map(points => points.map((p): Vec3 => [p[0], p[1] - gap * fraction, p[2]]));
-      if (lifted.some((points, i) => obstacles.some(other =>
-        conflicts(points, other.pts) && (other.region === "brow_lower_bridge" || !conflicts(spaced[i], other.pts))))) continue;
+      if (lifted.some((points, i) => obstacleSegments.some((segments, obstacleIndex) =>
+        conflicts(points, segments) && (obstacles[obstacleIndex].region === "brow_lower_bridge"
+          || !conflicts(spaced[i], segments))))) continue;
       selected.forEach((line, i) => { line.pts = lifted[i]; });
       break;
     }
@@ -775,9 +817,10 @@ function regularizeCanthusArcs(lines: MappedAtlasLine[], tighten = 0.75): void {
       const center = [0, 1].map(axis => middle[k][axis] + t * (middle[k + 1][axis] - middle[k][axis]));
       return [center[0] + (p[0] - center[0]) * tighten, center[1] + (p[1] - center[1]) * tighten, p[2]];
     }));
-    if (!tightened.some((points, i) => obstacles.some(other =>
-      conflicts(points, other.pts) && !conflicts(baseline[i], other.pts))
-      || tightened.slice(0, i).some(other => conflicts(points, other)))) {
+    const tightenedSegments = tightened.map(points => lineSegments(points));
+    if (!tightened.some((points, i) => obstacleSegments.some((segments) =>
+      conflicts(points, segments) && !conflicts(baseline[i], segments))
+      || tightened.slice(0, i).some((_, j) => conflicts(points, tightenedSegments[j])))) {
       selected.forEach((line, i) => { line.pts = tightened[i]; });
     }
   }
