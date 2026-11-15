@@ -52,6 +52,11 @@
   "onnx_bytes": 47346618,
   "onnx_sha256": "e60dde489cb7202b59cf39e6c4043ac9a6de3ffc80bae3f74b52a84b943d07c9",
   "exporter": "ultralytics 8.4.138",
+  "hugging_face": {
+    "repository": "LangerFace-Research/langerface-wrinkle-yolov8s-seg",
+    "filename": "wrinkle-yolov8s-seg-640.onnx",
+    "visibility": "private"
+  },
   "chunks": [
     "wrinkle-yolov8s-seg-640.onnx.part00",
     "wrinkle-yolov8s-seg-640.onnx.part01",
