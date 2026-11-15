@@ -68,6 +68,22 @@ let browGuardDiagnosticKey = "";
 let crossPairExperimentDiagnosticKey = "";
 let rstlCrossDebugPoints: Array<{ x: number; y: number }> = [];
 
+type LiveTopologyCache = {
+  source: TexImageSource | HTMLVideoElement | null;
+  lineKey: string;
+  previousLandmarks: Vec3[] | null;
+  suppressed: number[][] | null;
+  framesSinceCheck: number;
+};
+
+let liveTopologyCache: LiveTopologyCache = {
+  source: null,
+  lineKey: "",
+  previousLandmarks: null,
+  suppressed: null,
+  framesSinceCheck: 0,
+};
+
 const RSTL_0119_NAMES = new Set([
   "standard_field_0119_left",
   "standard_field_0119_right",
@@ -703,6 +719,67 @@ function buildTopologySafeRstlMasks(
   return safe;
 }
 
+function liveTopologyLineKey(lines: MappedAtlasLine[]): string {
+  return lines.map(line => `${line.name}:${line.pts.length}`).join("|");
+}
+
+function liveTopologyMotion(previous: Vec3[] | null, current: Vec3[], W: number, H: number): number {
+  if (!previous || previous.length !== current.length) return Number.POSITIVE_INFINITY;
+  const scale = Math.max(1, Math.min(W, H));
+  let maxMotion = 0;
+  for (let index = 0; index < current.length; index++) {
+    const before = previous[index];
+    const after = current[index];
+    if (!before || !after) continue;
+    maxMotion = Math.max(maxMotion,
+      Math.hypot(after[0] - before[0], after[1] - before[1]) / scale);
+  }
+  return maxMotion;
+}
+
+/**
+ * Reuse the expensive crossing decision on live frames. Only the suppression
+ * decision is cached; current-frame visibility and hand/face masks are always
+ * taken from `rawMasks`.
+ */
+function buildLiveTopologyMasks(
+  lines: MappedAtlasLine[],
+  rawMasks: number[][],
+  lm: Vec3[],
+  W: number,
+  H: number,
+): number[][] {
+  const source = sourceState.source as TexImageSource | HTMLVideoElement | null;
+  const lineKey = liveTopologyLineKey(lines);
+  const sourceChanged = liveTopologyCache.source !== source
+    || liveTopologyCache.lineKey !== lineKey;
+  const motion = sourceChanged
+    ? Number.POSITIVE_INFINITY
+    : liveTopologyMotion(liveTopologyCache.previousLandmarks, lm, W, H);
+  liveTopologyCache.framesSinceCheck += 1;
+
+  // Let the first live frames start immediately. Recheck after a short warmup,
+  // every eight frames, or as soon as the face moves enough that a cached
+  // crossing decision may no longer be valid.
+  const shouldRecheck = sourceChanged || liveTopologyCache.suppressed === null
+    ? liveTopologyCache.framesSinceCheck > 2
+    : liveTopologyCache.framesSinceCheck >= 8 || motion > 0.025;
+  if (shouldRecheck) {
+    const safe = buildTopologySafeRstlMasks(lines, rawMasks);
+    liveTopologyCache.source = source;
+    liveTopologyCache.lineKey = lineKey;
+    liveTopologyCache.previousLandmarks = lm.map(point => [...point] as Vec3);
+    liveTopologyCache.suppressed = rawMasks.map((mask, lineIndex) =>
+      mask.map((value, pointIndex) => value && !safe[lineIndex]?.[pointIndex] ? 1 : 0));
+    liveTopologyCache.framesSinceCheck = 0;
+  }
+
+  const suppressed = liveTopologyCache.suppressed;
+  if (!suppressed) return rawMasks;
+  return rawMasks.map((mask, lineIndex) => mask.map((value, pointIndex) =>
+    value && !suppressed[lineIndex]?.[pointIndex] ? 1 : 0));
+}
+
 function estimateRenderQualityGate(lm: Vec3[], W: number, H: number): AnyRecord {
   if (renderQualityDiagnostics.source !== sourceState.source) {
     renderQualityDiagnostics.source = sourceState.source;
@@ -922,14 +999,12 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       drawEntries.push({ line: ln, index: li, mask, action: localActionForPoints(ln.pts, dimRegions),
         selected: isSelected, partner: isPartner });
     }
-    // The topology guard is designed for the stable geometry of uploaded
-    // photos. Running its segment-intersection pass on every video/camera
-    // frame can monopolize the render loop and starve the live source from
-    // advancing. Live sources still use their normal visibility masks; the
-    // guard runs again when the source is a static image or a paused frame.
+    // Static images get the full crossing pass. Live sources reuse only the
+    // cached suppression decision and recheck it after meaningful movement;
+    // their current visibility/hand masks are always recomputed above.
     const safeMasks = sourceState.sourceKind === "image" || sourceState.paused
       ? buildTopologySafeRstlMasks(displayLines, rawMasks)
-      : rawMasks;
+      : buildLiveTopologyMasks(displayLines, rawMasks, lm, W, H);
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("rstlCrossDebugAll") === "1") {
       ctx.save();
       ctx.fillStyle = "#ff3030";
