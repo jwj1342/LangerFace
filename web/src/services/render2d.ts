@@ -1002,9 +1002,12 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     // Static images get the full crossing pass. Live sources reuse only the
     // cached suppression decision and recheck it after meaningful movement;
     // their current visibility/hand masks are always recomputed above.
+    const liveOverlayActive = Boolean(renderState.incisionOverlay);
     const safeMasks = sourceState.sourceKind === "image" || sourceState.paused
       ? buildTopologySafeRstlMasks(displayLines, rawMasks)
-      : buildLiveTopologyMasks(displayLines, rawMasks, lm, W, H);
+      : liveOverlayActive
+        ? rawMasks
+        : buildLiveTopologyMasks(displayLines, rawMasks, lm, W, H);
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("rstlCrossDebugAll") === "1") {
       ctx.save();
       ctx.fillStyle = "#ff3030";

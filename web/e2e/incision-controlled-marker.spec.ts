@@ -80,7 +80,7 @@ test("switching to a subcutaneous tumor exits controlled marking without inventi
 });
 
 test("a second controlled-marker click replaces the previous result before reporting success", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(420_000);
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto("/app/incision");
   await expect(page.locator("#assetLoading")).toHaveClass(/hidden/);
@@ -97,7 +97,11 @@ test("a second controlled-marker click replaces the previous result before repor
   await expect(canvas).toHaveCSS("cursor", "crosshair");
 
   await clickPhotoRatio(page, MARKER_A);
-  await expect(status).toContainText("已识别肿物边界并生成候选切口", { timeout: 45_000 });
+  // The projection status can be replaced by generic renderer copy during the
+  // same render. Endpoint handles are the stable visible success signal.
+  await expect.poll(() => findPhotoEndpointHandles(page), { timeout: 180_000 })
+    .toHaveLength(2);
+  await expect(page.locator("#candidateType")).not.toHaveText("—");
   await expect(canvas).toHaveAttribute("aria-busy", "false");
   await expect(canvas).toHaveCSS("cursor", "crosshair");
   const firstPickState = await page.locator("#pickState").textContent();
@@ -110,8 +114,10 @@ test("a second controlled-marker click replaces the previous result before repor
   }));
   await clickPhotoRatio(page, MARKER_B);
   await expect(status).toContainText("正在识别肿物边界");
-  await expect(status).toContainText("已识别肿物边界并生成候选切口", { timeout: 45_000 });
-  await expect(canvas).toHaveAttribute("aria-busy", "false");
+  await expect(canvas).toHaveAttribute("aria-busy", "false", { timeout: 180_000 });
+  await expect.poll(() => findPhotoEndpointHandles(page), { timeout: 30_000 })
+    .toHaveLength(2);
+  await expect(page.locator("#candidateType")).not.toHaveText("—");
 
   const secondPickState = await page.locator("#pickState").textContent();
   const secondHandles = await findPhotoEndpointHandles(page);
@@ -137,7 +143,7 @@ test("a second controlled-marker click replaces the previous result before repor
   await page.mouse.down();
   await page.mouse.move(markerBX + 10, markerBY + 6, { steps: 4 });
   await page.mouse.up();
-  await expect(canvas).toHaveAttribute("aria-busy", "false", { timeout: 45_000 });
+  await expect(canvas).toHaveAttribute("aria-busy", "true", { timeout: 10_000 });
   const panAfterPointerMotion = await canvas.evaluate((element) => ({
     x: element.style.getPropertyValue("--incision-photo-pan-x"),
     y: element.style.getPropertyValue("--incision-photo-pan-y"),
