@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
+    "sourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -129,9 +129,9 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#diagnostic-export-supplement-20261112",
-    "note": "263份复制/继承项逐文件长度及SHA回读；登记收口差额另以提交和补充载荷恢复；原冻结包不改。",
+    "sourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
+    "evidence": "本地 T1 回归测试、typecheck 与 test:geometry 通过；恢复包 manifest 已回读。",
+    "note": "本包绑定 PR #245 T1 修复提交 3facaa1；继承 R3 包未变文件，新增邻线索引修复及 mutation-sensitive 回归测试。",
     "previous": {
       "status": "verified",
       "sourceDigest": "1e3751aeccbdfadde3ccc44b45ae2fbe775e7ac60d0bca6d89e5812ee19681b6",
@@ -181,30 +181,30 @@
         "limitations": "官方263份复制文件长度/SHA逐项通过；scope外3测试入口已另存哈希补充件，完整恢复须合用。后登记差额以最终patch保全；不含环境、人工或医学验收。"
       }
     },
-    "manifestPath": "local_outputs/recovery-packages/pr245-ci-20261116-r3/manifest.json",
-    "manifestSha256": "b772de73f11dd287ffbca69be2a0c03691b6133f79fa01ab82d78446a2ab6290",
+    "manifestPath": "local_outputs/recovery-packages/pr245-ci-20261116-t1/manifest.json",
+    "manifestSha256": "19ba456667cac69781373fe821b454df6439155708617d2a94fc8417bce8fe89",
     "scopeConfigSha256": "3d8ee606897d82990930f5f651892089a4561dd1f77020e33d730a09da6018d3",
-    "verifiedAt": "2026-11-16T17:00:00+08:00",
+    "verifiedAt": "2026-11-16T17:30:00+08:00",
     "limitations": "本包绑定 PR #245 的 R3 修复提交 535ab59；保存可审计源码、配置和测试，模型/媒体/依赖及编辑器未保存缓冲仍按既有限制处理；不代表人工效果、真机或医学验收。"
   },
   "scopeBoundaryReview": {
-    "status": "confirmed",
-    "manifestSha256": "b772de73f11dd287ffbca69be2a0c03691b6133f79fa01ab82d78446a2ab6290",
-    "confirmedAt": "2026-11-16T09:02:47Z",
-    "evidence": "操作者已实际查看 PR #245 当前 R3 版本，接受这次 R3 修复；本次涉及文件均已保存，没有未保存的编辑器修改。"
+    "status": "pending",
+    "manifestSha256": "19ba456667cac69781373fe821b454df6439155708617d2a94fc8417bce8fe89",
+    "confirmedAt": null,
+    "evidence": "等待操作者查看 PR #245 T1 新版本并确认涉及文件已保存。"
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
-    "scope": "PR #245 R3：RSTL 可见性缺口补齐与硬排除优先级修复；该确认仅表示本次工程版本接受，不代表医学或临床验收。",
-    "evidence": "操作者已实际查看 PR #245 当前 R3 版本，接受这次 R3 修复。",
-    "confirmedAt": "2026-11-16T09:02:47Z"
+    "status": "pending",
+    "sourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
+    "scope": "PR #245 T1：眉间邻线索引修复及对旧实现敏感的回归测试；不代表医学或临床验收。",
+    "evidence": "等待操作者查看 PR #245 T1 新版本。",
+    "confirmedAt": null
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
-    "confirmedAt": "2026-11-16T09:02:47Z",
-    "evidence": "操作者确认本次涉及文件均已保存，没有未保存的编辑器修改。"
+    "status": "pending",
+    "sourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
+    "confirmedAt": null,
+    "evidence": "等待操作者确认本次 T1 涉及文件均已保存，没有未保存的编辑器修改。"
   },
   "history": [
     {
@@ -2882,10 +2882,10 @@
   "sourceFingerprint": {
     "encoding": "UTF-8",
     "normalization": "CRLF-to-LF-only",
-    "previousSourceDigest": "1e3751aeccbdfadde3ccc44b45ae2fbe775e7ac60d0bca6d89e5812ee19681b6",
-    "currentSourceDigest": "f78164e8779e3372e11393a4e807e69c1a5b6ec41135711fc6b52d8f77aee550",
-    "capturedAt": "2026-11-12T14:42:39.420575+08:00",
-    "reason": "仅诊断服务与test:privacy入口变化；算法及资产摘要保持。"
+    "previousSourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
+    "currentSourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
+    "capturedAt": "2026-11-16T10:06:57.422257+00:00",
+    "reason": "T1：强化眉间邻线索引回归测试，并修复先筛选后重新编号导致的邻线索引错误。"
   },
   "integrationHistory": [
     {
@@ -3049,9 +3049,9 @@
   ],
   "automatedValidation": {
     "status": "passed_default_and_scoped",
-    "sourceDigest": "f78164e8779e3372e11393a4e807e69c1a5b6ec41135711fc6b52d8f77aee550",
+    "sourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#diagnostic-export-supplement-20261112",
-    "note": "本组合npm test默认全链、隐私/诊断专项、typecheck、build及规范候选构建/产物身份回读、workflow/image/runtime契约均exit0；独立差额审查无新增有据阻断。未跑新浏览器整组，不沿用旧CI为新Head通过；两项人工事实已由当前直接回复补齐，发布门禁须在最终提交实际执行。",
+    "note": "本地 T1 回归测试已加强并通过，typecheck 与 test:geometry 通过；新 Head 尚未重新运行远端浏览器整组，不能沿用旧 CI 结论。",
     "previous": {
       "status": "passed_with_existing_skips",
       "sourceDigest": "1e3751aeccbdfadde3ccc44b45ae2fbe775e7ac60d0bca6d89e5812ee19681b6",
