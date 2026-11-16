@@ -10,7 +10,7 @@
       "孤立色素候选纠偏"
     ],
     "status": "candidate",
-    "sourceDigest": "10c7452756d3d3ae0ec1ba0835538befb35bfdb802956c436fb63e1763272142",
+    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
     "algorithmDigest": "b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a",
     "changeSlug": "isolated-pigment-after-validation",
     "previous": {
@@ -129,7 +129,7 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "10c7452756d3d3ae0ec1ba0835538befb35bfdb802956c436fb63e1763272142",
+    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#diagnostic-export-supplement-20261112",
     "note": "263份复制/继承项逐文件长度及SHA回读；登记收口差额另以提交和补充载荷恢复；原冻结包不改。",
     "previous": {
@@ -181,30 +181,28 @@
         "limitations": "官方263份复制文件长度/SHA逐项通过；scope外3测试入口已另存哈希补充件，完整恢复须合用。后登记差额以最终patch保全；不含环境、人工或医学验收。"
       }
     },
-    "manifestPath": "local_outputs/recovery-packages/pr245-ci-20261115-r1/manifest.json",
-    "manifestSha256": "ad66a76233b4f4bfd77d75fc67ad741119be9cfa136452a13e407d26f30abf33",
+    "manifestPath": "local_outputs/recovery-packages/pr245-ci-20261116-r3/manifest.json",
+    "manifestSha256": "b772de73f11dd287ffbca69be2a0c03691b6133f79fa01ab82d78446a2ab6290",
     "scopeConfigSha256": "3d8ee606897d82990930f5f651892089a4561dd1f77020e33d730a09da6018d3",
-    "verifiedAt": "2026-11-15T23:00:00+08:00",
-    "limitations": "本包绑定 PR #245 的 R1 修复提交 c5614f0；仅保存可审计源码、配置和测试，模型/媒体/依赖及编辑器未保存缓冲仍按既有限制处理；不代表人工效果、真机或医学验收。"
+    "verifiedAt": "2026-11-16T17:00:00+08:00",
+    "limitations": "本包绑定 PR #245 的 R3 修复提交 535ab59；保存可审计源码、配置和测试，模型/媒体/依赖及编辑器未保存缓冲仍按既有限制处理；不代表人工效果、真机或医学验收。"
   },
   "scopeBoundaryReview": {
-    "status": "confirmed",
-    "manifestSha256": "ad66a76233b4f4bfd77d75fc67ad741119be9cfa136452a13e407d26f30abf33",
-    "confirmedAt": "2026-11-15T15:07:49Z",
-    "evidence": "操作者已实际查看 PR #245 当前版本，接受 R1 修复；本次涉及文件均已保存，没有未保存的编辑器修改。"
+    "status": "pending",
+    "manifestSha256": "b772de73f11dd287ffbca69be2a0c03691b6133f79fa01ab82d78446a2ab6290",
+    "pendingSourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
+    "evidence": "已为 R3 新源码生成恢复包；等待操作者查看当前版本并确认责任范围和文件已保存。"
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "10c7452756d3d3ae0ec1ba0835538befb35bfdb802956c436fb63e1763272142",
-    "scope": "PR #245 R1：眉间邻线原始索引修复及回归测试；该确认仅表示本次工程版本接受，不代表医学或临床验收。",
-    "evidence": "操作者已实际查看 PR #245 当前版本，接受 R1 修复。",
-    "confirmedAt": "2026-11-15T15:07:49Z"
+    "status": "pending",
+    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
+    "scope": "PR #245 R3：RSTL 可见性缺口补齐与硬排除优先级修复；不代表医学或临床验收。",
+    "evidence": "等待操作者实际查看绑定当前源码指纹的 R3 版本后确认。"
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "10c7452756d3d3ae0ec1ba0835538befb35bfdb802956c436fb63e1763272142",
-    "confirmedAt": "2026-11-15T15:07:49Z",
-    "evidence": "操作者确认本次涉及文件均已保存，没有未保存的编辑器修改。"
+    "status": "pending",
+    "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
+    "evidence": "等待操作者确认绑定当前源码指纹的涉及文件均已保存。"
   },
   "history": [
     {
