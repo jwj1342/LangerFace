@@ -512,9 +512,9 @@ export function refineForeheadTrajectories(input: {
         // and can accidentally reintroduce the selected curve as an obstacle
         // when the selected curve is in the middle of the bundle.
         const neighbours = glabellarBaseline
-          .map((candidate, index) => ({ candidate, index }))
-          .filter(({ index }) => index !== match.curve)
-          .map(({ index }) => ({ index, value: baselineAt(index, x) }))
+          .map((_, index) => index)
+          .filter((index) => index !== match.curve)
+          .map((index) => ({ index, value: baselineAt(index, x) }))
           .filter((item): item is { index: number; value: number } => item.value !== null)
           .sort((a, b) => a.value - b.value);
         // Select the nearest baseline neighbour on either side of this curve,

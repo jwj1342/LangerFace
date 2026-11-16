@@ -64,19 +64,19 @@ for(let x=220;x<=400;x+=2) {
 const cropped = {...base, seeds:base.seeds.map(c=>({...c,pts:c.pts.map(([x,y]):Point=>[x,y-55])})),lines:[]};
 assert.deepEqual(refineForeheadTrajectories(cropped).curves,cropped.seeds,'off-image standard curves must not be clamped into the photo');
 
-// Glabellar neighbour bounds must use the original curve indices. Reordering
-// the same named bundle must therefore produce the same geometry after
-// restoring the result to name order; a filter-then-map implementation drops
-// the final neighbour and makes a selected middle curve order-dependent.
+// Glabellar neighbour bounds must use the original curve indices. This fixture
+// deliberately triggers the clearance limiter: the selected middle curve
+// moves toward a wide S-shaped wrinkle while its x=30/40 neighbours remain
+// fixed. The old filter-then-map implementation fails the spacing assertion.
 const glabellarCurve = (name: string, x: number) => ({
   name, region: 'orbital_brow_upturn_v11',
-  pts: Array.from({ length: 101 }, (_, i): Point => [x + .3 * Math.sin(i / 10), 10 + i]),
+  pts: Array.from({ length: 101 }, (_, i): Point => [x, 10 + i]),
 });
 const glabellarEvidence = {
   id: 'glabellar-reorder',
-  points: Array.from({ length: 61 }, (_, i): Point => [40 + 2 * Math.sin(i / 12), 30 + i]),
+  points: Array.from({ length: 61 }, (_, i): Point => [36 + 6 * Math.sin(i / 60 * 2 * Math.PI), 30 + i]),
 };
-const orderedGlabellar = [glabellarCurve('glabellar-a', 30), glabellarCurve('glabellar-b', 40), glabellarCurve('glabellar-c', 50)];
+const orderedGlabellar = [glabellarCurve('glabellar-a', 30), glabellarCurve('glabellar-b', 35), glabellarCurve('glabellar-c', 40)];
 const canonicalGlabellar = (curves: Array<{ name: string; pts: Point[] }>) => curves
   .map((item) => ({ name: item.name, pts: item.pts }))
   .sort((a, b) => a.name.localeCompare(b.name));
@@ -89,3 +89,16 @@ const glabellarReordered = refineForeheadTrajectories({
 });
 assert.deepEqual(canonicalGlabellar(glabellarReordered.curves), canonicalGlabellar(glabellarBaseline.curves),
   'glabellar neighbour bounds must be invariant to seed order');
+const selectedBaseline = glabellarBaseline.curves.find((curve) => curve.name === 'glabellar-b')!;
+const selectedSource = orderedGlabellar.find((curve) => curve.name === 'glabellar-b')!;
+assert.ok(selectedBaseline.pts.some(([x], index) => Math.abs(x - selectedSource.pts[index][0]) > 1e-6),
+  'the selected middle curve must actually move');
+for (const point of selectedBaseline.pts) {
+  assert.ok(point[0] >= 31.25 - 1e-6 && point[0] <= 38.75 + 1e-6,
+    'the selected curve stays inside both neighbour clearances');
+}
+for (const name of ['glabellar-a', 'glabellar-c']) {
+  const output = glabellarBaseline.curves.find((curve) => curve.name === name)!;
+  const source = orderedGlabellar.find((curve) => curve.name === name)!;
+  assert.deepEqual(output.pts, source.pts, `${name} remains unchanged`);
+}
