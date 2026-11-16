@@ -188,21 +188,23 @@
     "limitations": "本包绑定 PR #245 的 R3 修复提交 535ab59；保存可审计源码、配置和测试，模型/媒体/依赖及编辑器未保存缓冲仍按既有限制处理；不代表人工效果、真机或医学验收。"
   },
   "scopeBoundaryReview": {
-    "status": "pending",
+    "status": "confirmed",
     "manifestSha256": "b772de73f11dd287ffbca69be2a0c03691b6133f79fa01ab82d78446a2ab6290",
-    "pendingSourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
-    "evidence": "已为 R3 新源码生成恢复包；等待操作者查看当前版本并确认责任范围和文件已保存。"
+    "confirmedAt": "2026-11-16T09:02:47Z",
+    "evidence": "操作者已实际查看 PR #245 当前 R3 版本，接受这次 R3 修复；本次涉及文件均已保存，没有未保存的编辑器修改。"
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
-    "scope": "PR #245 R3：RSTL 可见性缺口补齐与硬排除优先级修复；不代表医学或临床验收。",
-    "evidence": "等待操作者实际查看绑定当前源码指纹的 R3 版本后确认。"
+    "scope": "PR #245 R3：RSTL 可见性缺口补齐与硬排除优先级修复；该确认仅表示本次工程版本接受，不代表医学或临床验收。",
+    "evidence": "操作者已实际查看 PR #245 当前 R3 版本，接受这次 R3 修复。",
+    "confirmedAt": "2026-11-16T09:02:47Z"
   },
   "editorSaveConfirmation": {
-    "status": "pending",
+    "status": "confirmed",
     "sourceDigest": "20e6d10a2cb8a3531a8ec9a9142381a66f8af89d6b4831a61f3c704207963392",
-    "evidence": "等待操作者确认绑定当前源码指纹的涉及文件均已保存。"
+    "confirmedAt": "2026-11-16T09:02:47Z",
+    "evidence": "操作者确认本次涉及文件均已保存，没有未保存的编辑器修改。"
   },
   "history": [
     {
