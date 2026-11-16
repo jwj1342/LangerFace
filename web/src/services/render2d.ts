@@ -62,6 +62,7 @@ import {
 } from "./liveWrinkleAnalysis.ts";
 import { RSTL_STANDARD_MAPPING_OPTIONS } from "./rstlStandardContract.ts";
 import { createStaticAtlasMappingCache } from "./staticAtlasMappingCache.ts";
+import { fillShortVisibilityGaps } from "./rstlVisibilityMask.ts";
 
 const staticAtlasMapping = createStaticAtlasMappingCache();
 let browGuardDiagnosticKey = "";
@@ -410,18 +411,6 @@ function projectedSegmentsCross(a: [Vec3, Vec3], b: [Vec3, Vec3]): boolean {
     && ((ba > eps && bb < -eps) || (ba < -eps && bb > eps));
 }
 
-function fillShortVisibilityGaps(mask: number[], maxGap = 2): void {
-  for (let start = 1; start < mask.length - 1;) {
-    if (mask[start]) { start++; continue; }
-    let end = start;
-    while (end < mask.length && !mask[end]) end++;
-    if (start > 0 && end < mask.length && end - start <= maxGap && mask[start - 1] && mask[end]) {
-      for (let index = start; index < end; index++) mask[index] = 1;
-    }
-    start = end;
-  }
-}
-
 function pointSegmentDistance2d(point: Vec3, segment: [Vec3, Vec3]): number {
   const [a, b] = segment;
   const dx = b[0] - a[0], dy = b[1] - a[1];
@@ -538,6 +527,7 @@ function stopBrowMasksBeforeForehead(lines: MappedAtlasLine[], masks: number[][]
 function buildTopologySafeRstlMasks(
   lines: MappedAtlasLine[],
   masks: number[][],
+  hardExcludedMasks: readonly (readonly boolean[])[] = [],
 ): number[][] {
   const crossDebug = typeof window !== "undefined"
     && new URLSearchParams(window.location.search).get("rstlCrossDebug") === "1";
@@ -548,7 +538,9 @@ function buildTopologySafeRstlMasks(
       || new URLSearchParams(window.location.search).get("rstlCrossDebugAll") === "1");
   const crossPairs = new Map<string, { x: number; y: number }>();
   const safe = masks.map(mask => mask.slice());
-  safe.forEach(mask => fillShortVisibilityGaps(mask));
+  safe.forEach((mask, lineIndex) => {
+    safe[lineIndex] = fillShortVisibilityGaps(mask, hardExcludedMasks[lineIndex] || []);
+  });
   stopBrowMasksBeforeForehead(lines, safe);
   type SegmentRecord = {
     id: number;
@@ -745,6 +737,7 @@ function liveTopologyMotion(previous: Vec3[] | null, current: Vec3[], W: number,
 function buildLiveTopologyMasks(
   lines: MappedAtlasLine[],
   rawMasks: number[][],
+  hardExcludedMasks: readonly (readonly boolean[])[],
   lm: Vec3[],
   W: number,
   H: number,
@@ -765,7 +758,7 @@ function buildLiveTopologyMasks(
     ? liveTopologyCache.framesSinceCheck > 2
     : liveTopologyCache.framesSinceCheck >= 8 || motion > 0.025;
   if (shouldRecheck) {
-    const safe = buildTopologySafeRstlMasks(lines, rawMasks);
+    const safe = buildTopologySafeRstlMasks(lines, rawMasks, hardExcludedMasks);
     liveTopologyCache.source = source;
     liveTopologyCache.lineKey = lineKey;
     liveTopologyCache.previousLandmarks = lm.map(point => [...point] as Vec3);
@@ -964,6 +957,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       partner: boolean;
     }> = [];
     const rawMasks = displayLines.map(() => [] as number[]);
+    const hardExcludedMasks = displayLines.map(() => [] as boolean[]);
     for (let li = 0; li < displayLines.length; li++) {
       if (visibleLineIndices && !visibleLineIndices.has(li)) continue;
       const ln = displayLines[li];
@@ -988,19 +982,21 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
           ? rawForeheadVisibility
           : stabilizeForeheadMask(rawForeheadVisibility);
       }
-      const mask = ln.pts.map((p, i) => {
+      const hardExcluded = ln.pts.map((p, i) => {
         if (ln.hiddenPointRuns?.some(([start, length]) =>
-          i >= start && i < start + length)) return 0;
+          i >= start && i < start + length)) return true;
         const triangleIndex = ln.tris[i];
-        const v = vis && Number.isInteger(triangleIndex) ? vis[triangleIndex] : 1;
-        if (innerMouth.has(ln.tris[i])) return 0; // 口裂三角面无论朝向都排除（#38）
-        if (!onVisibleSkin[i]) return 0;
+        if (innerMouth.has(ln.tris[i])) return true; // 口裂三角面无论朝向都排除（#38）
+        if (!onVisibleSkin[i]) return true;
         if (photoHairMask && !extendedForehead
-            && (!faceHullVisible(p) || !lowerFaceVisible(p) || !chinAppearanceVisible(p))) return 0;
-        if (frozenBoxes.some((box) => pointInBox(p, box))) return 0;
-        return v && !(hasMasks && pointInHandMasks(toPoint2(p), masks)) ? 1 : 0;
+            && (!faceHullVisible(p) || !lowerFaceVisible(p) || !chinAppearanceVisible(p))) return true;
+        if (frozenBoxes.some((box) => pointInBox(p, box))) return true;
+        return Boolean(hasMasks && pointInHandMasks(toPoint2(p), masks));
       });
+      const mask = ln.pts.map((_, i) => hardExcluded[i] ? 0
+        : (vis && Number.isInteger(ln.tris[i]) ? vis[ln.tris[i]] : 1));
       rawMasks[li] = mask;
+      hardExcludedMasks[li] = hardExcluded;
       drawEntries.push({ line: ln, index: li, mask, action: localActionForPoints(ln.pts, dimRegions),
         selected: isSelected, partner: isPartner });
     }
@@ -1010,10 +1006,10 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     const liveSource = sourceState.sourceKind === "video" || sourceState.sourceKind === "camera";
     const liveOverlayActive = Boolean(renderState.incisionOverlay);
     const safeMasks = sourceState.sourceKind === "image" || sourceState.paused
-      ? buildTopologySafeRstlMasks(displayLines, rawMasks)
+      ? buildTopologySafeRstlMasks(displayLines, rawMasks, hardExcludedMasks)
       : liveSource || liveOverlayActive
         ? rawMasks
-        : buildLiveTopologyMasks(displayLines, rawMasks, lm, W, H);
+        : buildLiveTopologyMasks(displayLines, rawMasks, hardExcludedMasks, lm, W, H);
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("rstlCrossDebugAll") === "1") {
       ctx.save();
       ctx.fillStyle = "#ff3030";
