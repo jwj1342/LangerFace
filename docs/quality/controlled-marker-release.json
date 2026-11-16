@@ -131,7 +131,7 @@
     "status": "verified",
     "sourceDigest": "e05dc5ada29358c5b3b443de0a63c7cdd748449050a5e1cf193ed2b548813826",
     "evidence": "本地 T1 回归测试、typecheck 与 test:geometry 通过；恢复包 manifest 已回读。",
-    "note": "本包绑定 PR #245 T1 修复提交 3facaa1；继承 R3 包未变文件，新增邻线索引修复及 mutation-sensitive 回归测试。",
+    "note": "本包为 PR #245 T1 当前 Head 的自包含恢复包，不依赖未提交或未上传的 R3 基础包；保存当前责任范围内源码、配置和测试，模型/媒体等按既有规则仅记录指纹。",
     "previous": {
       "status": "verified",
       "sourceDigest": "1e3751aeccbdfadde3ccc44b45ae2fbe775e7ac60d0bca6d89e5812ee19681b6",
@@ -181,15 +181,15 @@
         "limitations": "官方263份复制文件长度/SHA逐项通过；scope外3测试入口已另存哈希补充件，完整恢复须合用。后登记差额以最终patch保全；不含环境、人工或医学验收。"
       }
     },
-    "manifestPath": "local_outputs/recovery-packages/pr245-ci-20261116-t1/manifest.json",
-    "manifestSha256": "19ba456667cac69781373fe821b454df6439155708617d2a94fc8417bce8fe89",
+    "manifestPath": "local_outputs/recovery-packages/pr245-ci-20261116-t1-full/manifest.json",
+    "manifestSha256": "b44494cb169861f35a8f4ddbb49068867cdda4de6f2223a6fb50a8c951d3c554",
     "scopeConfigSha256": "3d8ee606897d82990930f5f651892089a4561dd1f77020e33d730a09da6018d3",
-    "verifiedAt": "2026-11-16T17:30:00+08:00",
+    "verifiedAt": "2026-11-16T18:00:00+08:00",
     "limitations": "本包绑定 PR #245 的 R3 修复提交 535ab59；保存可审计源码、配置和测试，模型/媒体/依赖及编辑器未保存缓冲仍按既有限制处理；不代表人工效果、真机或医学验收。"
   },
   "scopeBoundaryReview": {
     "status": "pending",
-    "manifestSha256": "19ba456667cac69781373fe821b454df6439155708617d2a94fc8417bce8fe89",
+    "manifestSha256": "b44494cb169861f35a8f4ddbb49068867cdda4de6f2223a6fb50a8c951d3c554",
     "confirmedAt": null,
     "evidence": "等待操作者查看 PR #245 T1 新版本并确认涉及文件已保存。"
   },
