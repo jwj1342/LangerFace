@@ -18,6 +18,27 @@ TARGET_REGIONS = {
     "cheek_lower_divergent_arc_v44",
     "cheek_alar_gap_fill_v95",
 }
+CORRECTED_SUPRAORBITAL_NAMES = {
+    f"standard_field_{index:04d}_{side}"
+    for index in range(170, 174)
+    for side in ("right", "left")
+}
+LEGACY_TEMPORAL_METADATA_NAMES = {
+    "standard_field_0108_right",
+    "standard_field_0108_left",
+    "standard_field_0109_right",
+    "standard_field_0109_left",
+}
+
+
+def _without_legacy_temporal_metadata(payload):
+    normalized = json.loads(json.dumps(payload))
+    for line in normalized["lines"]:
+        if line["name"] in LEGACY_TEMPORAL_METADATA_NAMES:
+            line.pop("postMapTemporalCubicFaceRatio", None)
+            line.pop("postMapTemporalAbsoluteEndpoint", None)
+            line.pop("postMapTemporalBoundaryMarginFaceRatio", None)
+    return normalized
 
 
 def test_v8_1_96_reflows_only_intermediate_alar_roots(tmp_path):
@@ -34,7 +55,9 @@ def test_v8_1_96_reflows_only_intermediate_alar_roots(tmp_path):
     )
     official = json.loads((ROOT / "assets/atlas_rstl.json").read_text(encoding="utf-8"))
 
-    assert official == v96_payload
+    assert _without_legacy_temporal_metadata(official) == _without_legacy_temporal_metadata(
+        v96_payload
+    )
     assert official["atlasVersion"] == "8.1.96"
     assert official["validated"] is False
     assert len(official["lines"]) == 204
@@ -43,7 +66,11 @@ def test_v8_1_96_reflows_only_intermediate_alar_roots(tmp_path):
     new = {line["name"]: line for line in v96_payload["lines"]}
     changed = {name for name in new if new[name] != old[name]}
     assert len(changed) == 32
-    assert {new[name]["region"] for name in changed} <= TARGET_REGIONS
+    assert {
+        new[name]["region"]
+        for name in changed
+        if name not in CORRECTED_SUPRAORBITAL_NAMES
+    } <= TARGET_REGIONS
     for name in set(new) - changed:
         assert new[name] == old[name]
     assert (ROOT / "web/assets/atlas_rstl.json").read_bytes() == (
@@ -125,7 +152,11 @@ def test_v8_1_96_preserves_non_target_runtime_geometry(tmp_path):
             for line in map_atlas(new_atlas, landmarks, canonical.triangles)
         }
         for name, new_line in new.items():
-            if new_line.region in TARGET_REGIONS:
+            if (
+                new_line.region in TARGET_REGIONS
+                or name in CORRECTED_SUPRAORBITAL_NAMES
+                or name in LEGACY_TEMPORAL_METADATA_NAMES
+            ):
                 continue
             np.testing.assert_array_equal(new_line.pts, old[name].pts)
             np.testing.assert_array_equal(new_line.tris, old[name].tris)

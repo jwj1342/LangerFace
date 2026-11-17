@@ -1,0 +1,124 @@
+import {
+  CONTROLLED_MARKER_DETECTOR_VERSION as CURRENT_DETECTOR_VERSION,
+  detectControlledMarker as detectWithCurrentCore,
+  translateControlledMarkerDetection,
+  type ControlledMarkerDetection,
+  type ControlledMarkerOptions,
+  type MarkerImageData,
+  type MarkerPoint,
+} from "./controlledMarkerDetection.ts";
+import {
+  CONTROLLED_MARKER_DETECTOR_VERSION as LEGACY_DETECTOR_VERSION,
+  detectControlledMarker as detectWithLegacyCore,
+} from "./controlledMarkerDetectionLegacyV023.ts";
+import {
+  CONTROLLED_MARKER_DETECTOR_VERSION as COLOR_DIFFERENCE_DETECTOR_VERSION,
+  detectControlledMarker as detectWithColorDifferenceCore,
+} from "./controlledMarkerDetectionColorV035.ts";
+
+export type {
+  ControlledMarkerDetection,
+  ControlledMarkerOptions,
+  MarkerImageData,
+  MarkerPoint,
+} from "./controlledMarkerDetection.ts";
+export { translateControlledMarkerDetection };
+
+export type ControlledMarkerDetectorProfile =
+  | "small-lesion-boundary-candidate"
+  | "current-v0.34"
+  | "legacy-v0.23";
+
+export const LEGACY_CONTROLLED_MARKER_SOURCE_COMMIT = "fe703e2bb37d837f339f2b4fb9861d202568b8e6";
+// The candidate is the project default. `legacy-v0.23` remains selectable only
+// through an explicit profile value, so rollback is possible without silently
+// returning ordinary launches to the older detector.
+export const DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE: ControlledMarkerDetectorProfile = "small-lesion-boundary-candidate";
+
+export function resolveControlledMarkerDetectorProfile(value?: string | null): ControlledMarkerDetectorProfile {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return DEFAULT_CONTROLLED_MARKER_DETECTOR_PROFILE;
+  if (normalized === "current" || normalized === "current-v0.34" || normalized === "v0.34") {
+    return "current-v0.34";
+  }
+  if (normalized === "color" || normalized === "color-difference"
+    || normalized === "small-lesion-boundary-candidate"
+    // Compatibility inputs only; the resolved runtime identity is the
+    // candidate name above and must not present these as the current version.
+    || normalized === "color-difference-v0.35" || normalized === "v0.35") {
+    return "small-lesion-boundary-candidate";
+  }
+  if (normalized === "legacy" || normalized === "legacy-v0.23" || normalized === "v0.23") {
+    return "legacy-v0.23";
+  }
+  throw new Error(`Unsupported controlled marker detector profile: ${value}`);
+}
+
+const viteEnvironment = (import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+}).env;
+const nodeEnvironment = (globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env;
+const controlledMarkerDiagnosticsEnabled = (
+  viteEnvironment?.VITE_CONTROLLED_MARKER_DETECTOR_DIAGNOSTICS
+    ?? nodeEnvironment?.VITE_CONTROLLED_MARKER_DETECTOR_DIAGNOSTICS
+) === "1";
+
+export const CONTROLLED_MARKER_DETECTOR_PROFILE = resolveControlledMarkerDetectorProfile(
+  viteEnvironment?.VITE_CONTROLLED_MARKER_DETECTOR_PROFILE
+    ?? nodeEnvironment?.VITE_CONTROLLED_MARKER_DETECTOR_PROFILE,
+);
+
+export function detectorVersionForProfile(profile: ControlledMarkerDetectorProfile): string {
+  if (profile === "legacy-v0.23") return LEGACY_DETECTOR_VERSION;
+  if (profile === "small-lesion-boundary-candidate") return COLOR_DIFFERENCE_DETECTOR_VERSION;
+  return CURRENT_DETECTOR_VERSION;
+}
+
+export const CONTROLLED_MARKER_DETECTOR_VERSION = detectorVersionForProfile(
+  CONTROLLED_MARKER_DETECTOR_PROFILE,
+);
+
+export function detectControlledMarkerWithProfile(
+  profile: ControlledMarkerDetectorProfile,
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions = {},
+): ControlledMarkerDetection {
+  const result = profile === "legacy-v0.23"
+    ? detectWithLegacyCore(image, seed, options) as unknown as ControlledMarkerDetection
+    : profile === "small-lesion-boundary-candidate"
+      ? detectWithColorDifferenceCore(image, seed, options)
+      : detectWithCurrentCore(image, seed, options);
+  if (controlledMarkerDiagnosticsEnabled) {
+    console.info(`[LangerFace] controlled marker profile result ${JSON.stringify({
+      profile,
+      version: detectorVersionForProfile(profile),
+      seed,
+      options,
+      result,
+    })}`);
+  }
+  return result;
+}
+
+export function detectControlledMarker(
+  image: MarkerImageData,
+  seed: MarkerPoint,
+  options: ControlledMarkerOptions = {},
+): ControlledMarkerDetection {
+  return detectControlledMarkerWithProfile(
+    CONTROLLED_MARKER_DETECTOR_PROFILE,
+    image,
+    seed,
+    options,
+  );
+}
+
+/** Product entry: keep explicit legacy profiles synchronous-compatible and refine only the candidate. */
+/** 正式异步入口：先按稳定算法族生成同步基线，再对当前候选族执行原图填充复核。
+ * Profile是算法族，SemVer是实现版本；不能把同一Profile当成同一实现。
+ * 页面/Worker应等待这个Promise；只测同步函数会漏掉复核层的拒识和改选。 */
+export async function detectControlledMarkerWithProfileAsync(profile:ControlledMarkerDetectorProfile,image:MarkerImageData,seed:MarkerPoint,options:ControlledMarkerOptions={}):Promise<ControlledMarkerDetection> {const baseline=detectControlledMarkerWithProfile(profile,image,seed,options);if(profile!=="small-lesion-boundary-candidate")return baseline;const {refineFilledCandidate}=await import("./controlledMarkerFilledCandidate.ts");return refineFilledCandidate(image,seed,options,baseline);}
+export function detectControlledMarkerAsync(image:MarkerImageData,seed:MarkerPoint,options:ControlledMarkerOptions={}):Promise<ControlledMarkerDetection> {return detectControlledMarkerWithProfileAsync(CONTROLLED_MARKER_DETECTOR_PROFILE,image,seed,options);}

@@ -89,10 +89,10 @@ assert.match(worker,
   /async detect[\s\S]*detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*request\.mode === "yolo-only"[\s\S]*dynamicFourRegionDetection/);
 assert.match(worker, /async refine[\s\S]*cachedFullDetection[\s\S]*refineV6/);
 assert.match(worker, /WRINKLE_V10_ENDPOINT/);
-assert.match(worker, /buildDirectNoseDorsumRstl/);
-assert.match(worker, /buildNoseRootIntersectionVisibilityPlan/);
+assert.match(worker, /const noseHybrid = refineNoseHybrid[\s\S]*const directNose = noseHybrid\.direct/);
+assert.match(worker, /eyePolygons:\[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR\]/);
 assert.match(worker, /Comlink\.expose\(api\)/);
-assert.match(workerClient, /new Worker\(new URL/);
+assert.match(workerClient, /const workerUrl = new URL[\s\S]*new Worker\(workerUrl/);
 assert.match(workerClient, /Comlink\.transfer/);
 assert.match(worker, /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
   "released worker must bundle the ONNX Runtime WASM module explicitly");

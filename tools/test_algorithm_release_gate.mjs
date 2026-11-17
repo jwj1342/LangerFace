@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 // Run the actual gate with an absent private archive, as on a fresh CI checkout.
@@ -110,6 +111,26 @@ const scopeRelativePath = 'docs/quality/algorithm-archive-scope.json';
 const actualScope = readFileSync(new URL('../' + scopeRelativePath, import.meta.url));
 const actualRelease = JSON.parse(readFileSync(new URL('../docs/quality/controlled-marker-release.json', import.meta.url), 'utf8'));
 const attributes = readFileSync(new URL('../.gitattributes', import.meta.url));
+// The integrated candidate ships a self-contained archive. Check every frozen
+// copy, then exercise Git checkout of both its LF manifest and a CRLF source.
+const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+const archiveManifestPath = resolve(repoRoot, actualRelease.archive.manifestPath);
+const archiveManifestBytes = readFileSync(archiveManifestPath);
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+assert.equal(digest(archiveManifestBytes), actualRelease.archive.manifestSha256);
+const archiveManifest = JSON.parse(archiveManifestBytes);
+assert.equal(archiveManifest.baseArchive, null, 'the current archive must be independently recoverable');
+assert.equal(archiveManifest.inherited.length, 0);
+for (const entry of archiveManifest.copied) {
+  const bytes = readFileSync(resolve(dirname(archiveManifestPath), 'worktree', entry.relativePath));
+  assert.equal(bytes.length, entry.bytes, entry.relativePath + ': archive length');
+  assert.equal(digest(bytes), entry.sha256, entry.relativePath + ': archive digest');
+}
+const crlfEntry = archiveManifest.copied.find(entry =>
+  readFileSync(resolve(dirname(archiveManifestPath), 'worktree', entry.relativePath)).includes(Buffer.from('\r\n')));
+assert.ok(crlfEntry, 'exercise a frozen CRLF source as well as the LF manifest');
+const frozenPaths = [actualRelease.archive.manifestPath,
+  dirname(actualRelease.archive.manifestPath).replaceAll('\\', '/') + '/worktree/' + crlfEntry.relativePath];
 const temporaryRoot = realpathSync(tmpdir());
 for (const autocrlf of ['false', 'input', 'true']) {
   const checkoutRoot = mkdtempSync(join(temporaryRoot, 'langerface-scope-checkout-'));
@@ -133,6 +154,19 @@ for (const autocrlf of ['false', 'input', 'true']) {
     assert.equal(createHash('sha256').update(checkedOutScope).digest('hex'), actualRelease.archive.scopeConfigSha256,
       `core.autocrlf=${autocrlf}: checkout must match the existing archive byte fingerprint`);
     assert.deepEqual(JSON.parse(checkedOutScope), JSON.parse(actualScope), 'checkout must preserve every scope value');
+    for (const relativePath of frozenPaths) {
+      const original = readFileSync(resolve(repoRoot, relativePath));
+      const target = join(checkoutRoot, relativePath);
+      mkdirSync(dirname(target), {recursive: true});
+      writeFileSync(target, original);
+      git('add', '--force', '--', relativePath);
+      assert.deepEqual(git('show', ':' + relativePath), original,
+        `core.autocrlf=${autocrlf}: frozen Git blob must retain raw bytes`);
+      rmSync(target);
+      git('checkout-index', '--force', '--', relativePath);
+      assert.deepEqual(readFileSync(target), original,
+        `core.autocrlf=${autocrlf}: frozen archive checkout must retain raw bytes`);
+    }
   } finally {
     assert.equal(dirname(realpathSync(checkoutRoot)), temporaryRoot);
     assert.ok(basename(checkoutRoot).startsWith('langerface-scope-checkout-'));
@@ -140,3 +174,4 @@ for (const autocrlf of ['false', 'input', 'true']) {
   }
 }
 console.log('archive scope checkout: LF/input/CRLF environments retain exact archive bytes and reject content changes');
+console.log(`frozen recovery archive: ${archiveManifest.copied.length} copies verified; raw bytes preserved in three Git checkout modes`);

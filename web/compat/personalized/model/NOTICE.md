@@ -9,11 +9,11 @@
 |---|---|
 | 上游基础权重 | `Wrinkle-Detection-StreamLit/best.pt`（23,846,637 bytes） |
 | 上游声明的许可证 | **无**（截至 2026-07-28，上游仓库未附带 LICENSE 文件） |
-| 本次微调权重 | `best_new_分辨率改成mask2_clean版本.pt`（23,941,044 bytes） |
-| 微调权重 SHA-256 | `15542156d7cd4f720279ba4317ab924231cb0d76621d0529a341b6fec7b80dd3` |
+| 本次微调权重 | `10_23微调最终版.pt`（23,962,741 bytes） |
+| 微调权重 SHA-256 | `a11100408f21cc030c86b52ba6a0364d3d0538bfea408a50699906a77ff48d34` |
 | 导出工具 | ultralytics 8.4.138（PyTorch → ONNX，opset 12） |
-| 导出产物 | `wrinkle-yolov8s-seg-640.onnx`，47,346,561 bytes（已移除训练机绝对路径元数据） |
-| SHA-256 | `F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C` |
+| 导出产物 | `wrinkle-yolov8s-seg-640.onnx`，47,346,618 bytes（已移除训练机绝对路径元数据） |
+| SHA-256 | `E60DDE489CB7202B59CF39E6C4043AC9A6DE3FFC80BAE3F74B52A84B943D07C9` |
 | 分片方式 | 按字节切成 4 份，运行时顺序拼接后校验总字节数与 SHA-256 |
 
 ## 许可状态：未确认（**明确记录，不做推定**）

@@ -1,6 +1,5 @@
 import {
   innerMouthTriangles,
-  mapAtlas,
   type AtlasLine,
   type MappedAtlasLine,
 } from "./geometryAtlas.ts";
@@ -14,6 +13,7 @@ import { buildRstlRenderPlan } from "./rstlRenderPlan.ts";
 import { incisionOverlayStyle } from "./incisionOverlayStyle.ts";
 import { pointInPolygon2d, segmentsIntersect2d, type Point2 } from "./incisionPathGeometry.ts";
 import { sourcePointToSurfaceRef } from "./photoPlanningController.ts";
+import { createStaticAtlasMappingCache } from "./staticAtlasMappingCache.ts";
 import type { Triangle, Vec3 } from "./softBody.ts";
 
 export const INCISION_PHOTO_MAX_BYTES = 20 * 1024 * 1024;
@@ -26,6 +26,12 @@ const MEDIAPIPE_FACE_OVAL = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
   400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
 ] as const;
+
+// Photo planning can ask for the same static RSTL projection more than once
+// while the clinician adjusts an unrelated incision control. Reuse the exact
+// mapped geometry for an unchanged input frame; the cache clones its result so
+// callers remain free to edit their display copy.
+const staticPhotoAtlasMapping = createStaticAtlasMappingCache();
 
 export interface PhotoFaceEdgeSurfaceRecovery {
   ref: SurfaceRef;
@@ -1929,7 +1935,7 @@ export function buildIncisionPhotoGeometry({
   // RSTL is a shared team-owned layer. Keep its source mapping identical to
   // the live 2D renderer; the extended surface is only for incision picking
   // and candidate/lesion projection.
-  const rstl = mapAtlas(atlasLines, landmarks, triangles);
+  const rstl = staticPhotoAtlasMapping.map(atlasLines, landmarks, triangles);
   const directionReferenceRstl = projectedRstlLines?.length
     ? visibleCurrentProjectedRstlLines(projectedRstlLines, landmarks, triangles)
     : visibleProjectedRstlLines(rstl, landmarks, triangles);
@@ -2426,7 +2432,7 @@ export function queryIncisionPhotoRstlDirection({
   const sourceLandmarks = [...landmarks] as Vec3[];
   const visibleRstl = projectedRstlLines?.length
     ? visibleCurrentProjectedRstlLines(projectedRstlLines, sourceLandmarks, triangles)
-    : visibleProjectedRstlLines(mapAtlas(atlasLines, sourceLandmarks, triangles), sourceLandmarks, triangles);
+    : visibleProjectedRstlLines(staticPhotoAtlasMapping.map(atlasLines, sourceLandmarks, triangles), sourceLandmarks, triangles);
   const nearest = nearestProjectedRstlSegment(center, visibleRstl);
   if (!nearest) return null;
   const selectedVisibleLine = visibleRstl[nearest.lineIndex];

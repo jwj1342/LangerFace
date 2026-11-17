@@ -43,7 +43,7 @@ import {
 } from "./bottomUpPersonalization.ts";
 import { smoothProjectedCurveV2 } from "./prstlPersonalizationV2.ts";
 import { dataSource, type PreviewAtlasPayload } from "../dataSource.ts";
-import { WrinkleYoloOnnx, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
+import { WrinkleYoloOnnx, YOLO_WRINKLE_CONFIDENCE, fuseStrictUnion } from "./yoloWrinkleOnnx.ts";
 import { refineV6 } from "./v6RstlRefinementV9.ts";
 import { latestV9RstlRefinementOptions } from "./v9RstlRefinementProfile.ts";
 import {
@@ -114,7 +114,7 @@ const FROWN_QUALITY_THRESHOLDS = Object.freeze({
   // 同上：有效帧数由 aggregateCycleEvidence() 固定为 4。
   minPeakFrames: 4,
 });
-const YOLO_CONFIDENCE = 0.07;
+const YOLO_CONFIDENCE = YOLO_WRINKLE_CONFIDENCE;
 const REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO = 0.018;
 const FROWN_REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO = 0.025;
 const SMILE_REGISTRATION_RESIDUAL_LIMIT_FACE_RATIO = 0.030;
@@ -1832,7 +1832,7 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
   for (let index = 0; index < samples.length; index++) {
     const sample = samples[index];
     setLocalPipelineStatus(
-      `YOLO 0.07：${sample.label}（${index + 1}/${samples.length}）`,
+      `YOLO ${YOLO_CONFIDENCE}：${sample.label}（${index + 1}/${samples.length}）`,
       8 + 55 * ((index + 1) / samples.length),
     );
     detections.push(await detectWrinkles(model, {
@@ -2416,7 +2416,7 @@ function commitCycle(action: ActionName): void {
       } else {
         sess.actionIndex = ACTION_ORDER.indexOf(next);
         sess.phase = "paused";
-        const resultNote = "单次质量检查通过，已加入 YOLO 0.07 待处理队列";
+        const resultNote = `单次质量检查通过，已加入 YOLO ${YOLO_CONFIDENCE} 待处理队列`;
         sess.message = `「${ACTION_LABELS[action]}」已完成（${resultNote}）→ 点击「下一步：${ACTION_LABELS[next]}」`;
       }
     } catch (e) {
@@ -2979,7 +2979,7 @@ async function startCapture() {
     if (els.wrinkleSemanticDownload) els.wrinkleSemanticDownload.disabled = true;
     if (els.wrinkleAlignmentDownload) els.wrinkleAlignmentDownload.disabled = true;
     if (els.wrinkleEvidenceDownload) els.wrinkleEvidenceDownload.disabled = true;
-    setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V9。", 0);
+    setLocalPipelineStatus(`采集完成后将在本机运行 YOLO ${YOLO_CONFIDENCE} 与 V9。`, 0);
     releaseMediaUrls();
     if (els.debugMediaExports) els.debugMediaExports.innerHTML = "";
     sess.recordingEnabled = consentToDebugRecording();
@@ -3167,7 +3167,7 @@ export function mountPersonalizedWorkbench() {
 
   updateGuide();
   setMeters(0, 0);
-    setLocalPipelineStatus("采集完成后将在本机运行 YOLO 0.07 与 V9。", 0);
+    setLocalPipelineStatus(`采集完成后将在本机运行 YOLO ${YOLO_CONFIDENCE} 与 V9。`, 0);
   els.badge.textContent = "就绪";
   els.badge.classList.remove("warn");
   setMsg("点击「开始采集」开启摄像头；每完成一步需再点一次进入下一步。");

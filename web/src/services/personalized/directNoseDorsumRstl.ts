@@ -1,5 +1,5 @@
 export const DIRECT_NOSE_DORSUM_RSTL_ALGORITHM =
-  "direct-nose-dorsum-wrinkle-rstl-generation-1.0";
+  "direct-nose-dorsum-wrinkle-rstl-generation-2.0";
 
 export const DIRECT_NOSE_DORSUM_RSTL_REGION =
   "personalized_nose_dorsum_wrinkle_v1";
@@ -164,6 +164,44 @@ function polylineIntersectionCount(
   return count;
 }
 
+// New lines yield to fixed existing curves. Subdivision only interpolates
+// the smoothed trajectory; it does not change its shape. Keep one continuous
+// longest safe run, so a line never reappears beyond an intervening obstacle.
+export function trimNoseCurveToClearance(
+  points: readonly Point2[], obstacles: readonly (readonly Point2[])[], clearance: number,
+): Point2[] {
+  const dense: Point2[] = [];
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i], b = points[i + 1];
+    const steps = Math.max(1, Math.ceil(Math.hypot(b[0]-a[0], b[1]-a[1]) / (clearance / 4)));
+    for (let j = 0; j < steps; j++) dense.push([a[0]+(b[0]-a[0])*j/steps, a[1]+(b[1]-a[1])*j/steps]);
+  }
+  if (points.length) dense.push([...points[points.length-1]]);
+  const runs: Point2[][] = []; let run: Point2[] = [];
+  for (let i = 0; i + 1 < dense.length; i++) {
+    const a = dense[i], b = dense[i+1];
+    const safe = obstacles.every(polyline => {
+      for (let k = 0; k + 1 < polyline.length; k++) {
+        const c = polyline[k], d = polyline[k+1];
+        if (Math.max(Math.min(a[0],b[0])-Math.max(c[0],d[0]),
+          Math.min(c[0],d[0])-Math.max(a[0],b[0]),
+          Math.min(a[1],b[1])-Math.max(c[1],d[1]),
+          Math.min(c[1],d[1])-Math.max(a[1],b[1])) > clearance) continue;
+        if (segmentsIntersect(a,b,c,d) || Math.min(
+          pointSegmentDistance(a,c,d),pointSegmentDistance(b,c,d),
+          pointSegmentDistance(c,a,b),pointSegmentDistance(d,a,b)) <= clearance) return false;
+      }
+      return true;
+    });
+    if (safe) { if (!run.length) run.push(a); run.push(b); }
+    else if (run.length) { runs.push(run); run=[]; }
+  }
+  if (run.length) runs.push(run);
+  const length = (p: Point2[]) => p.slice(1).reduce((n,b,i) => n+Math.hypot(b[0]-p[i][0],b[1]-p[i][1]),0);
+  runs.sort((a,b)=>length(b)-length(a));
+  return runs.length && length(runs[0]) >= 2*clearance ? runs[0] : [];
+}
+
 export function buildDirectNoseDorsumRstl({
   fineLines,
   sourceFineLineIds = DIRECT_NOSE_DORSUM_FINE_LINE_IDS,
@@ -198,7 +236,7 @@ export function buildDirectNoseDorsumRstl({
   const minimumEyeClearancePx = Math.max(3, faceWidthPx * 0.006);
   const maximumMeanAdherencePx = Math.max(0.75, faceWidthPx * 0.002);
   const records: Record<string, unknown>[] = [];
-  const curves = selected.map((line, orderedIndex): DirectNoseDorsumCurve => {
+  let curves = selected.map((line, orderedIndex): DirectNoseDorsumCurve => {
     let points: Point2[] | null = null;
     let selectedSigma = 0;
     for (const sigma of [2.5, 2.75, 3, 3.25, 3.5, 4, 4.5]) {
@@ -249,6 +287,21 @@ export function buildDirectNoseDorsumRstl({
     };
   });
 
+  const clearance = Math.max(1, faceWidthPx * 0.006);
+  const obstacles = existingCurves.map(c => normalizePoints(c.pts));
+  curves = curves.flatMap(curve => {
+    const originalCount = curve.pts.length;
+    const points = trimNoseCurveToClearance(curve.pts, obstacles, clearance);
+    Object.assign(records.find(r => r.source_fine_line_id === curve.sourceFineLineId)!, {
+      clipping_policy: "longest_continuous_safe_run", clearance_px: clearance,
+      retained_point_count: points.length, original_point_count: originalCount,
+      omitted_no_safe_run: !points.length});
+    if (!points.length) return [];
+    obstacles.push(points);
+    return [{...curve, pts: points, priorPts: points.map(p => [...p] as Point2),
+      normalOffsetsPx: points.map(() => 0)}];
+  });
+
   let existingCurveIntersectionCount = 0;
   const existingIntersectionRecords: Record<string, unknown>[] = [];
   for (let generatedIndex = 0; generatedIndex < curves.length; generatedIndex += 1) {
@@ -275,7 +328,7 @@ export function buildDirectNoseDorsumRstl({
       generatedCurveIntersectionCount += polylineIntersectionCount(curves[left].pts, curves[right].pts);
     }
   }
-  if ((!auditExistingCurveIntersections && existingCurveIntersectionCount) ||
+  if (existingCurveIntersectionCount ||
       generatedCurveIntersectionCount) {
     throw new Error("direct nose-dorsum RSTL intersects an existing or generated RSTL curve: " +
       JSON.stringify({ existingCurveIntersectionCount, generatedCurveIntersectionCount,
@@ -296,8 +349,8 @@ export function buildDirectNoseDorsumRstl({
       existing_curve_intersection_count: existingCurveIntersectionCount,
       existing_curve_intersection_records: existingIntersectionRecords,
       generated_curve_intersection_count: generatedCurveIntersectionCount,
-      existing_curve_intersection_policy: auditExistingCurveIntersections ?
-        "audited_direct_overlay_intersections" : "reject",
+      existing_curve_intersection_policy: "trim_new_curve_preserve_existing",
+      minimum_existing_curve_clearance_px: clearance,
       records,
     },
   };

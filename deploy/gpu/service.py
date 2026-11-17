@@ -34,7 +34,7 @@ INPUT_BYTES = 1 * 3 * 640 * 640 * 4
 RGBA_INPUT_BYTES = 640 * 640 * 4
 MEDIA_UPLOAD_BYTES = 512 * 1024 * 1024
 IMAGE_MAX_PIXELS = 50 * 1024 * 1024
-IMAGE_PROCESSING_MAX_SIDE = 1280
+IMAGE_PROCESSING_MAX_SIDE = 640
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.avi', '.m4v', '.webm'}
 DIRECT_VIDEO_CODECS = {'h264', 'vp8', 'vp9', 'av1'}
 
@@ -99,11 +99,12 @@ class CudaDetector:
         compact = compact_class_masks(outputs)
         postprocess_ms = (time.perf_counter() - postprocess_started) * 1000
         masks = compact.pop('masks')
+        classes = compact.pop('classes')
         description = json.dumps({
             'version': 1,
             'width': 640,
             'height': 640,
-            'classes': ['forehead', 'frown', 'wrinkle'],
+            'classes': classes,
             'inferenceMs': inference_ms,
             'postprocessMs': postprocess_ms,
             'modelSha256': self.sha256,
@@ -125,11 +126,12 @@ class CudaDetector:
         compact = compact_class_masks(outputs)
         postprocess_ms = (time.perf_counter() - postprocess_started) * 1000
         masks = compact.pop('masks')
+        classes = compact.pop('classes')
         description = json.dumps({
             'version': 1,
             'width': 640,
             'height': 640,
-            'classes': ['forehead', 'frown', 'wrinkle'],
+            'classes': classes,
             'preprocessingMs': preprocessing_ms,
             'inferenceMs': inference_ms,
             'postprocessMs': postprocess_ms,
@@ -167,7 +169,8 @@ async def lifespan(app):
     app.state.image_worker = await asyncio.create_subprocess_exec(
         node, str(ROOT / 'deploy/gpu/wrinkle_worker.mjs'),
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-        limit=32*1024*1024)
+        limit=32*1024*1024,
+        env={**os.environ, 'LANGERFACE_WRINKLE_MODEL_VARIANT': '640'})
     try:
         yield
     finally:

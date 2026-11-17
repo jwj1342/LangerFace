@@ -5,6 +5,17 @@ export const RSTL_STANDARD_CONTRACT = Object.freeze({
   expandForehead: true,
 });
 
+/**
+ * Shared display/refinement mapping contract for the current standard RSTL.
+ * The source atlas remains unchanged; these options define its runtime view.
+ */
+export const RSTL_STANDARD_MAPPING_OPTIONS = Object.freeze({
+  expandForehead: RSTL_STANDARD_CONTRACT.expandForehead,
+  foreheadBridgeLineCount: 16,
+  foreheadBridgeBottomShiftFaceRatio: 0.058,
+  medialUpwardVisibleGapFaceRatio: 0.012,
+});
+
 interface RstlAtlasPayloadLike {
   atlasVersion?: unknown;
   validated?: unknown;

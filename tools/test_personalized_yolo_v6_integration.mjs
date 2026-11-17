@@ -123,19 +123,20 @@ const modelParts = [0, 1, 2, 3].map((index) =>
   new URL(`model/wrinkle-yolov8s-seg-640.onnx.part${String(index).padStart(2, "0")}`, assets));
 const metadata = JSON.parse(await readFile(new URL("model/wrinkle-yolov8s-seg-640.json", assets), "utf8"));
 const modelInstalled = await access(modelParts[0]).then(() => true, () => false);
-let bytes = metadata.onnx_bytes;
 if (modelInstalled) {
   const hash = createHash("sha256");
-  bytes = 0;
+  let bytes = 0;
   for (const part of modelParts) {
     const payload = await readFile(part);
     bytes += payload.byteLength;
     hash.update(payload);
   }
-  assert.equal(bytes, 47_346_561);
+  assert.equal(bytes, 47346618);
   assert.equal(hash.digest("hex").toUpperCase(),
-    "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C");
+    "E60DDE489CB7202B59CF39E6C4043AC9A6DE3FFC80BAE3F74B52A84B943D07C9");
+} else {
+  console.log("640 model parts are not installed; verified static 640 runtime contract only");
 }
 assert.equal(metadata.hugging_face.visibility, "private");
 
-console.log(`personalized YOLO/V6 integration test passed (${root}; ${bytes} model bytes)`);
+console.log(`personalized YOLO/V6 integration contract passed (${root}; 640 runtime)`);

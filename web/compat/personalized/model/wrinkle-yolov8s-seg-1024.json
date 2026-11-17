@@ -1,0 +1,40 @@
+{
+  "format": "onnx",
+  "version": "yolov8s-seg-three-class-10_22-v1-1024-browser-0.4.5",
+  "opset": 12,
+  "task": "instance-segmentation",
+  "input": {
+    "name": "images",
+    "shape": [1, 3, 1024, 1024],
+    "dtype": "float32",
+    "color": "rgb",
+    "range": [0, 1]
+  },
+  "outputs": [
+    { "name": "output0", "shape": [1, 39, 21504] },
+    { "name": "output1", "shape": [1, 32, 256, 256] }
+  ],
+  "classes": ["forehead", "frown", "wrinkle"],
+  "confidence": 0.10,
+  "source_weight": "10_22微调第一版.pt",
+  "source_weight_bytes": 94869604,
+  "source_weight_sha256": "c0c259aae7e311a0ae1665f15fea65dd30ba0ea11dcf545404403bf2366592df",
+  "training_dataset": "/root/autodl-tmp/RSTL项目/datasets/wrinkle_yolo_combined/data.yaml (checkpoint metadata)",
+  "training_imgsz": 1024,
+  "training_mask_ratio": 2,
+  "onnx_bytes": 47608706,
+  "onnx_sha256": "617df9d55e0d20a8c6533367577800de5a43d8417ffb242714d904f5237e296f",
+  "exporter": "ultralytics 8.4.138",
+  "local_only": true,
+  "hugging_face": {
+    "repository": "LangerFace-Research/langerface-wrinkle-yolov8s-seg",
+    "filename": "wrinkle-yolov8s-seg-1024.onnx",
+    "visibility": "private"
+  },
+  "chunks": [
+    "wrinkle-yolov8s-seg-1024.onnx.part00",
+    "wrinkle-yolov8s-seg-1024.onnx.part01",
+    "wrinkle-yolov8s-seg-1024.onnx.part02",
+    "wrinkle-yolov8s-seg-1024.onnx.part03"
+  ]
+}

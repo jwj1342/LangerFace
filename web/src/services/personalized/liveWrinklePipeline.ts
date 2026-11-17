@@ -14,6 +14,8 @@ import {
   YOLO_WRINKLE_CONFIDENCE,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "./yoloWrinkleOnnx.ts";
+import { classifySingleClassWrinkleLines, hasSingleClassWrinkleMask } from
+  "./singleClassWrinkleAdapter.ts";
 
 export interface LiveWrinkleModelProgress {
   loadedChunks: number;
@@ -43,6 +45,7 @@ export interface GeneralLiveWrinklePipelineInput {
   seeds: V6Seed[];
   size: number;
   faceWidthPx: number;
+  landmarks?: readonly (readonly number[])[];
   onModelProgress?: (progress: LiveWrinkleModelProgress) => void;
   onEvidence?: (evidence: FineWrinkleExtraction) => void;
   assertCurrent?: () => void;
@@ -59,6 +62,7 @@ export async function runGeneralLiveWrinklePipeline({
   seeds,
   size,
   faceWidthPx,
+  landmarks,
   onModelProgress,
   onEvidence,
   assertCurrent,
@@ -74,6 +78,7 @@ export async function runGeneralLiveWrinklePipeline({
     throw new Error(`皱纹检测器版本不匹配：${detection.version}`);
   }
 
+  const singleClassModel = hasSingleClassWrinkleMask(detection.classMasks);
   const evidence = extractFineWrinkleLines(
     detection.classMasks,
     size,
@@ -83,19 +88,27 @@ export async function runGeneralLiveWrinklePipeline({
       resampleSpacingPx: 1,
       maximumSkeletonIterations: 96,
       sourceImageRgba: imageData.data,
+      classes: singleClassModel ? ["wrinkled"] : undefined,
     },
   );
   if (!evidence.lines.length || !evidence.validation.passed) {
     throw new Error("未提取到通过质量门禁的细皱纹线");
   }
-  onEvidence?.(evidence);
+  const adapted = singleClassModel
+    ? classifySingleClassWrinkleLines(evidence.lines, landmarks).lines
+    : evidence.lines;
+  if (singleClassModel && !adapted.length) {
+    throw new Error("单类别皱纹中心线未落入额头、眉间或鼻背区域");
+  }
+  const adaptedEvidence = singleClassModel ? { ...evidence, lines: adapted } : evidence;
+  onEvidence?.(adaptedEvidence);
   assertCurrent?.();
 
   const refined = refineV6({
     seeds,
-    wrinkleMask: evidence.mask,
-    confidenceMap: evidence.confidence,
-    directionQ: evidence.directionQ,
+    wrinkleMask: adaptedEvidence.mask,
+    confidenceMap: adaptedEvidence.confidence,
+    directionQ: adaptedEvidence.directionQ,
     size,
     faceWidthPx,
     options: latestV9RstlRefinementOptions(faceWidthPx),
@@ -105,7 +118,7 @@ export async function runGeneralLiveWrinklePipeline({
   return {
     detectorVersion: detection.version,
     refinementProfile: LATEST_WRINKLE_REFINEMENT_PROFILE,
-    evidence,
+    evidence: adaptedEvidence,
     refined,
   };
 }
