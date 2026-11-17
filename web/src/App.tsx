@@ -50,6 +50,11 @@ export function App() {
         <Route path="/app/surgery" element={<SurgeryRoute />} />
         <Route path="/app/v6-review" element={<V6ReviewRoute />} />
         <Route path="/app/workflow" element={<WorkflowRoute />} />
+        <Route path="/app/workflow/640" element={<WorkflowRoute />} />
+        <Route path="/app/workflow/640-lowconf" element={<WorkflowRoute />} />
+        <Route path="/app/workflow/640-ultralowconf" element={<WorkflowRoute />} />
+        <Route path="/app/workflow/640-threshold001" element={<WorkflowRoute />} />
+        <Route path="/app/workflow/640-threshold01" element={<WorkflowRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

@@ -1,23 +1,26 @@
+import { refineNoseHybrid } from '../services/personalized/noseHybridRefinement.ts';
 import * as Comlink from "comlink";
 import ortWasmModuleUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url";
 import ortWasmBinaryUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url";
 
-import { buildDirectNoseDorsumRstl } from
-  "../services/personalized/directNoseDorsumRstl.ts";
 import { extractFineWrinkleLines } from
   "../services/personalized/fineWrinkleLines.ts";
-import { removeCrowFeetWrinkleLines, selectNoseDorsumWrinkleLines } from
+import { keepFaceRegionWrinkleLines, keepTargetWrinkleLines } from
   "../services/personalized/crowFeetFilter.ts";
 import {
-  buildNoseRootIntersectionVisibilityPlan,
-  noseRootVisibilityDiagnostic,
-} from "../services/personalized/noseRootIntersectionVisibility.ts";
+  classifySingleClassWrinkleLines,
+  hasSingleClassWrinkleMask,
+  normalizeHorizontalForeheadGuidanceLines,
+  routeGenericWrinkleLines,
+} from
+  "../services/personalized/singleClassWrinkleAdapter.ts";
 import {
   buildPrecomputedFineWrinkleEvidence,
   validatedPrecomputedFineWrinkleSummary,
   type PrecomputedFineWrinkleEvidence,
   type PrecomputedFineWrinklePayload,
 } from "../services/personalized/precomputedFineWrinkleEvidence.ts";
+import { refineForeheadTrajectories, auditFinalForeheadAttraction } from "../services/personalized/foreheadTrajectoryAttraction.ts";
 import { refineV6 } from "../services/personalized/v6RstlRefinementV9.ts";
 import { refinementOutputHashes } from "../services/personalized/refinementOutputHash.ts";
 import {
@@ -28,7 +31,7 @@ import {
 } from "../services/personalized/v9RstlRefinementProfile.ts";
 import {
   YoloWrinkleOnnx,
-  YOLO_WRINKLE_CONFIDENCE,
+  requestedWrinkleConfidence,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "../services/personalized/yoloWrinkleOnnx.ts";
 import {
@@ -88,8 +91,9 @@ interface DynamicFourRegionPayload extends PrecomputedFineWrinklePayload {
   lines: DynamicFineLine[];
 }
 
+const wrinkleConfidence = requestedWrinkleConfidence();
 const detector = new YoloWrinkleOnnx({
-  confidenceThreshold: YOLO_WRINKLE_CONFIDENCE,
+  confidenceThreshold: wrinkleConfidence,
   wasmPaths: { mjs: ortWasmModuleUrl, wasm: ortWasmBinaryUrl },
 });
 let fullDetectionSequence = 0;
@@ -249,49 +253,39 @@ function appendDirectNoseCurves(
 ) {
   const noseLines = payload.lines.filter((line) => line.anatomicalClass === "nasal_dorsum");
   const landmarks = pixelLandmarks(request);
-  const directNose = buildDirectNoseDorsumRstl({
-    fineLines: noseLines,
-    sourceFineLineIds: noseLines.map((line) => line.id),
-    faceWidthPx: request.faceWidthPx,
-    eyePolygons: [LEFT_EYE_CONTOUR, RIGHT_EYE_CONTOUR].map((indices) =>
-      indices.map((index) => landmarks[index]).filter(Boolean)),
-    existingCurves: refined.curves,
-    maximumTurnLimitDegrees: 8,
-    auditExistingCurveIntersections: true,
+  const noseHybrid = refineNoseHybrid({
+    curves: refined.curves.map(c=>({...c,pts:c.pts.map((p:number[])=>[p[0],p[1]] as [number,number])})),
+    lines:noseLines.map(l=>({id:l.id,points:l.points as [number,number][]})),
+    size:request.size,faceWidthPx:request.faceWidthPx,
+    eyePolygons:[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR].map(indices=>indices.map(i=>landmarks[i]).filter(Boolean)),
   });
+  const directNose=noseHybrid.direct;
   const curves: LiveWrinkleWorkerCurve[] = [
-    ...refined.curves.map((curve) => ({
+    ...noseHybrid.curves.map((curve) => ({
       name: curve.name,
       region: curve.region,
       pts: curve.pts.map((point: number[]) => [point[0], point[1]] as [number, number]),
       hiddenPointRuns: [] as Array<[number, number]>,
     })),
-    ...directNose.curves.map((curve) => ({
+    ...(directNose?.curves || []).map((curve) => ({
       name: curve.name,
       region: curve.region,
       pts: curve.pts.map((point) => [point[0], point[1]] as [number, number]),
       hiddenPointRuns: [] as Array<[number, number]>,
     })),
   ];
-  const visibilityPlan = buildNoseRootIntersectionVisibilityPlan({
-    curves: curves.map((curve, curveIndex) => ({ ...curve, curveIndex })),
-    faceWidthPx: request.faceWidthPx,
-  });
-  for (const record of visibilityPlan.hiddenCurves) {
-    const curve = curves[record.curveIndex];
-    if (curve) curve.hiddenPointRuns = record.hiddenPointRuns.map((run) => [run[0], run[1]]);
-  }
   Object.assign(refined.diagnostics, {
     refinement_profile: LATEST_WRINKLE_REFINEMENT_PROFILE,
     four_region_detector: payload.detectorVersion,
     source_nose_dorsum_wrinkles_excluded_from_refinement: true,
-    direct_nose_dorsum_rstl: directNose.diagnostics,
-    direct_nose_dorsum_generated_curve_count: directNose.curves.length,
-    nose_root_intersection_visibility: noseRootVisibilityDiagnostic(visibilityPlan),
+    direct_nose_dorsum_rstl: directNose?.diagnostics || null,
+    nose_hybrid_refinement: noseHybrid.diagnostics,
+    direct_nose_dorsum_generated_curve_count: directNose?.curves.length || 0,
+    nose_root_intersection_visibility: null,
   });
   Object.assign(refined.audit, {
-    directNoseDorsumRstl: directNose.diagnostics,
-    noseRootIntersectionVisibility: noseRootVisibilityDiagnostic(visibilityPlan),
+    directNoseDorsumRstl: directNose?.diagnostics || null,
+    noseRootIntersectionVisibility: null,
   });
   return curves;
 }
@@ -304,7 +298,12 @@ async function seedYoloEvidence(
     point[1] * request.size,
     point[2] * request.size,
   ]);
-  const visibleLines = removeCrowFeetWrinkleLines(request.lines, detectionLandmarks);
+  const singleClassLines = request.lines.length > 0
+    && request.lines.every((line) => line.class === "wrinkled");
+  const adaptedLines = singleClassLines
+    ? classifySingleClassWrinkleLines(request.lines, detectionLandmarks).lines
+    : request.lines;
+  const visibleLines = keepFaceRegionWrinkleLines(adaptedLines, detectionLandmarks);
   if (!visibleLines.length) throw new Error("YOLO 未提取到有效皱纹中心线");
   const browserBaselineSha256 = typeof request.summary.browserBaselineSha256 === "string"
     ? request.summary.browserBaselineSha256
@@ -319,25 +318,33 @@ async function seedYoloEvidence(
     summary: {
       ...request.summary,
       fineLineCount: visibleLines.length,
-      excludedCrowFeetLineCount: request.lines.length - visibleLines.length,
+      adaptedLineCount: adaptedLines.length,
+      visibleLineCount: visibleLines.length,
+      sourceConnectedComponents: new Set(visibleLines.map((line) => line.sourceComponentId)).size,
+      excludedNonTargetLineCount: adaptedLines.length - visibleLines.length,
+      singleClassModel: singleClassLines,
       browserBaselineSha256,
     },
   };
   let detectionId: string | null = null;
-  if (request.cacheForRefinement) {
-    if (visibleLines.some((line) =>
+  if (request.cacheForRefinement && !request.debugUnfilteredPreview) {
+  const guidanceLines = keepTargetWrinkleLines(
+    normalizeHorizontalForeheadGuidanceLines(adaptedLines, detectionLandmarks),
+    detectionLandmarks,
+  );
+    if (guidanceLines.some((line) =>
       line.class === "forehead" || line.class === "frown" || line.class === "wrinkle")) {
       const cacheKey = `yolo-guidance-${++yoloDetectionSequence}`;
       detectionId = `yolo-${yoloDetectionSequence}`;
       cachedYoloDetection = {
         id: detectionId,
         foreheadEvidence: buildYoloGuidanceEvidence(
-          visibleLines, "forehead", request.size, `${cacheKey}-forehead`, request.summary,
+          guidanceLines, "forehead", request.size, `${cacheKey}-forehead`, request.summary,
         ),
         glabellarEvidence: buildYoloGuidanceEvidence(
-          visibleLines, "frown", request.size, `${cacheKey}-glabellar`, request.summary,
+          guidanceLines, "frown", request.size, `${cacheKey}-glabellar`, request.summary,
         ),
-        noseDorsumLines: selectNoseDorsumWrinkleLines(visibleLines, detectionLandmarks)
+        noseDorsumLines: guidanceLines.filter((line) => line.class === "wrinkle")
           .map((line) => ({
             id: line.id,
             class: line.class,
@@ -360,6 +367,24 @@ async function seedYoloEvidence(
   };
 }
 
+function adaptSingleClassLines(
+  lines: ReturnType<typeof extractFineWrinkleLines>["lines"],
+  classMasks: Record<string, ArrayLike<number>>,
+  landmarks: Array<[number, number, number]>,
+) {
+  if (!hasSingleClassWrinkleMask(classMasks)) return lines;
+  return classifySingleClassWrinkleLines(lines, landmarks).lines;
+}
+
+function countActivePixels(field: ArrayLike<number> | null | undefined): number {
+  if (!field) return 0;
+  let count = 0;
+  for (let index = 0; index < field.length; index += 1) {
+    if (Number(field[index]) > 0) count += 1;
+  }
+  return count;
+}
+
 const api: LiveWrinklePipelineWorkerApi = {
   async detect(request, onEvent) {
     const totalStart = performance.now();
@@ -373,27 +398,62 @@ const api: LiveWrinklePipelineWorkerApi = {
       data: request.pixels,
     } as ImageData;
     const detection = request.mode === "yolo-only"
-      ? await detector.detectClassMasks(imageData, { confidenceThreshold: YOLO_WRINKLE_CONFIDENCE })
-      : await detector.detect(imageData, { confidenceThreshold: YOLO_WRINKLE_CONFIDENCE });
+      ? await detector.detectClassMasks(imageData, {
+        confidenceThreshold: wrinkleConfidence, preserveInstanceMasks: true,
+      })
+      : await detector.detect(imageData, {
+        confidenceThreshold: wrinkleConfidence, preserveInstanceMasks: true,
+      });
     if (detection.version !== YOLO_WRINKLE_ONNX_VERSION) {
       throw new Error(`皱纹检测器版本不匹配：${detection.version}`);
     }
     const yoloDetectionMs = performance.now() - yoloStart;
     const baselineStart = performance.now();
+    const singleClassModel = hasSingleClassWrinkleMask(detection.classMasks);
     const baseline = extractFineWrinkleLines(
       detection.classMasks,
       request.size,
       request.size,
       {
         minimumLineLengthPx: 20,
+        minimumLineLengthPxByClass: { frown: 16 },
         resampleSpacingPx: 1,
         maximumSkeletonIterations: 96,
         sourceImageRgba: request.mode === "yolo-only" ? undefined : request.pixels,
         outputMode: "summary",
+        classes: singleClassModel ? ["wrinkled"] : undefined,
+        instanceMasks: "instanceMasks" in detection ? detection.instanceMasks : undefined,
       },
     );
     if (!baseline.lines.length || !baseline.validation.passed) {
       throw new Error("YOLO 未提取到有效皱纹中心线");
+    }
+    const adaptedResult = singleClassModel
+      ? classifySingleClassWrinkleLines(
+        baseline.lines,
+        request.landmarks.map((point) => [
+          point[0] * request.size,
+          point[1] * request.size,
+          point[2] * request.size,
+        ]),
+      )
+      : (() => {
+        const routed = routeGenericWrinkleLines(baseline.lines, request.landmarks.map((point) => [
+          point[0] * request.size,
+          point[1] * request.size,
+          point[2] * request.size,
+        ]));
+        return {
+          lines: routed.lines,
+          rejectedLineCount: 0,
+          lineCountByClass: baseline.summary.lineCountByClass,
+          genericForeheadReroutedCount: routed.reclassifiedForeheadCount,
+          genericFrownReroutedCount: routed.reclassifiedFrownCount,
+        };
+      })();
+    const adaptedLines = adaptedResult.lines;
+    if (singleClassModel && !adaptedLines.length) {
+      throw new Error("单类别皱纹中心线未落入额头、眉间或鼻背区域");
     }
     const baselineExtractionMs = performance.now() - baselineStart;
     // Periodic correction only consumes geometry and scores. Avoid creating a
@@ -406,10 +466,22 @@ const api: LiveWrinklePipelineWorkerApi = {
         .map((item) => Number(item.score))
         .filter((score) => Number.isFinite(score));
       const result = await seedYoloEvidence({
-        lines: baseline.lines,
+        debugUnfilteredPreview: request.debugUnfilteredPreview,
+        lines: adaptedLines,
         summary: {
           ...baseline.summary,
           sourceConnectedComponents: baseline.validation.renderedConnectedComponents,
+          singleClassModel,
+          singleClassRejectedLineCount: singleClassModel
+            ? adaptedResult.rejectedLineCount : 0,
+          rawDetectionCount: detection.detections.length,
+          rawYoloClassMaskPixels: countActivePixels(detection.classMasks.wrinkled),
+          baselineLineCount: baseline.lines.length,
+          baselineRejectedComponentCount: baseline.rejectedComponents.length,
+          genericForeheadReroutedCount: Number((adaptedResult as { genericForeheadReroutedCount?: number }).genericForeheadReroutedCount || 0),
+          genericFrownReroutedCount: Number((adaptedResult as { genericFrownReroutedCount?: number }).genericFrownReroutedCount || 0),
+          adaptedLineCount: adaptedLines.length,
+          adaptedLineCountByClass: adaptedResult.lineCountByClass,
           browserBaselineSha256,
           yoloDiagnostics: detection.diagnostics || {},
           yoloScores,
@@ -439,7 +511,7 @@ const api: LiveWrinklePipelineWorkerApi = {
     if (onEvent) await onEvent({ type: "provider-ready", capability: provider });
     emit(onEvent, { type: "pipeline-progress", stage: "four-region" });
     const fourRegionStart = performance.now();
-    const payload = await dynamicFourRegionDetection(request, baseline.lines, session);
+    const payload = await dynamicFourRegionDetection(request, adaptedLines, session);
     const fourRegionDetectionMs = performance.now() - fourRegionStart;
     const evidenceStart = performance.now();
     const displaySummary = validatedPrecomputedFineWrinkleSummary(
@@ -497,7 +569,18 @@ const api: LiveWrinklePipelineWorkerApi = {
         seeds: typeof eligibleSeeds,
         evidence: PrecomputedFineWrinkleEvidence | null,
         channel: "forehead" | "glabellar",
-      ) => seeds.length && evidence ? refineV6({
+      ) => channel === "glabellar" && seeds.length && evidence
+        ? refineForeheadTrajectories({
+          mode: "glabellar",
+          seeds: seeds.map(({ seed }) => seed),
+          lines: evidence.lines,
+          size: request.size,
+          // Solve the local glabellar bundle first.  Other facial regions are
+          // checked by the merged global guard after this solve; injecting all
+          // of them here clamps the nearest candidate back to its baseline.
+          fixedCurves: [],
+        })
+        : seeds.length && evidence ? refineV6({
           seeds: seeds.map(({ seed }) => seed),
           wrinkleMask: evidence.mask,
           confidenceMap: evidence.confidence,
@@ -508,14 +591,31 @@ const api: LiveWrinklePipelineWorkerApi = {
           performance: profile ? (profile[channel] = {}) : undefined,
           cacheGeometry: request.performanceMode !== "baseline",
         }) : null;
-      const forehead = refineChannel(foreheadSeeds, cachedYolo.foreheadEvidence, "forehead");
       const glabellar = refineChannel(glabellarSeeds, cachedYolo.glabellarEvidence, "glabellar");
-      const channelCurves = new Map<number, ReturnType<typeof refineV6>["curves"][number]>();
+      // Resolve the unchanged regional pipeline first; forehead treats its final
+      // geometry as fixed obstacles rather than pushing it aside after the solve.
+      const glabellarByIndex = new Map(glabellarSeeds.map(({ index }, i) =>
+        [index, glabellar?.curves[i]]));
+      const regionalGuard = guardMergedYoloGuidedRstlCurves(request.seeds,
+        request.seeds.map((seed, index) => ({ name: String(seed.name || ""),
+          region: String(seed.region || ""),
+          pts: glabellarByIndex.get(index)?.pts || seed.pts as [number, number][] })));
+      // The regional guard is retained for preparing forehead obstacles, but
+      // it must not become the source geometry for glabellar curves. Its
+      // conservative whole-face rollback can erase a valid local frown
+      // deformation before the authoritative final global guard runs.
+      const glabellarOutputByIndex = new Map(glabellarSeeds.map(({ index }, i) =>
+        [index, glabellar?.curves[i]]));
+      const forehead = cachedYolo.foreheadEvidence && foreheadSeeds.length
+        ? refineForeheadTrajectories({ seeds: foreheadSeeds.map(({ seed }) => seed),
+          lines: cachedYolo.foreheadEvidence.lines, size: request.size,
+          fixedCurves: regionalGuard.curves.filter((_, i) => !isYoloGuidedForeheadSeed(request.seeds[i])) }) : null;
+      const channelCurves = new Map<number, { name: string; region: string; pts: [number, number][] }>();
       foreheadSeeds.forEach(({ index }, scopedIndex) => {
         if (forehead) channelCurves.set(index, forehead.curves[scopedIndex]);
       });
-      glabellarSeeds.forEach(({ index }, scopedIndex) => {
-        if (glabellar) channelCurves.set(index, glabellar.curves[scopedIndex]);
+      glabellarSeeds.forEach(({ index }) => {
+        if (glabellar) channelCurves.set(index, glabellarOutputByIndex.get(index)!);
       });
       const scopedCurves = eligibleSeeds.map(({ seed, index }) =>
         channelCurves.get(index) || { ...seed, pts: Array.isArray(seed.pts) ? seed.pts : [] });
@@ -530,6 +630,8 @@ const api: LiveWrinklePipelineWorkerApi = {
       });
       if (profile) profile.globalGuardMs = performance.now() - guardStart;
       const standardCurves: LiveWrinkleWorkerCurve[] = globalGuard.curves;
+      if (forehead) auditFinalForeheadAttraction(forehead,
+        foreheadSeeds.map(({ index }) => ({ ...standardCurves[index], region: standardCurves[index].region || "" })), request.size);
       const foreheadAudit = reconcileYoloGuidedAuditAfterGlobalGuard(
         forehead?.audit, foreheadSeeds.map(({ index }) => index),
         globalGuard.rolledBackCurveIndices,
@@ -541,21 +643,17 @@ const api: LiveWrinklePipelineWorkerApi = {
       const channelResults = [forehead, glabellar].filter(
         (result): result is NonNullable<typeof result> => Boolean(result),
       );
-      if (!channelResults.length) throw new Error("缓存中没有额头或眉间皱纹证据");
+      if (!channelResults.length && !cachedYolo.noseDorsumLines.length) throw new Error("缓存中没有可用皱纹证据");
+      const nonForeheadChannelResults = channelResults.filter((result) => result !== forehead);
       const noseStart = profile ? performance.now() : 0;
       const landmarks = pixelLandmarks(request);
-      const directNose = cachedYolo.noseDorsumLines.length ? buildDirectNoseDorsumRstl({
-        fineLines: cachedYolo.noseDorsumLines,
-        sourceFineLineIds: cachedYolo.noseDorsumLines.map((line) => line.id),
-        faceWidthPx: request.faceWidthPx,
-        eyePolygons: [LEFT_EYE_CONTOUR, RIGHT_EYE_CONTOUR].map((indices) =>
-          indices.map((index) => landmarks[index]).filter(Boolean)),
-        existingCurves: standardCurves,
-        maximumTurnLimitDegrees: 8,
-        auditExistingCurveIntersections: true,
-      }) : null;
+      const noseHybrid = refineNoseHybrid({curves:standardCurves,
+        lines:cachedYolo.noseDorsumLines.map(l=>({id:l.id,points:l.points as [number,number][]})),
+        size:request.size, faceWidthPx:request.faceWidthPx,
+        eyePolygons:[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR].map(indices=>indices.map(i=>landmarks[i]).filter(Boolean))});
+      const directNose = noseHybrid.direct;
       const curves: LiveWrinkleWorkerCurve[] = [
-        ...standardCurves,
+        ...noseHybrid.curves,
         ...(directNose?.curves.map((curve) => ({
           name: curve.name,
           region: curve.region,
@@ -563,38 +661,41 @@ const api: LiveWrinklePipelineWorkerApi = {
           hiddenPointRuns: [] as Array<[number, number]>,
         })) || []),
       ];
-      const visibilityPlan = directNose?.curves.length ?
-        buildNoseRootIntersectionVisibilityPlan({
-          curves: curves.map((curve, curveIndex) => ({ ...curve, curveIndex })),
-          faceWidthPx: request.faceWidthPx,
-        }) : null;
-      for (const record of visibilityPlan?.hiddenCurves || []) {
-        const curve = curves[record.curveIndex];
-        if (curve) {
-          curve.hiddenPointRuns = record.hiddenPointRuns.map((run) => [run[0], run[1]]);
-        }
-      }
       if (profile) profile.noseAndVisibilityMs = performance.now() - noseStart;
       const diagnostics = {
-        ...channelResults[0].diagnostics,
+        ...glabellar?.diagnostics,
+        ...forehead?.diagnostics,
         refinement_scope: YOLO_GUIDED_RSTL_SCOPE,
         refinement_scope_seed_count: eligibleSeeds.length,
         excluded_rstl_curve_count: request.seeds.length - eligibleSeeds.length,
         guidance_channels_isolated: true,
         forehead_evidence_line_count: cachedYolo.foreheadEvidence?.lines.length || 0,
         glabellar_evidence_line_count: cachedYolo.glabellarEvidence?.lines.length || 0,
+        generic_forehead_rerouted_count: Number(
+          cachedYolo.foreheadEvidence?.summary.genericForeheadReroutedCount ||
+          cachedYolo.glabellarEvidence?.summary.genericForeheadReroutedCount || 0,
+        ),
+        generic_frown_rerouted_count: Number(
+          cachedYolo.glabellarEvidence?.summary.genericFrownReroutedCount || 0,
+        ),
         nose_bridge_evidence_line_count: cachedYolo.noseDorsumLines.length,
+        forehead_multi_curve_attraction: forehead?.diagnostics.forehead_multi_curve_attraction === true,
+        non_forehead_maximum_selected_rstl_curves_per_wrinkle: Math.max(0, ...nonForeheadChannelResults.map(
+          (result) => Number(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle || 0),
+        )),
+        non_forehead_curve_unique_wrinkle_ownership: nonForeheadChannelResults.every((result) =>
+          result.diagnostics.curve_unique_wrinkle_ownership === true),
         forehead_moved_curve_count: standardCurves.filter((curve, index) =>
           isYoloGuidedForeheadSeed(request.seeds[index]) &&
           JSON.stringify(curve.pts) !== JSON.stringify(request.seeds[index].pts)).length,
         glabellar_moved_curve_count: standardCurves.filter((curve, index) =>
           isYoloGuidedGlabellarSeed(request.seeds[index]) &&
           JSON.stringify(curve.pts) !== JSON.stringify(request.seeds[index].pts)).length,
-        nose_bridge_moved_curve_count: directNose?.curves.length || 0,
+        nose_bridge_moved_curve_count: noseHybrid.diagnostics.movedExistingCurveCount,
+        nose_hybrid_refinement: noseHybrid.diagnostics,
         direct_nose_dorsum_generated_curve_count: directNose?.curves.length || 0,
         direct_nose_dorsum_rstl: directNose?.diagnostics || null,
-        nose_root_intersection_visibility: visibilityPlan ?
-          noseRootVisibilityDiagnostic(visibilityPlan) : null,
+        nose_root_intersection_visibility: null,
         glabellar_classified_trend_count: Array.isArray(glabellar?.diagnostics.wrinkle_trend_geometry)
           ? glabellar.diagnostics.wrinkle_trend_geometry.filter(
             (trend: Record<string, unknown>) => trend.classified_guided_region === "glabellar",
@@ -623,6 +724,8 @@ const api: LiveWrinklePipelineWorkerApi = {
             {},
           )
           : {},
+        glabellar_local_rollback_indices: (glabellar?.diagnostics as Record<string, any> | undefined)?.forehead_attraction_rollback_indices || [],
+        glabellar_local_boundary_failures: (glabellar?.diagnostics as Record<string, any> | undefined)?.forehead_boundary_failures || [],
         moved_curve_count: standardCurves.filter((curve, index) =>
           JSON.stringify(curve.pts) !== JSON.stringify(request.seeds[index].pts)).length,
         moved_point_count: standardCurves.reduce((sum, curve, index) => sum + curve.pts.filter(
@@ -641,14 +744,13 @@ const api: LiveWrinklePipelineWorkerApi = {
           Number(result.diagnostics.maximum_selected_rstl_curves_per_wrinkle || 0))),
         curve_unique_wrinkle_ownership: channelResults.every((result) =>
           result.diagnostics.curve_unique_wrinkle_ownership === true),
-        wrinkle_with_single_side_selected_count: channelResults.reduce((sum, result) =>
+        wrinkle_with_single_side_selected_count: nonForeheadChannelResults.reduce((sum, result) =>
           sum + Number(result.diagnostics.wrinkle_with_single_side_selected_count || 0), 0),
         nose_bridge_single_curve_selected_count: 0,
         crows_feet_single_curve_selected_count: 0,
-        bundle_follower_moved_curve_count: channelResults.reduce((sum, result) =>
+        bundle_follower_moved_curve_count: nonForeheadChannelResults.reduce((sum, result) =>
           sum + Number(result.diagnostics.bundle_follower_moved_curve_count || 0), 0),
-        curvature_fairing_enabled: channelResults.every((result) =>
-          result.diagnostics.curvature_fairing_enabled === true),
+        curvature_fairing_enabled: glabellar ? glabellar.diagnostics.curvature_fairing_enabled === true : true,
         topology_contract_preserved: channelResults.every((result) =>
           result.diagnostics.topology_contract_preserved === true),
         post_export_new_intersection_pair_count: globalGuard.newIntersectionPairCount,
@@ -667,8 +769,7 @@ const api: LiveWrinklePipelineWorkerApi = {
             forehead: foreheadAudit,
             glabellar: glabellarAudit,
             directNoseDorsumRstl: directNose?.diagnostics || null,
-            noseRootIntersectionVisibility: visibilityPlan ?
-              noseRootVisibilityDiagnostic(visibilityPlan) : null,
+            noseRootIntersectionVisibility: null,
             globalIntersectionGuard: {
               rollbackReason: "global_intersection_guard",
               rolledBackCurveIndices: globalGuard.rolledBackCurveIndices,

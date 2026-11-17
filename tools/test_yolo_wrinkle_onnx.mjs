@@ -18,6 +18,7 @@ import {
   fuseStrictUnion,
   preprocessImageData,
   skeletonizeBinary,
+  suppressCoveredInstanceMasks,
 } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
 import {
   fetchCachedModelAsset,
@@ -29,6 +30,35 @@ assert.ok(DEFAULT_MODEL_CHUNK_URLS.every((url) => /\.onnx\.part0[0-3]$/.test(url
 assert.equal(WrinkleYoloOnnx, YoloWrinkleOnnx);
 assert.equal(typeof YoloWrinkleOnnx.prototype.detect, "function");
 assert.ok(YOLO_WRINKLE_MODEL_CACHE_NAME.startsWith(YOLO_WRINKLE_MODEL_CACHE_PREFIX));
+
+{
+  const instances = [
+    { className: "frown", mask: Uint8Array.from([1, 1, 0, 0, 0, 0]) },
+    { className: "frown", mask: Uint8Array.from([0, 0, 0, 1, 1, 0]) },
+    { className: "frown", mask: Uint8Array.from([1, 1, 1, 1, 1, 0]) },
+    { className: "frown", mask: Uint8Array.from([0, 0, 0, 0, 0, 1]) },
+  ];
+  assert.deepEqual(suppressCoveredInstanceMasks(instances),
+    [instances[0], instances[1], instances[3]],
+    "a weak bridge between two retained wrinkles must not become a third centerline");
+}
+
+// The single-class export is [1,37,8400]. Its 37-channel axis must be used
+// for class inference; treating 8400 as channels allocates thousands of masks.
+{
+  const transform = {
+    inputSize: 640, sourceWidth: 8, sourceHeight: 8,
+    resizedWidth: 8, resizedHeight: 8, padX: 0, padY: 0,
+    scale: 1, scaleX: 1, scaleY: 1,
+  };
+  const prediction = { dims: [1, 37, 8400], data: new Float32Array(37 * 8400) };
+  prediction.data[0 * 8400] = 4;
+  prediction.data[2 * 8400] = 4;
+  prediction.data[3 * 8400] = 4;
+  prediction.data[4 * 8400] = 0.9;
+  const decoded = decodeYoloSegOutput(prediction, transform);
+  assert.equal(decoded.length, 1, "single-class [1,37,8400] channel inference must remain bounded");
+}
 
 function createMemoryCacheStorage(initialNames = []) {
   const stores = new Map(initialNames.map((name) => [name, new Map()]));
@@ -375,6 +405,13 @@ assert.equal(boxIou([0, 0, 2, 2], [3, 3, 4, 4]), 0);
   assert.ok(combined.classConfidenceMaps[1][0] > 0.78);
   assert.ok(combined.classConfidenceMaps[1][3] > 0 && combined.classConfidenceMaps[1][3] < 0.02,
     "dense class evidence remains available below the binary mask threshold");
+  const separate = combinePrototypeMasks(detections, prototype, {
+    inputSize: 2, sourceWidth: 2, sourceHeight: 2,
+    padX: 0, padY: 0, scaleX: 1, scaleY: 1,
+  }, { preserveInstanceMasks: true });
+  assert.equal(separate.instanceMasks.length, 1);
+  assert.equal(separate.instanceMasks[0].classId, 1);
+  assert.deepEqual([...separate.instanceMasks[0].mask], [1, 1, 1, 0]);
 }
 
 {

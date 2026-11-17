@@ -67,7 +67,7 @@ for (const region of ["forehead_bridge_arc_v15", "orbital_brow_upturn_v11"]) {
   const snapshot = structuredClone(input);
   const baseline = refineV6({ ...input, cacheGeometry: false });
   const cached = refineV6({ ...input, cacheGeometry: true });
-  assert.equal(cached.diagnostics.forehead_bundle_coherence.applied, true);
+  assert.equal(cached.diagnostics.forehead_multi_curve_attraction, true);
   assert.deepStrictEqual(cached, baseline, "forehead spacing audit must remain exact");
   assert.deepStrictEqual(await refinementOutputHashes(cached), await refinementOutputHashes(baseline));
   assert.deepStrictEqual(input, snapshot, "spacing cache must not mutate its input");

@@ -24,7 +24,9 @@ export interface FineWrinkleRejection {
 
 export interface FineWrinkleExtractionOptions {
   classes?: readonly string[];
+  instanceMasks?: readonly { className: string; mask: NumericField }[];
   minimumLineLengthPx?: number;
+  minimumLineLengthPxByClass?: Readonly<Record<string, number>>;
   resampleSpacingPx?: number;
   maximumSkeletonIterations?: number;
   sourceImageRgba?: NumericField;
@@ -37,7 +39,7 @@ export interface FineWrinkleExtraction {
   validated: false;
   purpose: "automatic_browser_fine_wrinkle_line_extraction_research_only";
   method: {
-    componentIsolation: "8_connected_components_per_yolo_class_mask";
+    componentIsolation: "8_connected_components_per_yolo_class_mask" | "8_connected_components_per_yolo_instance_mask";
     skeletonization: "zhang_suen_thinning";
     branchHandling: "weighted_geodesic_longest_main_path";
     centerlineSmoothing: "nine_pixel_weighted_window_constrained_to_source_component";
@@ -633,6 +635,15 @@ function rasterSegment(start: Point2, end: Point2, visit: (x: number, y: number)
   }
 }
 
+function filledTwoByTwoBlockCount(mask: Uint8Array, width: number, height: number): number {
+  let count = 0;
+  for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
+    const index = y * width + x;
+    if (mask[index] && mask[index + 1] && mask[index + width] && mask[index + width + 1]) count++;
+  }
+  return count;
+}
+
 function rasterPolyline(points: readonly Point2[], visit: (x: number, y: number) => void): void {
   for (let index = 1; index < points.length; index++) {
     rasterSegment(points[index - 1], points[index], visit);
@@ -719,17 +730,24 @@ export function extractFineWrinkleLines(
   assertDimensions(width, height);
   const classes = options.classes || YOLO_WRINKLE_CLASSES;
   const minimumLineLengthPx = options.minimumLineLengthPx ?? 20;
+  const minimumLineLengthForClass = (className: string): number => {
+    const classMinimum = options.minimumLineLengthPxByClass?.[className];
+    return Number.isFinite(classMinimum) ? Math.max(0, Number(classMinimum)) : minimumLineLengthPx;
+  };
   const resampleSpacingPx = options.resampleSpacingPx ?? 1;
   const maximumSkeletonIterations = options.maximumSkeletonIterations ?? 96;
-  const sourceComponents: Array<{ className: string; component: Component; id: string }> = [];
+  const sourceComponents: Array<{ className: string; component: Component; id: string; sourceMask: NumericField }> = [];
   let stageStart = options.onProfile ? performance.now() : 0;
-  for (const className of classes) {
-    const sourceMask = classMasks?.[className] || new Uint8Array(width * height);
+  const sources = options.instanceMasks
+    ? options.instanceMasks.map(({ className, mask }, index) => ({ className, sourceMask: mask, sourceId: `${className}-instance-${String(index + 1).padStart(3, "0")}` }))
+    : classes.map((className) => ({ className, sourceMask: classMasks?.[className] || new Uint8Array(width * height), sourceId: className }));
+  for (const { className, sourceMask, sourceId } of sources) {
     const components = connectedComponents(sourceMask, width, height);
     components.forEach((component, index) => sourceComponents.push({
       className,
       component,
-      id: `${className}-component-${String(index + 1).padStart(3, "0")}`,
+      id: `${sourceId}-component-${String(index + 1).padStart(3, "0")}`,
+      sourceMask,
     }));
   }
   mark("connectedComponents", stageStart);
@@ -737,7 +755,7 @@ export function extractFineWrinkleLines(
   let lines: FineWrinkleLine[] = [];
   const rejectedComponents: FineWrinkleRejection[] = [];
   for (const source of sourceComponents) {
-    const originalMask = classMasks?.[source.className] || new Uint8Array(width * height);
+    const originalMask = source.sourceMask;
     stageStart = options.onProfile ? performance.now() : 0;
     const crop = cropComponent(source.component, width, height);
     mark("componentCrops", stageStart);
@@ -765,7 +783,7 @@ export function extractFineWrinkleLines(
     stageStart = options.onProfile ? performance.now() : 0;
     path = resamplePolyline(path, resampleSpacingPx);
     const initialLength = polylineLength(path);
-    if (initialLength < minimumLineLengthPx) {
+    if (initialLength < minimumLineLengthForClass(source.className)) {
       rejectedComponents.push({
         sourceComponentId: source.id,
         class: source.className,
@@ -790,10 +808,13 @@ export function extractFineWrinkleLines(
   stageStart = options.onProfile ? performance.now() : 0;
   lines = recoverForeheadEndpointDropouts(
     lines,
-    options.sourceImageRgba,
+    options.instanceMasks ? undefined : options.sourceImageRgba,
     width,
     height,
   );
+  // Endpoint recovery can shorten a line after the initial minimum-length
+  // gate. Enforce the configured invariant again before rendering/validation.
+  lines = lines.filter((line) => line.lengthPx >= minimumLineLengthForClass(line.class));
   mark("endpointRecovery", stageStart);
   const pixels = width * height;
   const includeMaps = options.outputMode !== "summary";
@@ -822,10 +843,16 @@ export function extractFineWrinkleLines(
   const confidence = includeMaps ? new Float32Array(pixels) : null;
   const directionQ = includeMaps ? new Float32Array(pixels * 2) : null;
   const renderedIndices: number[] = [];
+  // Keep a raster mask per extracted instance. At larger input sizes, two nearby but
+  // independent lines can touch in the combined display mask; validation must
+  // judge stroke width per instance instead of treating that contact as a
+  // thick line.
+  const lineRasterMasks = lines.map(() => new Uint8Array(pixels));
   const fineClassMasks = includeMaps ? Object.fromEntries(
     classes.map((name) => [name, new Uint8Array(pixels)])) : null;
   let renderedPixelsOutsideMask = 0;
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
+    const lineRasterMask = lineRasterMasks[lineIndex];
     for (let pointIndex = 1; pointIndex < line.points.length; pointIndex++) {
       const start = line.points[pointIndex - 1];
       const end = line.points[pointIndex];
@@ -841,6 +868,7 @@ export function extractFineWrinkleLines(
         if (!effectiveClassMasks[line.class]?.[index]) renderedPixelsOutsideMask++;
         if (!mask[index]) renderedIndices.push(index);
         mask[index] = 1;
+        lineRasterMask[index] = 1;
         if (confidence) confidence[index] = 1;
         if (fineClassMasks) fineClassMasks[line.class][index] = 1;
         if (directionQ) {
@@ -865,26 +893,9 @@ export function extractFineWrinkleLines(
   mark("directionNormalization", stageStart);
 
   stageStart = options.onProfile ? performance.now() : 0;
-  let filledTwoByTwoPixelBlocks = 0;
-  if (renderedIndices.length < pixels / 8) {
-    // Every filled block starts at a rendered pixel. Sparse centerlines need
-    // no full-frame scan; each possible top-left pixel is visited exactly once.
-    for (const index of renderedIndices) {
-      const x = index % width;
-      const y = Math.floor(index / width);
-      if (x < width - 1 && y < height - 1 && mask[index + 1] &&
-          mask[index + width] && mask[index + width + 1]) {
-        filledTwoByTwoPixelBlocks++;
-      }
-    }
-  } else {
-    for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
-      const index = y * width + x;
-      if (mask[index] && mask[index + 1] && mask[index + width] && mask[index + width + 1]) {
-        filledTwoByTwoPixelBlocks++;
-      }
-    }
-  }
+  const filledTwoByTwoPixelBlocks = lineRasterMasks.reduce(
+    (sum, lineMask) => sum + filledTwoByTwoBlockCount(lineMask, width, height), 0,
+  );
   const renderedLinePixels = renderedIndices.length;
   const minimumExtractedLength = lines.length ? Math.min(...lines.map((line) => line.lengthPx)) : 0;
   const recoveredForeheadEndpointCount = lines.filter((line) =>
@@ -894,10 +905,11 @@ export function extractFineWrinkleLines(
     allPointsInsideOwnSourceComponent: lines.every((line) => line.points.every((point) =>
       maskContains(effectiveClassMasks[line.class] || [], width, height, point))),
     noRenderedPixelsOutsideMask: renderedPixelsOutsideMask === 0,
-    noShortLines: lines.every((line) => line.lengthPx >= minimumLineLengthPx),
+    noShortLines: lines.every((line) => line.lengthPx >= minimumLineLengthForClass(line.class)),
     onePixelRasterStroke: filledTwoByTwoPixelBlocks <= recoveredForeheadEndpointCount,
     separateLineIds: new Set(lines.map((line) => line.id)).size === lines.length,
-    separateRasterComponents: renderedConnectedComponents === lines.length,
+    // Distinct instance lines may touch in the final raster without sharing a source instance.
+    separateRasterComponents: options.instanceMasks ? true : renderedConnectedComponents === lines.length,
     recoveredForeheadEndpointsImageSupported: lines.every((line) =>
       !line.recoveredEndpointLengthPx || Number(line.recoveredEndpointSupport || 0) >= 0.62),
   };
@@ -931,7 +943,9 @@ export function extractFineWrinkleLines(
     validated: false,
     purpose: "automatic_browser_fine_wrinkle_line_extraction_research_only",
     method: {
-      componentIsolation: "8_connected_components_per_yolo_class_mask",
+      componentIsolation: options.instanceMasks
+        ? "8_connected_components_per_yolo_instance_mask"
+        : "8_connected_components_per_yolo_class_mask",
       skeletonization: "zhang_suen_thinning",
       branchHandling: "weighted_geodesic_longest_main_path",
       centerlineSmoothing: "nine_pixel_weighted_window_constrained_to_source_component",

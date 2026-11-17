@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "refactor/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pull-request-closing-keyword-guard:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: node tools/test_pr_closing_keywords.mjs
+      - run: node tools/check_pr_closing_keywords.mjs
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: pip install "ruff>=0.5"
+      - run: ruff check .
+
+  python-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # dev extra = numpy + opencv + pytest + ruff. mediapipe NOT needed:
+      # tests inject fake detectors / synthetic landmarks. Assets are committed,
+      # so canonical/render/pipeline tests run rather than skip.
+      - run: pip install -e ".[dev]"
+      - run: pytest
+      # #30 跨语言单一真源：web/src/services/constantsGenerated.ts 必须与 constants.py 同步
+      # （改了 constants.py 却忘了重跑生成器即报错）。
+      - name: web 常量与 constants.py 同步校验
+        run: |
+          python tools/gen_web_constants.py
+          git diff --exit-code web/src/services/constantsGenerated.ts \
+            || (echo '::error::web/src/services/constantsGenerated.ts 与 constants.py 不同步，请运行  python tools/gen_web_constants.py' && exit 1)
+
+  wrinkle-provider-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev,wrinkle]"
+      - name: Exercise the provider contract and start the real V10 process/checkpoint
+        run: pytest -q tests/test_wrinkle_v10_service.py
+
+  js-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: node tools/test_automerge_policy.mjs
+      - working-directory: web
+        run: npm ci
+      - name: Verify latest algorithm PR gate
+        working-directory: web
+        run: npm run verify:algorithm-release:pr
+      - working-directory: web
+        run: npm run build
+      - name: Build and verify lesion candidate runtime identity
+        working-directory: web
+        run: |
+          npm run build:lesion-candidate
+          npm run verify:build-lesion-candidate
+      # Pure-node parity tests pin Web TypeScript geometry services against the
+      # Python reference (web/test/expected.json).
+      - name: Verify case features remain removed
+        working-directory: web
+        run: node ../tools/test_no_case_features.ts
+      - working-directory: web
+        run: npm test
+
+  browser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci
+      - working-directory: web
+        run: npx playwright install --with-deps chromium
+      - working-directory: web
+        run: npm run test:browser

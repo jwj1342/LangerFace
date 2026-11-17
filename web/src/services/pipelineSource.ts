@@ -13,6 +13,7 @@ import {
 } from "./cameraSource.ts";
 import { ctx, els } from "./liveDom.ts";
 import { prepareImageSource } from "./imageSource.ts";
+import { resetRstlPhotoHairOcclusion, startRstlPhotoHairOcclusion } from "./rstlPhotoHairOcclusion.ts";
 import { confirmLikelyScreenshotUpload } from "./imageUploadPreflight.ts";
 import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
 import {
@@ -242,9 +243,6 @@ export async function handleFile(
   let pendingVideoRelease: (() => void) | null = null;
   let sourceReplaced = false;
   const workflowUpload = Boolean(document.querySelector(".workflow-workbench"));
-  stopSource({ preserveOperation: true });
-  sourceReplaced = true;
-  setLive(false, "待机");
   setMsg(isImage ? "图片加载中" : "正在准备视频…", 0, true);
   try {
     if (isImage) {
@@ -261,7 +259,11 @@ export async function handleFile(
         const decoded = img.decode().then(() => {
           decodedAt = performance.now();
         });
-        await Promise.all([modelReady, decoded]);
+        // Keep the current source visible while the new file is decoding and
+        // the cached MediaPipe models are warming up.  The model promise is
+        // intentionally started in parallel, but it must not delay showing
+        // the decoded image.
+        await decoded;
         if (operationId !== sourceOperationId) return;
         const dimensions = {
           width: img.naturalWidth || img.width,
@@ -273,8 +275,18 @@ export async function handleFile(
         }
         if (workflowUpload) setMsg("图片加载中", 0, true);
         const prepared = prepareImageSource(img);
+        stopSource({ preserveOperation: true });
+        sourceReplaced = true;
+        setLive(false, "待机");
         sourceState.imageFile = file;
         setSource(prepared.source, "image", prepared.width, prepared.height);
+        sourceReplaced = false;
+        // setSource() paints the image immediately.  Static landmarks are
+        // requested again after the model promise resolves, so model startup
+        // never produces a blank canvas.
+        await modelReady;
+        if (operationId !== sourceOperationId) return;
+        requestFrame();
         sourceState.imageFileName = file.name;
         const sourceSetAt = performance.now();
         recordMetricSample("source.imageModelWaitMs", modelReadyAt - startedAt, { bytes: file.size });
@@ -412,6 +424,7 @@ export function setSource(
   setMsg(null);
   setLive(true, kind === "camera" ? "实时摄像头" : kind === "video" ? "视频" : "照片");
   if (kind === "image") {
+    startRstlPhotoHairOcclusion(src as TexImageSource, sourceWidth, sourceHeight, requestFrame);
     lastStaticSource = {
       densityFrac: renderState.densityFrac,
       source: src,
@@ -438,6 +451,7 @@ export function stopSource({
   if (!preserveOperation) sourceOperationId += 1;
   if (!preserveOperation) setMsg(null);
   cancelFrame();
+  resetRstlPhotoHairOcclusion();
   sourceLayoutScheduler.cancel();
   sourceState.planning2d?.clearSource();
   els.video.pause();

@@ -102,7 +102,8 @@ function parseCompactMaskResponse(buffer: ArrayBuffer, expectedSha256: string) {
   const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLength)));
   if (header.modelSha256 !== expectedSha256.toLowerCase()) throw new Error('CUDA model changed');
   if (header.width !== 640 || header.height !== 640
-      || JSON.stringify(header.classes) !== JSON.stringify(['forehead', 'frown', 'wrinkle'])) {
+      || !Array.isArray(header.classes) || header.classes.length < 1
+      || header.classes.some((name: unknown) => typeof name !== 'string')) {
     throw new Error('Invalid compact mask metadata');
   }
   const pixels = header.width * header.height;
@@ -143,7 +144,7 @@ function parseCompactMaskResponse(buffer: ArrayBuffer, expectedSha256: string) {
     diagnostics: {
       candidateCount: header.candidateCount,
       detectionCount: header.detectionCount,
-      confidenceThreshold: 0.07,
+      confidenceThreshold: 0.10,
       iouThreshold: 0.45,
       maskThreshold: 0.5,
       preprocessingMs: header.preprocessingMs,

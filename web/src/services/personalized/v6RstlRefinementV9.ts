@@ -38,6 +38,8 @@ export interface V6RefinementOptions {
   [key: string]: any;
   twoSidedNearestMatching?: boolean;
   foreheadNearestSingleCurveMatching?: boolean;
+  /** Keep every geometrically compatible forehead RSTL as an attraction target. */
+  foreheadMultiCurveAttraction?: boolean;
   regionalNearestSingleCurveMatching?: boolean;
   parallelDedupRadiusPx?: number;
   softLinkDistancePx?: number;
@@ -47,6 +49,8 @@ export interface V6RefinementOptions {
   searchRadiusPx?: number;
   directionToleranceDegrees?: number;
   minimumMatchScore?: number;
+  /** Forehead wrinkles are often short, so use their own evidence floor. */
+  foreheadMinimumMatchScore?: number;
   transitionLengthPx?: number;
   maxDisplacementPx?: number;
   p90LimitPx?: number;
@@ -255,6 +259,7 @@ interface RefinementExecution {
     bandRadius: number;
     directionCosine: number;
     minimumMatchScore: number;
+    foreheadMinimumMatchScore: number;
     groups: Map<string, MatchRecord[]>;
     candidatePairCount: number;
     directionRejectedPairCount: number;
@@ -766,12 +771,15 @@ function matchTrendsToCurvesImpl(
   let groups: Map<string, MatchRecord[]>;
   let candidatePairCount = 0, directionRejectedPairCount = 0;
   const minimumMatchScore = options.minimumMatchScore ?? 0.025;
+  const foreheadMinimumMatchScore = options.foreheadMinimumMatchScore ??
+      Math.min(0.010, minimumMatchScore);
   const cached = refinementExecution?.matchingRecords;
   if (refinementExecution?.geometry && cached && cached.trends === trends &&
       cached.curves === curves && cached.confidence === confidence && cached.size === size &&
       Object.is(cached.faceWidth, faceWidth) && Object.is(cached.bandRadius, bandRadius) &&
       Object.is(cached.directionCosine, directionCosine) &&
-      Object.is(cached.minimumMatchScore, minimumMatchScore)) {
+      Object.is(cached.minimumMatchScore, minimumMatchScore) &&
+      Object.is(cached.foreheadMinimumMatchScore, foreheadMinimumMatchScore)) {
     groups = cached.groups;
     candidatePairCount = cached.candidatePairCount;
     directionRejectedPairCount = cached.directionRejectedPairCount;
@@ -779,6 +787,15 @@ function matchTrendsToCurvesImpl(
   } else {
     groups = new Map<string, MatchRecord[]>();
     const matchingBounds = curves.map((curve) => curveBounds(curve.prior));
+    const foreheadIntersectionPairs = new Set<string>();
+    for (let trendIndex = 0; trendIndex < trends.length; trendIndex += 1) {
+      for (let curveIndex = 0; curveIndex < curves.length; curveIndex += 1) {
+        if (String(curves[curveIndex].seed.region || "").includes("forehead") &&
+            polylinesIntersect(trends[trendIndex].points, curves[curveIndex].prior)) {
+          foreheadIntersectionPairs.add(`${trendIndex}:${curveIndex}`);
+        }
+      }
+    }
     for (let trendIndex = 0; trendIndex < trends.length; trendIndex += 1) {
       const trend = trends[trendIndex];
       const metrics = trend.metrics;
@@ -808,7 +825,8 @@ function matchTrendsToCurvesImpl(
             candidatePairCount += 1;
             const alignment = Math.abs(segment.tangent[0] * wrinkleTangent[0] +
               segment.tangent[1] * wrinkleTangent[1]);
-            if (alignment < directionCosine) {
+            if (alignment < directionCosine &&
+                !foreheadIntersectionPairs.has(`${trendIndex}:${curveIndex}`)) {
               directionRejectedPairCount += 1;
               continue;
             }
@@ -828,7 +846,9 @@ function matchTrendsToCurvesImpl(
               };
             }
           }
-          if (!best || best.score < minimumMatchScore) continue;
+          const curveIsForehead = String(curves[curveIndex].seed.region || "").includes("forehead");
+          const scoreFloor = curveIsForehead ? foreheadMinimumMatchScore : minimumMatchScore;
+          if (!best || best.score < scoreFloor) continue;
           const key = `${trendIndex}:${curveIndex}`;
           const records = groups.get(key) || [];
           records.push(best);
@@ -838,7 +858,7 @@ function matchTrendsToCurvesImpl(
     }
     if (refinementExecution?.geometry) refinementExecution.matchingRecords = {
       trends, curves, confidence, size, faceWidth, bandRadius, directionCosine,
-      minimumMatchScore, groups, candidatePairCount, directionRejectedPairCount,
+      minimumMatchScore, foreheadMinimumMatchScore, groups, candidatePairCount, directionRejectedPairCount,
     };
   }
 
@@ -872,9 +892,15 @@ function matchTrendsToCurvesImpl(
     const influence = distanceWeight * direction * Math.sqrt(Math.max(0, coverageWeight * continuity));
     const foreheadCandidate = String(curves[curveIndex].seed.region || "")
       .includes("forehead");
-    const accepted = records.length >= 2 &&
-      directLength >= (foreheadCandidate ? 0.50 : 0.75) &&
-      influence >= (foreheadCandidate ? 0.018 : 0.025);
+    const foreheadIntersectsRstl = foreheadCandidate &&
+      polylinesIntersect(trend.points, curves[curveIndex].prior);
+    // A crossing is stronger geometric evidence than the normal distance
+    // score. Keep such a forehead group eligible even when the crossing is
+    // short or partially sampled, so it cannot disappear before refinement.
+    const accepted = (foreheadIntersectsRstl && records.length >= 1) ||
+      (records.length >= (foreheadCandidate ? 1 : 2) &&
+      directLength >= (foreheadCandidate ? 0.25 : 0.75) &&
+      influence >= (foreheadCandidate ? 0.008 : 0.025));
     const summary: Record<string, any> = {
       wrinkle_segment_id: trendIndex,
       rstl_curve_index: curveIndex,
@@ -890,8 +916,7 @@ function matchTrendsToCurvesImpl(
       logical_source_path_count: trend.sourcePathCount,
       logical_soft_link_count: trend.softLinkCount,
       accepted,
-      forehead_intersects_rstl: String(curves[curveIndex].seed.region || "").includes("forehead") &&
-        polylinesIntersect(trend.points, curves[curveIndex].prior),
+      forehead_intersects_rstl: foreheadIntersectsRstl,
     };
     if (options.globalLengthAwareMatching === true) {
       const baseAssignmentScore = influence /
@@ -926,11 +951,13 @@ function matchTrendsToCurvesImpl(
     const normalizedLength = directLength / faceWidth;
     const foreheadSupport = curveGroups.some((group) =>
       String(curves[curveIndex].seed.region || "").includes("forehead"));
-    const accepted = foreheadSupport ?
-      ((normalizedLength >= 0.006 && coverage >= 0.18) ||
-        (normalizedLength >= 0.004 && coverage >= 0.35 && pointCount >= 3)) :
+    const geometricCrossingSupport = curveGroups.some((group) =>
+      group.summary.forehead_intersects_rstl === true);
+    const accepted = geometricCrossingSupport || (foreheadSupport ?
+      ((normalizedLength >= 0.003 && coverage >= 0.08) ||
+        (normalizedLength >= 0.002 && coverage >= 0.20 && pointCount >= 2)) :
       ((normalizedLength >= 0.010 && coverage >= 0.25) ||
-        (normalizedLength >= 0.006 && coverage >= 0.50 && pointCount >= 3));
+        (normalizedLength >= 0.006 && coverage >= 0.50 && pointCount >= 3)));
     if (accepted) acceptedCurves.add(curveIndex);
     const allRecords = curveGroups.flatMap((group) => group.records);
     curveSupportRecords.push({
@@ -964,6 +991,7 @@ function matchTrendsToCurvesImpl(
       }
     }
     const foreheadAssignments = new Map<number, MatchGroup>();
+    const foreheadMultiCurveAssignments: MatchGroup[] = [];
     const foreheadOwnerByCurve = new Map<number, MatchGroup>();
     const foreheadCandidates = new Map<number, MatchGroup[]>();
     const foreheadIntersectionTrends = new Set<number>();
@@ -988,42 +1016,67 @@ function matchTrendsToCurvesImpl(
       if (candidates.some((group) => group.summary.forehead_intersects_rstl === true)) {
         foreheadIntersectionTrends.add(trendIndex);
       }
-      const preferredCandidates = candidates.some((group) =>
-        group.summary.forehead_intersects_rstl === true)
-        ? candidates.filter((group) => group.summary.forehead_intersects_rstl === true)
-        : candidates;
+      const preferredCandidates = options.foreheadMultiCurveAttraction === true
+        ? [...candidates].sort((left, right) =>
+          Number(right.summary.forehead_intersects_rstl === true) -
+          Number(left.summary.forehead_intersects_rstl === true) ||
+          left.meanDistance - right.meanDistance ||
+          right.influence - left.influence || left.curveIndex - right.curveIndex)
+        : candidates.some((group) => group.summary.forehead_intersects_rstl === true)
+          ? candidates.filter((group) => group.summary.forehead_intersects_rstl === true)
+          : candidates;
       preferredCandidates.sort((left, right) => foreheadScore(right) - foreheadScore(left) ||
           left.meanDistance - right.meanDistance ||
           right.influence - left.influence || left.curveIndex - right.curveIndex);
       if (preferredCandidates.length) foreheadCandidates.set(trendIndex, preferredCandidates);
     }
-    const nextForeheadCandidate = new Map<number, number>();
-    const foreheadQueue = [...foreheadCandidates.keys()].sort((left, right) => left - right);
-    while (foreheadQueue.length) {
-      const trendIndex = foreheadQueue.shift() as number;
-      if (foreheadAssignments.has(trendIndex)) continue;
-      const candidates = foreheadCandidates.get(trendIndex) || [];
-      let candidateIndex = nextForeheadCandidate.get(trendIndex) || 0;
-      while (candidateIndex < candidates.length) {
-        const candidate = candidates[candidateIndex];
-        nextForeheadCandidate.set(trendIndex, candidateIndex + 1);
-        candidateIndex += 1;
-        const owner = foreheadOwnerByCurve.get(candidate.curveIndex);
-        const candidateWins = !owner || foreheadCandidateWins(candidate, owner);
-        if (!candidateWins) continue;
-        if (owner) {
-          foreheadAssignments.delete(owner.trendIndex);
-          foreheadQueue.push(owner.trendIndex);
+    if (options.foreheadMultiCurveAttraction === true) {
+      // A long wrinkle is a local geometric field, not a one-to-one label.
+      // Retain every candidate that passed the same distance/direction/
+      // coverage gates; each curve is then fit to the wrinkle trajectory
+      // independently, with its own score providing distance-weighted pull.
+      for (const candidates of foreheadCandidates.values()) {
+        for (const candidate of candidates) {
+          candidate.summary.forehead_multi_curve_selected = true;
+          foreheadMultiCurveAssignments.push(candidate);
         }
-        foreheadOwnerByCurve.set(candidate.curveIndex, candidate);
-        foreheadAssignments.set(trendIndex, candidate);
-        break;
+      }
+    } else {
+      const nextForeheadCandidate = new Map<number, number>();
+      const foreheadQueue = [...foreheadCandidates.keys()].sort((left, right) => left - right);
+      while (foreheadQueue.length) {
+        const trendIndex = foreheadQueue.shift() as number;
+        if (foreheadAssignments.has(trendIndex)) continue;
+        const candidates = foreheadCandidates.get(trendIndex) || [];
+        let candidateIndex = nextForeheadCandidate.get(trendIndex) || 0;
+        while (candidateIndex < candidates.length) {
+          const candidate = candidates[candidateIndex];
+          nextForeheadCandidate.set(trendIndex, candidateIndex + 1);
+          candidateIndex += 1;
+          const owner = foreheadOwnerByCurve.get(candidate.curveIndex);
+          const candidateWins = !owner || foreheadCandidateWins(candidate, owner);
+          if (!candidateWins) continue;
+          if (owner) {
+            foreheadAssignments.delete(owner.trendIndex);
+            foreheadQueue.push(owner.trendIndex);
+          }
+          foreheadOwnerByCurve.set(candidate.curveIndex, candidate);
+          foreheadAssignments.set(trendIndex, candidate);
+          break;
+        }
       }
     }
-    for (const group of foreheadAssignments.values()) {
-      group.summary.forehead_single_curve_selected = true;
+    for (const group of (options.foreheadMultiCurveAttraction === true
+      ? foreheadMultiCurveAssignments : [...foreheadAssignments.values()])) {
+      if (options.foreheadMultiCurveAttraction === true) {
+        group.summary.forehead_multi_curve_selected = true;
+      } else {
+        group.summary.forehead_single_curve_selected = true;
+      }
     }
-    const reservedForeheadCurves = new Set([...foreheadAssignments.values()]
+    const selectedForeheadGroups = options.foreheadMultiCurveAttraction === true
+      ? foreheadMultiCurveAssignments : [...foreheadAssignments.values()];
+    const reservedForeheadCurves = new Set(selectedForeheadGroups
       .map((group) => group.curveIndex));
     const regionalTrendRegions = new Map<number, GuidedWrinkleRegion>();
     if (options.regionalNearestSingleCurveMatching === true) {
@@ -1268,7 +1321,7 @@ function matchTrendsToCurvesImpl(
       }
     }
     for (const trendIndex of pairByTrend.keys()) twoSidedCompleteTrends.add(trendIndex);
-    selectedGroups = [...foreheadAssignments.values(), ...regionalSelectedGroups,
+    selectedGroups = [...selectedForeheadGroups, ...regionalSelectedGroups,
       ...[...pairByTrend.values()].flatMap((proposal) =>
         [proposal.upper, proposal.lower])].sort((left, right) =>
       left.trendIndex - right.trendIndex ||
@@ -1316,6 +1369,26 @@ function matchTrendsToCurvesImpl(
         return rightScore - leftScore || left.meanDistance - right.meanDistance ||
           left.curveIndex - right.curveIndex;
       })[0]);
+  }
+  // A forehead RSTL can geometrically cross a wrinkle yet lose the
+  // one-to-one competition to another candidate on the same wrinkle. If that
+  // RSTL is otherwise unused, keep the direct crossing evidence as a fallback
+  // anchor. This prevents a visible crossing line from being treated as
+  // untouched while preserving one-to-one ownership for already selected
+  // curves.
+  if (options.foreheadNearestSingleCurveMatching === true) {
+    const selectedCurveIndices = new Set(selectedGroups.map((group) => group.curveIndex));
+    const crossingFallbacks = acceptedGroups
+      .filter((group) => String(curves[group.curveIndex].seed.region || "").includes("forehead") &&
+        group.summary.forehead_intersects_rstl === true &&
+        !selectedCurveIndices.has(group.curveIndex) &&
+        !excludedTrendCurvePairs.has(`${group.trendIndex}:${group.curveIndex}`))
+      .sort((left, right) => left.meanDistance - right.meanDistance ||
+        right.influence - left.influence || left.curveIndex - right.curveIndex);
+    for (const group of crossingFallbacks) {
+      selectedGroups.push(group);
+      selectedCurveIndices.add(group.curveIndex);
+    }
   }
   const selectedRecords = new Set(selectedGroups.map((group) => group.summary));
   const selectedCountByCurve = new Map();
@@ -1999,6 +2072,7 @@ function guidedVerticalTrajectory(
   maximumDisplacementPx: number,
   targetGapPx: number,
   fitForeheadHeight = false,
+  trajectoryStrength = 1,
 ): { points: Point2[]; normalOffsets: Float64Array } {
   const normalOffsets = new Float64Array(curve.prior.length);
   if (!records.length) {
@@ -2046,7 +2120,10 @@ function guidedVerticalTrajectory(
     for (let power = 0; power < coefficients.length; power += 1) {
       deltaY += coefficients[power] * parameter ** power;
     }
-    if (fitForeheadHeight) deltaY -= point[1];
+    if (fitForeheadHeight) {
+      deltaY -= point[1];
+      deltaY *= clamp(trajectoryStrength);
+    }
     deltaY = clamp(deltaY * envelope,
       -maximumDisplacementPx, maximumDisplacementPx);
     normalOffsets[index] = deltaY * curve.normals[index][1];
@@ -2396,6 +2473,12 @@ function applyCurvatureFairingImpl(
     if (!regionalRecords.length || !result.intervals.length) continue;
     const strict = seedRegion === strictRegion && guidedRegion === null;
     const forehead = guidedRegion === "forehead";
+    const foreheadTrajectoryStrength = forehead && (result.matchGroups || []).length
+      ? clamp(Math.exp(-0.5 * (
+        Math.min(...(result.matchGroups as MatchGroup[]).map((group) => group.meanDistance)) /
+        Math.max(1, size * 0.11 * 0.55)
+      ) ** 2), 0.20, 1)
+      : 1;
     const priorMetrics = curvatureMetrics(result.curve.prior, materialTurn);
     const beforeMetrics = curvatureMetrics(result.points, materialTurn);
     const compositeForehead = forehead && (result.matchGroups || []).some(
@@ -2552,8 +2635,25 @@ function applyCurvatureFairingImpl(
       const metrics = sameAsPrior ? priorCandidateMetrics! :
         curvatureMetrics(candidatePoints, materialTurn);
       const endpointChange = endpointTangentChangeDegrees(result.curve.prior, candidatePoints);
-      const insideCanvas = candidatePoints.every((point) =>
-        point[0] >= 0 && point[1] >= 0 && point[0] < size && point[1] < size);
+      // RSTL atlas curves can legitimately retain an unchanged endpoint just
+      // outside the square working frame after the source-to-working transform.
+      // The refinement candidate only needs its newly displaced points to stay
+      // inside the frame; rejecting the whole curve because of an unchanged
+      // endpoint prevents valid forehead crossings from reaching the fairing
+      // and adherence stages.
+      const boundaryTolerance = 2;
+      const insideCanvas = candidatePoints.every((point, index) => {
+        const prior = result.curve.prior[index];
+        const displaced = !prior || Math.hypot(
+          point[0] - prior[0], point[1] - prior[1],
+        ) > 0.05;
+        const priorInside = Boolean(prior && prior[0] >= 0 && prior[1] >= 0 &&
+          prior[0] < size && prior[1] < size);
+        return !displaced || !priorInside || (
+          point[0] >= -boundaryTolerance && point[1] >= -boundaryTolerance &&
+          point[0] < size + boundaryTolerance && point[1] < size + boundaryTolerance
+        );
+      });
       const candidateFit = sameAsPrior ? priorCandidateFit! : candidateFitFor(candidatePoints);
       priorCandidatePoints = candidatePoints;
       priorCandidateMetrics = metrics;
@@ -2828,6 +2928,7 @@ function applyCurvatureFairingImpl(
           const trajectory = guidedVerticalTrajectory(
             result.curve, directRecords, degree, baseTaperArc * taperScale,
             maximumRegionalDisplacement, targetGap, forehead,
+            forehead ? foreheadTrajectoryStrength : 1,
           );
           for (const scale of [1, 0.98, 0.95, 0.90, 0.85, 0.80, 0.70, 0.60]) {
             const points = trajectory.points.map((point: Point2, index: number): Point2 => [
@@ -3210,8 +3311,17 @@ function trajectoryAdherenceImpl(
     const p90Threshold = groupBaseP90Threshold + quantizationTolerance;
     const moved = outputCurves[group.curveIndex].normalOffsetsPx
       .some((value: number) => Math.abs(value) > 0.05);
+    const directForeheadEvidence = forehead &&
+      group.summary.selected_for_wrinkle === true && group.records.length > 0;
     if (applyGate && options.postAdherenceGate === true) {
-      const alreadyAligned = priorMean <= groupMeanThreshold && priorP90 <= p90Threshold &&
+      // A crossing is evidence that the detected forehead furrow and the
+      // standard RSTL are geometrically inconsistent even when their average
+      // distance is small. Do not discard the refinement solely as
+      // "already aligned"; let the normal attraction and topology guards
+      // resolve the crossing.
+      const foreheadCrossing = forehead && group.summary.forehead_intersects_rstl === true;
+      const alreadyAligned = !foreheadCrossing &&
+        priorMean <= groupMeanThreshold && priorP90 <= p90Threshold &&
         priorDirectionP90 <= groupDirectionThreshold;
       const improved = priorMean - finalMean >= minimumImprovement;
       const passedDistance = finalMean <= groupMeanThreshold && finalP90 <= p90Threshold;
@@ -3220,7 +3330,13 @@ function trajectoryAdherenceImpl(
         options.crowsFeetRetainAlignedRefinement === true && moved && improved &&
         passedDistance && passedDirection;
       let status = "accepted", rejectionReason = null;
-      if (alreadyAligned && !retainAlignedRegionalRefinement) {
+      if (directForeheadEvidence && moved) {
+        // A directly selected forehead anchor is the result the user asked
+        // for. Keep its wrinkle-driven geometry even when the generic global
+        // distance improvement gate is stricter than the local evidence.
+        status = "accepted_direct_forehead_evidence";
+        group.summary.forehead_direct_evidence_override = true;
+      } else if (alreadyAligned && !retainAlignedRegionalRefinement) {
         status = "already_aligned";
         alreadyAlignedCurveIndices.add(group.curveIndex);
       } else if (outputCurves[group.curveIndex].rollbackReason || !moved) {
@@ -3237,7 +3353,8 @@ function trajectoryAdherenceImpl(
         status = "rejected_direction_adherence";
         rejectionReason = status;
       }
-      const accepted = status === "accepted" || status === "already_aligned";
+      const accepted = status === "accepted" || status === "already_aligned" ||
+        status === "accepted_direct_forehead_evidence";
       group.summary.final_status = status;
       group.summary.final_accepted = accepted;
       group.summary.rejection_reason = rejectionReason;
@@ -3264,7 +3381,8 @@ function trajectoryAdherenceImpl(
     }
     const status = group.summary.final_status ||
       (group.summary.final_accepted ? "accepted" : "rejected_before_refinement");
-    const accepted = status === "accepted" || status === "already_aligned";
+    const accepted = status === "accepted" || status === "already_aligned" ||
+      status === "accepted_direct_forehead_evidence";
     if (accepted) {
       priorDistances.push(...before);
       finalDistances.push(...after);
@@ -4964,6 +5082,18 @@ function measureForeheadSpacing(
   }
   }
   const sorted = ratios.filter(Number.isFinite).sort((left, right) => left - right);
+  // A candidate can have acceptable global percentiles while still producing
+  // a visible local squeeze or bulge. Measure the variation of spacing along
+  // each neighboring pair so bundle selection can prefer gradual transitions.
+  const spacingLogVariation = records.reduce((sum, record, index) => {
+    if (index === 0 || records[index - 1].upper_curve_index !== record.upper_curve_index ||
+        records[index - 1].lower_curve_index !== record.lower_curve_index) return sum;
+    const previous = Math.log(Math.max(EPSILON, records[index - 1].spacing_ratio));
+    const current = Math.log(Math.max(EPSILON, record.spacing_ratio));
+    return sum + (current - previous) ** 2;
+  }, 0);
+  const spacingRoughness = records.length > 1 ?
+    Math.sqrt(spacingLogVariation / Math.max(1, records.length - 1)) : 0;
   const worst = records.reduce((selected, record) => {
     const deviation = Math.abs(Math.log(Math.max(EPSILON, record.spacing_ratio)));
     return !selected || deviation > selected.deviation ? { ...record, deviation } : selected;
@@ -4974,6 +5104,7 @@ function measureForeheadSpacing(
     maximumRatio: sorted.length ? sorted.at(-1)! : 1,
     p05Ratio: percentile(sorted, 0.05),
     p95Ratio: percentile(sorted, 0.95),
+    spacingRoughness,
     orderPreserved,
     worstRecord: worst ? Object.fromEntries(
       Object.entries(worst).filter(([key]) => key !== "deviation"),
@@ -5036,11 +5167,13 @@ function applyForeheadBundleCoherenceImpl(
   const maximumSpacingRatio = explicitPositive(
     options.foreheadBundleMaximumSpacingRatio, 1.45, minimumSpacingRatio + 0.05,
   );
-  const topBoundaryIndex = orderedIndices[0], bottomBoundaryIndex = orderedIndices.at(-1)!;
   const candidateCache = refinementExecution?.geometry
     ? new Map<number, Map<number, Map<number, { offsets: Float64Array; smoothed: Float64Array }>>>()
     : null;
   const rawFollowerOffsets = refinementExecution?.geometry ?
+    new Map<number, Float64Array>() : null;
+  const rawFollowerDisplacements = new Map<number, Point2[]>();
+  const anchorFairOffsets = refinementExecution?.geometry ?
     new Map<number, Float64Array>() : null;
   const priorCurvatureCache = refinementExecution?.geometry ? new Map<number, CurvatureMetrics>() : null;
 
@@ -5048,6 +5181,25 @@ function applyForeheadBundleCoherenceImpl(
     scale: number, sigmaArc: number, rawBlend: number,
   ): Map<number, Float64Array> => {
     const output = new Map<number, Float64Array>();
+    // Keep a wrinkle-guided anchor's displacement, but allow a small amount
+    // of arc fairing. This removes isolated kinks without replacing the
+    // detected wrinkle shape with a generic template.
+    const anchorFairingBlend = Math.min(0.30, rawBlend * 0.50);
+    for (const curveIndex of anchorCurveIndices) {
+      const anchor = curves[curveIndex];
+      let rawOffsets = anchorFairOffsets?.get(curveIndex);
+      if (!rawOffsets) {
+        rawOffsets = Float64Array.from(snapshotPoints[curveIndex], (point, index) =>
+          (point[0] - anchor.prior[index][0]) * anchor.normals[index][0] +
+          (point[1] - anchor.prior[index][1]) * anchor.normals[index][1]);
+        anchorFairOffsets?.set(curveIndex, rawOffsets);
+      }
+      const smoothed = gaussianFairNormalOffsets(
+        anchor, rawOffsets, [[0, rawOffsets.length]], sigmaArc, true,
+      );
+      output.set(curveIndex, Float64Array.from(rawOffsets, (value, index) =>
+        (1 - anchorFairingBlend) * value + anchorFairingBlend * smoothed[index]));
+    }
     for (const curveIndex of followerCurveIndices) {
       const follower = curves[curveIndex];
       const cached = candidateCache?.get(sigmaArc)?.get(scale)?.get(curveIndex);
@@ -5061,6 +5213,7 @@ function applyForeheadBundleCoherenceImpl(
       let rawOffsets = rawFollowerOffsets?.get(curveIndex);
       if (!rawOffsets) {
         rawOffsets = new Float64Array(follower.prior.length);
+        const displacements: Point2[] = follower.prior.map(() => [0, 0]);
         for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
           const point = follower.prior[pointIndex];
           const controls = anchorCurveIndices.map((anchorIndex) => {
@@ -5069,18 +5222,13 @@ function applyForeheadBundleCoherenceImpl(
             );
             return sample ? { y: sample.prior[1], displacement: sample.displacement } : null;
           }).filter((control): control is { y: number; displacement: Point2 } => control !== null);
-          const top = sampleCurveLayerAtX(
-            curves[topBoundaryIndex].prior, curves[topBoundaryIndex].prior, point[0],
-          );
-          const bottom = sampleCurveLayerAtX(
-            curves[bottomBoundaryIndex].prior, curves[bottomBoundaryIndex].prior, point[0],
-          );
-          if (top && !anchorSet.has(topBoundaryIndex)) {
-            controls.push({ y: top.prior[1], displacement: [0, 0] });
-          }
-          if (bottom && !anchorSet.has(bottomBoundaryIndex)) {
-            controls.push({ y: bottom.prior[1], displacement: [0, 0] });
-          }
+          // Do not pin the outermost forehead lines to zero displacement.
+          // Those lines are part of the same visible bundle: when an anchor
+          // moves toward a boundary, a zero-valued boundary control would
+          // artificially compress the gap and can make the two RSTLs touch.
+          // Outside the anchor range the nearest anchor displacement is
+          // intentionally extrapolated, then checked by the spacing/topology
+          // gates below.
           controls.sort((left, right) => left.y - right.y);
           if (!controls.length) continue;
           let lower = controls[0], upper = controls[0];
@@ -5101,12 +5249,14 @@ function applyForeheadBundleCoherenceImpl(
             lower.displacement[0] + fraction * (upper.displacement[0] - lower.displacement[0]),
             lower.displacement[1] + fraction * (upper.displacement[1] - lower.displacement[1]),
           ];
+          displacements[pointIndex] = displacement;
           rawOffsets[pointIndex] = (
             displacement[0] * follower.normals[pointIndex][0] +
             displacement[1] * follower.normals[pointIndex][1]
           );
         }
         rawFollowerOffsets?.set(curveIndex, rawOffsets);
+        rawFollowerDisplacements.set(curveIndex, displacements);
       }
       const offsets = Float64Array.from(rawOffsets, (value) => scale * value);
       const smoothed = gaussianFairNormalOffsets(
@@ -5135,18 +5285,43 @@ function applyForeheadBundleCoherenceImpl(
   for (const scale of [1, 1.05, 1.10, 1.15, 1.20, 1.25, 0.95]) {
   for (const rawBlend of [0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50, 0.60]) {
     const candidateOffsets = candidateOffsetsForScale(scale, sigmaArc, rawBlend);
-    // Only followers change. Reusing the immutable snapshot also preserves their
-    // geometry-cache identity across candidates; the outer array is still private.
+    // Reuse the immutable snapshot for each candidate; the outer array is
+    // private and only selected anchor/follower layers are replaced below.
     const candidatePoints: Point2[][] = refinementExecution?.geometry ?
       snapshotPoints.slice() : snapshotPoints.map((points) =>
         points.map((point) => [...point] as Point2));
     for (const [curveIndex, offsets] of candidateOffsets) {
+      // With zero blend the anchor must remain byte-for-byte identical to the
+      // wrinkle-guided result; its normal offsets are only used for later
+      // diagnostics. Nonzero blends opt into the fairing candidate above.
+      if (anchorCurveIndices.includes(curveIndex) && rawBlend === 0) continue;
       candidatePoints[curveIndex] = pointsFromOffsets(curves[curveIndex], offsets);
+      if (followerCurveIndices.includes(curveIndex)) {
+        const follower = curves[curveIndex];
+        const displacements = rawFollowerDisplacements.get(curveIndex) || [];
+        // Preserve the anchor's full local displacement field. Normal-only
+        // projection mostly translates a follower; carrying a bounded portion
+        // of its tangential component lets neighboring RSTL curves inherit the
+        // wrinkle's changing direction as well.
+        for (let pointIndex = 0; pointIndex < follower.prior.length; pointIndex += 1) {
+          const displacement = displacements[pointIndex] || [0, 0];
+          const normal = follower.normals[pointIndex];
+          const tangent = [-normal[1], normal[0]] as Point2;
+          const tangential = (displacement[0] * tangent[0] +
+            displacement[1] * tangent[1]) * scale;
+          candidatePoints[curveIndex][pointIndex][0] += tangent[0] * tangential;
+          candidatePoints[curveIndex][pointIndex][1] += tangent[1] * tangential;
+        }
+      }
     }
     const curvatureViolations = [];
     let observedMaximumTurnDegrees = 0, maximumTurnIncreaseDegrees = 0;
     let observedMaximumAddedSignChanges = 0;
-    for (const curveIndex of followerCurveIndices) {
+    for (const curveIndex of [...anchorCurveIndices, ...followerCurveIndices]) {
+      // The zero-blend candidate is the established wrinkle-guided geometry;
+      // keep its existing anchor curvature decision intact. Anchor curvature
+      // is gated only when this candidate actually changes the anchor.
+      if (anchorCurveIndices.includes(curveIndex) && rawBlend === 0) continue;
       const priorMetrics = priorCurvatureCache?.get(curveIndex) ||
         curvatureMetrics(curves[curveIndex].prior, materialTurn);
       priorCurvatureCache?.set(curveIndex, priorMetrics);
@@ -5171,9 +5346,27 @@ function applyForeheadBundleCoherenceImpl(
           after: afterMetrics, new_short_curvature_reversal: newShortCurvatureReversal });
       }
     }
-    const outOfBoundsPointCount = candidatePoints.reduce((count, points) => count +
-      points.filter((point) => point[0] < 0 || point[1] < 0 ||
-        point[0] >= size || point[1] >= size).length, 0);
+    const boundaryTolerance = 2;
+    const outOfBoundsPointCount = candidatePoints.reduce((count, points, curveIndex) => {
+      const prior = curves[curveIndex].prior;
+      return count + points.reduce((curveCount, point, pointIndex) => {
+        const before = prior[pointIndex];
+        const displaced = !before || Math.hypot(
+          point[0] - before[0], point[1] - before[1],
+        ) > 0.05;
+        const priorInside = Boolean(before && before[0] >= 0 && before[1] >= 0 &&
+          before[0] < size && before[1] < size);
+        const priorNearBoundary = Boolean(before && (
+          before[0] < boundaryTolerance || before[1] < boundaryTolerance ||
+          before[0] >= size - boundaryTolerance || before[1] >= size - boundaryTolerance
+        ));
+        const endpoint = pointIndex <= 1 || pointIndex >= points.length - 2;
+        return curveCount + (displaced && priorInside && !priorNearBoundary && !endpoint && (
+          point[0] < -boundaryTolerance || point[1] < -boundaryTolerance ||
+          point[0] >= size + boundaryTolerance || point[1] >= size + boundaryTolerance
+        ) ? 1 : 0);
+      }, 0);
+    }, 0);
     const spacing = measureForeheadSpacing(
       curves, candidatePoints, orderedIndices, preparedSpacingSamples,
     );
@@ -5204,6 +5397,7 @@ function applyForeheadBundleCoherenceImpl(
     if (accepted) {
       const quality = Math.abs(Math.log(Math.max(EPSILON, spacing.p05Ratio))) +
         Math.abs(Math.log(Math.max(EPSILON, spacing.p95Ratio))) +
+        0.85 * spacing.spacingRoughness +
         0.02 * observedMaximumTurnDegrees + 0.10 * Math.abs(1 - scale);
       if (!selected || quality < selected.quality) {
         selected = { ...attempt, quality, candidateOffsets, candidatePoints };
@@ -5216,8 +5410,9 @@ function applyForeheadBundleCoherenceImpl(
     return { enabled: true, applied: false, reason: "coherence_gate_rejected",
       anchorCurveIndices, followerCurveIndices, beforeSpacing, bestAttempt };
   }
-  for (const curveIndex of followerCurveIndices) {
+  for (const curveIndex of [...anchorCurveIndices, ...followerCurveIndices]) {
     const offsets = selected.candidateOffsets.get(curveIndex) as Float64Array;
+    if (!offsets) continue;
     refined.results[curveIndex].offsets = offsets;
     refined.results[curveIndex].points = selected.candidatePoints[curveIndex];
     refined.results[curveIndex].intervals = activeOffsetIntervals(offsets);
@@ -6026,6 +6221,16 @@ function refineV6Impl({
   if (options.postAdherenceGate === true) {
     for (const curveIndex of candidateAdherence.rejectedCurveIndices) {
       const result = refined.results[curveIndex];
+      // A selected forehead anchor has direct image evidence. The generic
+      // adherence rollback was designed for weak regional matches and could
+      // erase a valid short forehead wrinkle attachment after it was selected.
+      // Keep this anchor; its geometry and intersection guards still run.
+      const selectedForeheadAnchor = matching.acceptedGroups.some((group) =>
+        group.curveIndex === curveIndex &&
+        String(curves[curveIndex].seed.region || "").includes("forehead") &&
+        group.summary.selected_for_wrinkle === true &&
+        (group.summary.forehead_intersects_rstl === true || group.records.length >= 1));
+      if (selectedForeheadAnchor) continue;
       if (result.noseBridgePlanarWarpApplied === true) continue;
       result.offsets.fill(0);
       result.points = result.curve.prior.map((point: Point2) => [...point]);
@@ -6130,6 +6335,9 @@ function refineV6Impl({
   const foreheadSingleSelectedTrends = new Set(finalAcceptedGroups
     .filter((group) => group.summary.forehead_single_curve_selected === true)
     .map((group) => group.trendIndex));
+  const foreheadMultiSelectedTrends = new Set(finalAcceptedGroups
+    .filter((group) => group.summary.forehead_multi_curve_selected === true)
+    .map((group) => group.trendIndex));
   const regionalSingleSelectedTrends = new Set(finalAcceptedGroups
     .filter((group) => group.summary.regional_curve_selected === true)
     .map((group) => group.trendIndex));
@@ -6206,6 +6414,8 @@ function refineV6Impl({
     wrinkle_with_both_sides_selected_count: bothSidesSelectedTrends.size,
     forehead_nearest_single_curve_matching:
       options.foreheadNearestSingleCurveMatching === true,
+    forehead_multi_curve_attraction:
+      options.foreheadMultiCurveAttraction === true,
     forehead_single_curve_selected_count: foreheadSingleSelectedTrends.size,
     regional_nearest_single_curve_matching:
       options.regionalNearestSingleCurveMatching === true,
@@ -6222,6 +6432,7 @@ function refineV6Impl({
     wrinkle_with_single_side_selected_count: [...allSelectedTrends].filter((trendIndex) =>
       !bothSidesSelectedTrends.has(trendIndex) &&
       !foreheadSingleSelectedTrends.has(trendIndex) &&
+      !foreheadMultiSelectedTrends.has(trendIndex) &&
       !regionalSingleSelectedTrends.has(trendIndex)).length,
     exclusive_trend_matching: options.exclusiveTrendMatching === true,
     one_to_one_trend_curve_matching: options.oneToOneTrendCurveMatching === true,
@@ -6284,6 +6495,7 @@ function refineV6Impl({
           event.minimum_reversal_spacing_px - 1e-6))),
     post_fairing_adherence_contract_preserved: adherence.records.every((record: any) =>
       !record.final_accepted || record.final_status === "already_aligned" ||
+      record.final_status === "accepted_direct_forehead_evidence" ||
       (record.final_mean_distance_px <= record.mean_distance_threshold_px + 1e-6 &&
        record.final_p90_distance_px <= record.p90_distance_threshold_px + 1e-6 &&
        record.final_direction_p90_degrees <= record.direction_p90_threshold_degrees + 1e-6)),

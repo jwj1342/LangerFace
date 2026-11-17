@@ -13,26 +13,57 @@ import {
   type ModelAssetCacheStorage,
 } from "./modelAssetCache.ts";
 
-export const YOLO_WRINKLE_ONNX_VERSION = "yolov8s-seg-clean92-mask2-browser-0.2.0";
+export type WrinkleModelVariant = "640";
+
+// The browser workflow intentionally has one model contract. URL and query
+// parameters cannot activate the removed high-resolution inference path.
+export const WRINKLE_MODEL_VARIANT: WrinkleModelVariant = "640";
+const MODEL_CONFIG = {
+    version: "yolov8s-seg-three-class-10_23-final-640-browser-0.6.0",
+    inputSize: 640 as number,
+    bytes: 47_346_618,
+    sha256: "E60DDE489CB7202B59CF39E6C4043AC9A6DE3FFC80BAE3F74B52A84B943D07C9",
+    chunks: [
+      "wrinkle-yolov8s-seg-640.onnx.part00",
+      "wrinkle-yolov8s-seg-640.onnx.part01",
+      "wrinkle-yolov8s-seg-640.onnx.part02",
+      "wrinkle-yolov8s-seg-640.onnx.part03",
+    ],
+  } as const;
+
+export const YOLO_WRINKLE_ONNX_VERSION = MODEL_CONFIG.version;
 export const YOLO_WRINKLE_CLASSES = Object.freeze(["forehead", "frown", "wrinkle"]);
-export const YOLO_WRINKLE_INPUT_SIZE = 640;
-export const YOLO_WRINKLE_CONFIDENCE = 0.07;
+export const YOLO_WRINKLE_INPUT_SIZE = MODEL_CONFIG.inputSize;
+export const YOLO_WRINKLE_CONFIDENCE = 0.10;
+export const YOLO_WRINKLE_THRESHOLD01_CONFIDENCE = 0.01;
+export const YOLO_WRINKLE_LOW_CONFIDENCE = 0.001;
+export const YOLO_WRINKLE_ULTRALOW_CONFIDENCE = 0.0001;
+
+export function requestedWrinkleConfidence(): number {
+  const location = globalThis.location;
+  const params = typeof location?.search === "string"
+    ? new URLSearchParams(location.search)
+    : new URLSearchParams();
+  if (typeof location?.hash === "string") {
+    const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+    for (const [key, value] of hashParams) params.set(key, value);
+  }
+  const search = params.get("wrinkleConfidence");
+  if (search === "0.0001") return YOLO_WRINKLE_ULTRALOW_CONFIDENCE;
+  if (search === "0.1") return YOLO_WRINKLE_CONFIDENCE;
+  if (search === "0.01") return YOLO_WRINKLE_THRESHOLD01_CONFIDENCE;
+  return search === "0.001" ? YOLO_WRINKLE_LOW_CONFIDENCE : YOLO_WRINKLE_CONFIDENCE;
+}
 // These values describe the checked-in four-part browser artifact. They are
 // intentionally verified independently of the source PyTorch checkpoint.
-export const YOLO_WRINKLE_MODEL_BYTES = 47_346_561;
-export const YOLO_WRINKLE_MODEL_SHA256 =
-  "F58BED3A49734597BB3A8651B3BE571DACC2F55AABBBDBCB7994DC9D8D8DB76C";
+export const YOLO_WRINKLE_MODEL_BYTES = MODEL_CONFIG.bytes;
+export const YOLO_WRINKLE_MODEL_SHA256 = MODEL_CONFIG.sha256;
 export const YOLO_WRINKLE_MODEL_CACHE_PREFIX = "langerface-yolo-wrinkle-";
 export const YOLO_WRINKLE_MODEL_CACHE_NAME = `${YOLO_WRINKLE_MODEL_CACHE_PREFIX}${YOLO_WRINKLE_MODEL_SHA256.slice(0, 16).toLowerCase()}`;
 
 // `new URL(..., import.meta.url)` works in Node tests, Vite development and
 // Vite production builds without teaching Node how to import the binary parts.
-const MODEL_CHUNK_NAMES = Object.freeze([
-  "wrinkle-yolov8s-seg-640.onnx.part00",
-  "wrinkle-yolov8s-seg-640.onnx.part01",
-  "wrinkle-yolov8s-seg-640.onnx.part02",
-  "wrinkle-yolov8s-seg-640.onnx.part03",
-]);
+const MODEL_CHUNK_NAMES = Object.freeze(MODEL_CONFIG.chunks);
 const modelChunkBaseUrl = typeof globalThis.location?.origin === "string"
   ? new URL("/compat/personalized/model/", globalThis.location.origin).href
   : new URL(/* @vite-ignore */ "../../../compat/personalized/model/", import.meta.url).href;
@@ -74,6 +105,37 @@ export interface YoloDetection {
   sourceBox?: Box;
 }
 
+export interface YoloInstanceMask {
+  className: string;
+  mask: Uint8Array;
+}
+
+/** Drop duplicate bridge masks already explained by stronger instances of the same class. */
+export function suppressCoveredInstanceMasks(
+  instances: readonly YoloInstanceMask[],
+  minimumCoverage = 0.8,
+): YoloInstanceMask[] {
+  const coveredByClass = new Map<string, Uint8Array>();
+  const kept: YoloInstanceMask[] = [];
+  for (const instance of instances) {
+    const covered = coveredByClass.get(instance.className) || new Uint8Array(instance.mask.length);
+    let pixels = 0;
+    let overlapping = 0;
+    for (let index = 0; index < instance.mask.length; index++) {
+      if (!instance.mask[index]) continue;
+      pixels++;
+      if (covered[index]) overlapping++;
+    }
+    if (!pixels || overlapping / pixels >= minimumCoverage) continue;
+    for (let index = 0; index < instance.mask.length; index++) {
+      if (instance.mask[index]) covered[index] = 1;
+    }
+    coveredByClass.set(instance.className, covered);
+    kept.push(instance);
+  }
+  return kept;
+}
+
 interface ModelProgress {
   loadedChunks: number;
   totalChunks: number;
@@ -93,6 +155,7 @@ interface FetchChunkOptions {
 }
 
 interface YoloOptions {
+  preserveInstanceMasks?: boolean;
   classCount?: number;
   maskChannels?: number;
   confidenceThreshold?: number;
@@ -365,14 +428,28 @@ function predictionLayout(dims: readonly number[] | undefined, classCount: numbe
   throw new Error(`Detection tensor has no ${expectedChannels}-channel axis: ${JSON.stringify(dims)}`);
 }
 
-/** Decode [1,39,8400] YOLOv8-seg output and undo the input letterbox. */
+function inferClassCount(dims: readonly number[] | undefined, maskChannels: number): number {
+  if (!Array.isArray(dims) || dims.length !== 3 || dims[0] !== 1) {
+    throw new Error(`Unexpected detection tensor shape: ${JSON.stringify(dims)}`);
+  }
+  // YOLO exports [1, channels, anchors] (or its transpose). The channel axis
+  // is the smaller of the two variable axes: 37/39 versus the anchor count.
+  const channels = Math.min(dims[1], dims[2]);
+  const classCount = channels - 4 - maskChannels;
+  if (!Number.isInteger(classCount) || classCount < 1) {
+    throw new Error(`Detection tensor has invalid class count: ${JSON.stringify(dims)}`);
+  }
+  return classCount;
+}
+
+/** Decode YOLOv8-seg output and undo the input letterbox. */
 export function decodeYoloSegOutput(
   prediction: TensorLike,
   transform: LetterboxTransform,
   options: YoloOptions = {},
 ): YoloDetection[] {
-  const classCount = options.classCount ?? YOLO_WRINKLE_CLASSES.length;
   const maskChannels = options.maskChannels ?? 32;
+  const classCount = options.classCount ?? inferClassCount(prediction?.dims, maskChannels);
   const confidenceThreshold = options.confidenceThreshold ?? YOLO_WRINKLE_CONFIDENCE;
   const layout = predictionLayout(prediction?.dims, classCount, maskChannels);
   const data = tensorData(prediction, "Detection tensor");
@@ -467,11 +544,17 @@ export function combinePrototypeMasks(
   const channels = dims[1], protoHeight = dims[2], protoWidth = dims[3];
   const protoData = tensorData(prototype, "Prototype tensor");
   const width = transform.sourceWidth, height = transform.sourceHeight, pixels = width * height;
+  if (width > YOLO_WRINKLE_INPUT_SIZE || height > YOLO_WRINKLE_INPUT_SIZE) {
+    throw new RangeError(
+      `YOLO wrinkle working frame must be at most ${YOLO_WRINKLE_INPUT_SIZE}px, received ${width}x${height}`,
+    );
+  }
   const maskThreshold = options.maskThreshold ?? 0.5;
   const classCount = options.classCount ?? YOLO_WRINKLE_CLASSES.length;
   const binaryMask = new Uint8Array(pixels);
   const confidence = new Float32Array(pixels);
   const classMasks = Array.from({ length: classCount }, () => new Uint8Array(pixels));
+  const instanceMasks: Array<{ classId: number; mask: Uint8Array }> = [];
   const classConfidenceMaps = Array.from(
     { length: classCount },
     () => new Float32Array(pixels),
@@ -479,6 +562,7 @@ export function combinePrototypeMasks(
 
   for (const detection of detections || []) {
     if (detection.classId < 0 || detection.classId >= classCount) continue;
+    const instanceMask = options.preserveInstanceMasks ? new Uint8Array(pixels) : null;
     const instance = decodePrototypeMask(
       protoData, detection.coefficients, channels, protoWidth, protoHeight,
     );
@@ -500,10 +584,12 @@ export function combinePrototypeMasks(
       if (probability < maskThreshold) continue;
       binaryMask[index] = 1;
       classMasks[detection.classId][index] = 1;
+      if (instanceMask) instanceMask[index] = 1;
       if (value > confidence[index]) confidence[index] = value;
     }
+    if (instanceMask) instanceMasks.push({ classId: detection.classId, mask: instanceMask });
   }
-  return { binaryMask, confidence, classMasks, classConfidenceMaps, width, height };
+  return { binaryMask, confidence, classMasks, classConfidenceMaps, instanceMasks, width, height };
 }
 
 /** Restrict evidence to skin and remove eyes, brows, lips and other forbidden regions. */
@@ -867,11 +953,11 @@ export function fuseStrictUnion(results: WrinkleResultLike[], options: YoloOptio
 function findOutputTensors(outputs: Record<string, TensorLike> | null | undefined) {
   const tensors = Object.values(outputs || {});
   const prediction = tensors.find((tensor) => Array.isArray(tensor?.dims) && tensor.dims.length === 3
-    && (tensor.dims[1] === 39 || tensor.dims[2] === 39));
+    && ((tensor.dims[1] || 0) >= 37 || (tensor.dims[2] || 0) >= 37));
   const prototype = tensors.find((tensor) => Array.isArray(tensor?.dims) && tensor.dims.length === 4
     && tensor.dims[1] === 32);
   if (!prediction || !prototype) {
-    throw new Error(`Expected outputs [1,39,8400] and [1,32,160,160], received ${tensors
+    throw new Error(`Expected YOLO-seg detection output and a 32-channel prototype tensor, received ${tensors
       .map((tensor) => JSON.stringify(tensor?.dims)).join(", ")}`);
   }
   return { prediction, prototype };
@@ -1043,7 +1129,9 @@ export class YoloWrinkleOnnx {
     try {
       outputs = await this.session.run({ [inputName]: tensor });
       const { prediction, prototype } = findOutputTensors(outputs);
+      const modelClassCount = options.classCount ?? inferClassCount(prediction.dims, 32);
       const decoded = decodeYoloSegOutput(prediction, prepared.transform, {
+        classCount: modelClassCount,
         confidenceThreshold: options.confidenceThreshold ?? this.confidenceThreshold,
         preNmsTopK: options.preNmsTopK,
       });
@@ -1052,7 +1140,9 @@ export class YoloWrinkleOnnx {
         options.maxDetections ?? this.maxDetections,
       );
       const combined = combinePrototypeMasks(detections, prototype, prepared.transform, {
+        classCount: modelClassCount,
         maskThreshold: options.maskThreshold ?? this.maskThreshold,
+        preserveInstanceMasks: options.preserveInstanceMasks,
       });
       const gated = applyAnatomicalGates(
         combined.binaryMask, combined.confidence, combined.width, combined.height,
@@ -1079,7 +1169,19 @@ export class YoloWrinkleOnnx {
         options.directionRadius ?? 6,
       );
       const mask = Uint8Array.from(skeleton, (value) => value ? 255 : 0);
-      const classMasks = Object.fromEntries(YOLO_WRINKLE_CLASSES.map((name, classId) => {
+      const outputClassNames = modelClassCount === 1 ? ["wrinkled"] : YOLO_WRINKLE_CLASSES;
+      const instanceMasks = suppressCoveredInstanceMasks(combined.instanceMasks.map(({ classId, mask }) => {
+        const gatedMask = new Uint8Array(mask.length);
+        for (let index = 0; index < mask.length; index++) {
+          if (mask[index] && skinAllows(options.skinMask, index)
+              && !maskEnabled(options.forbiddenMask, index)
+              && Number(options.regionGate?.[index] ?? 1) >= Number(options.regionGateThreshold ?? 0.18)) {
+            gatedMask[index] = 1;
+          }
+        }
+        return { className: outputClassNames[classId], mask: gatedMask };
+      }));
+      const classMasks = Object.fromEntries(outputClassNames.map((name, classId) => {
         const current = combined.classMasks[classId];
       const gatedClass = new Uint8Array(current.length);
       for (let index = 0; index < current.length; index++) {
@@ -1091,7 +1193,7 @@ export class YoloWrinkleOnnx {
         }
         return [name, gatedClass];
       }));
-      const classConfidenceMaps = Object.fromEntries(YOLO_WRINKLE_CLASSES.map((name, classId) => {
+      const classConfidenceMaps = Object.fromEntries(outputClassNames.map((name, classId) => {
         const current = combined.classConfidenceMaps[classId];
         const gatedClass = new Float32Array(current.length);
         for (let index = 0; index < current.length; index++) {
@@ -1116,10 +1218,11 @@ export class YoloWrinkleOnnx {
         directionQ: directions.q,
         directionConsistency: directions.consistency,
         classMasks,
+        instanceMasks,
         classConfidenceMaps,
         detections: detections.map((detection) => ({
           classId: detection.classId,
-          className: YOLO_WRINKLE_CLASSES[detection.classId],
+          className: outputClassNames[detection.classId] || "wrinkled",
           score: detection.score,
           box: [...detection.box],
         })),
@@ -1147,6 +1250,7 @@ export class YoloWrinkleOnnx {
   detectClassMasks(imageData: ImageData, options: YoloOptions = {}) {
     return this.enqueueSessionOperation(async () => {
       await this.loadSession(options.onModelProgress);
+      if (options.preserveInstanceMasks) return this.inferExclusive(imageData, options);
       if (!this.session?.runClassMasks) return this.inferExclusive(imageData, options);
       if ((options.confidenceThreshold ?? this.confidenceThreshold) !== YOLO_WRINKLE_CONFIDENCE) {
         return this.inferExclusive(imageData, options);
@@ -1161,7 +1265,7 @@ export class YoloWrinkleOnnx {
           classMasks: compact.classMasks,
           detections: compact.detections.map(detection => ({
             ...detection,
-            className: YOLO_WRINKLE_CLASSES[detection.classId],
+            className: Object.keys(compact.classMasks)[detection.classId] || "wrinkled",
           })),
           diagnostics: compact.diagnostics,
           transform: {
@@ -1192,7 +1296,7 @@ export class YoloWrinkleOnnx {
         classMasks: compact.classMasks,
         detections: compact.detections.map(detection => ({
           ...detection,
-          className: YOLO_WRINKLE_CLASSES[detection.classId],
+          className: Object.keys(compact.classMasks)[detection.classId] || "wrinkled",
         })),
         diagnostics: compact.diagnostics,
         transform: prepared.transform,

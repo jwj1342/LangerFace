@@ -37,6 +37,7 @@ import {
 } from "./liveWrinkleMath.ts";
 import { V6_RSTL_ALGORITHM } from "./personalized/v6RstlRefinementV9.ts";
 import {
+  YOLO_WRINKLE_INPUT_SIZE,
   YOLO_WRINKLE_MODEL_SHA256,
   YOLO_WRINKLE_ONNX_VERSION,
 } from "./personalized/yoloWrinkleOnnx.ts";
@@ -55,7 +56,10 @@ import {
   wrinkleV10ProcessingLocationLabel,
   type WrinkleV10ProviderCapability,
 } from "./personalized/wrinkleV10Provider.ts";
-import { RSTL_STANDARD_CONTRACT } from "./rstlStandardContract.ts";
+import {
+  RSTL_STANDARD_CONTRACT,
+  RSTL_STANDARD_MAPPING_OPTIONS,
+} from "./rstlStandardContract.ts";
 import type { LiveWrinkleWorkerEvidence } from
   "../workers/liveWrinklePipelineWorkerContract.ts";
 import type { LiveWrinkleDetectionResult, LiveWrinkleRefinementPerformance } from
@@ -108,6 +112,9 @@ interface WrinkleAnalysisState {
   displayMode: WrinkleDisplayMode;
   evidenceLines: LiveWrinkleEvidenceLine[];
   standardLines: EditableRefineLine[] | null;
+  // The exact standard geometry shown by render2d for the current source.
+  // Refinement keeps its dedicated landmark baseline separately.
+  displayStandardLines: EditableRefineLine[] | null;
   autoRefinedLines: EditableRefineLine[] | null;
   movedCurveCount: number;
   movedPointCount: number;
@@ -119,6 +126,7 @@ interface WrinkleAnalysisState {
   timings: LiveWrinkleWorkerTimings | null;
   provider: WrinkleV10ProviderCapability | null;
   reproducibility: Record<string, unknown> | null;
+  pipelineDiagnostics: Record<string, unknown> | null;
   detectionId: string | null;
   refinementContext: {
     working: WorkingFrame;
@@ -138,6 +146,7 @@ const state: WrinkleAnalysisState = {
   displayMode: "both",
   evidenceLines: [],
   standardLines: null,
+  displayStandardLines: null,
   autoRefinedLines: null,
   movedCurveCount: 0,
   movedPointCount: 0,
@@ -149,6 +158,7 @@ const state: WrinkleAnalysisState = {
   timings: null,
   provider: null,
   reproducibility: null,
+  pipelineDiagnostics: null,
   detectionId: null,
   refinementContext: null,
   trackedLines: [],
@@ -159,8 +169,11 @@ let wrinkleWorker: LiveWrinklePipelineWorkerClient | null = null;
 let refinementPerformance: LiveWrinkleRefinementPerformance | null = null;
 let wrinkleFaceLandmarker: FaceLandmarker | null = null;
 const activeAnalyses = new Set<Promise<void>>();
-const LIVE_YOLO_INPUT_SIZE = 640;
-const STATIC_WRINKLE_MAXIMUM_SIZE = 1280;
+const LIVE_YOLO_INPUT_SIZE = YOLO_WRINKLE_INPUT_SIZE;
+// YOLO and its prototype masks are exported at the configured input size. Keeping the working
+// frame at that size prevents large photos and many instances from creating
+// several full-frame mask copies during browser post-processing.
+const STATIC_WRINKLE_MAXIMUM_SIZE = LIVE_YOLO_INPUT_SIZE;
 const LIVE_YOLO_CORRECTION_INTERVAL_SECONDS = 2;
 const LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS = 2;
 let liveDetectionInFlight = false;
@@ -307,7 +320,7 @@ export function buildWrinkleWorkingFrame(
 async function sha256Hex(value: Uint8Array | Uint8ClampedArray | string): Promise<string> {
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
   if (!globalThis.crypto?.subtle) return "unavailable-in-insecure-context";
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -322,7 +335,14 @@ function numericFingerprint(value: unknown): Promise<string> {
 function currentStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
   const atlasLines = modelState.atlases.rstl;
   return cloneMappedLines(mapAtlas(atlasLines, landmarks, modelState.triangles as any[], {
-    expandForehead: RSTL_STANDARD_CONTRACT.expandForehead,
+    ...RSTL_STANDARD_MAPPING_OPTIONS,
+  }));
+}
+
+function currentDisplayedStandardLines(landmarks: Vec3[]): EditableRefineLine[] {
+  const atlasLines = modelState.atlases[renderState.system] || modelState.atlases.rstl;
+  return cloneMappedLines(mapAtlas(atlasLines, landmarks, modelState.triangles as any[], {
+    ...RSTL_STANDARD_MAPPING_OPTIONS,
   }));
 }
 
@@ -422,23 +442,42 @@ function terminateWrinkleWorker(): void {
 }
 
 function assertRefinementGate(diagnostics: Record<string, any>): void {
-  if (
-    diagnostics.algorithm !== V6_RSTL_ALGORITHM
-    || diagnostics.two_sided_nearest_matching !== true
-    || diagnostics.forehead_nearest_single_curve_matching !== true
-    || diagnostics.regional_nearest_single_curve_matching !== true
-    || Number(diagnostics.maximum_selected_rstl_curves_per_wrinkle) > 2
-    || diagnostics.curve_unique_wrinkle_ownership !== true
-    || Number(diagnostics.wrinkle_with_single_side_selected_count || 0) !== 0
-    || Number(diagnostics.crows_feet_single_curve_selected_count || 0) !== 0
-    || diagnostics.bundle_propagation_enabled === true
-    || Number(diagnostics.bundle_follower_moved_curve_count || 0) > 0
-    || diagnostics.curvature_fairing_enabled !== true
-    || diagnostics.topology_contract_preserved !== true
-    || diagnostics.post_export_new_intersection_pair_count !== 0
-    || diagnostics.post_export_new_self_cross_curve_count !== 0
-  ) {
-    throw new Error("皱纹引导结果未通过拓扑、交叉或线束间距门禁");
+  const failures: string[] = [];
+  const trajectoryForehead = String(diagnostics.forehead_attraction_version || "")
+    .startsWith("forehead-trajectory-attraction-");
+  const trajectoryGlabellar = String(diagnostics.glabellar_trajectory_attraction_version || "")
+    .startsWith("forehead-trajectory-attraction-");
+  const trajectoryAny = trajectoryForehead || trajectoryGlabellar;
+  if (!trajectoryAny && diagnostics.algorithm !== V6_RSTL_ALGORITHM) failures.push("algorithm");
+  if (!trajectoryAny && diagnostics.two_sided_nearest_matching !== true) failures.push("two_sided_nearest_matching");
+  if (!trajectoryAny && diagnostics.forehead_nearest_single_curve_matching !== true) failures.push("forehead_nearest_single_curve_matching");
+  if (!trajectoryAny && diagnostics.regional_nearest_single_curve_matching !== true) failures.push("regional_nearest_single_curve_matching");
+  // Forehead multi-curve attraction intentionally allows one wrinkle to own
+  // several nearby forehead RSTL curves. Apply the legacy limits to the
+  // remaining regional channels only.
+  if (Number(diagnostics.non_forehead_maximum_selected_rstl_curves_per_wrinkle ??
+    diagnostics.maximum_selected_rstl_curves_per_wrinkle) > 2) {
+    failures.push("maximum_selected_rstl_curves_per_wrinkle");
+  }
+  if ((diagnostics.non_forehead_curve_unique_wrinkle_ownership ??
+      diagnostics.curve_unique_wrinkle_ownership) !== true) {
+    failures.push("curve_unique_wrinkle_ownership");
+  }
+  if (Number(diagnostics.wrinkle_with_single_side_selected_count || 0) !== 0) failures.push("wrinkle_with_single_side_selected_count");
+  if (Number(diagnostics.crows_feet_single_curve_selected_count || 0) !== 0) failures.push("crows_feet_single_curve_selected_count");
+  if (diagnostics.bundle_propagation_enabled === true) failures.push("bundle_propagation_enabled");
+  if (Number(diagnostics.bundle_follower_moved_curve_count || 0) > 0) failures.push("bundle_follower_moved_curve_count");
+  if (diagnostics.curvature_fairing_enabled !== true) failures.push("curvature_fairing_enabled");
+  if (diagnostics.topology_contract_preserved !== true) failures.push("topology_contract_preserved");
+  if (diagnostics.post_export_new_intersection_pair_count !== 0) failures.push("post_export_new_intersection_pair_count");
+  if (diagnostics.post_export_new_self_cross_curve_count !== 0) failures.push("post_export_new_self_cross_curve_count");
+  if (trajectoryForehead) {
+    if (diagnostics.forehead_final_output_audited !== true) failures.push("forehead_final_output_audited");
+    if (Number(diagnostics.maximum_selected_rstl_curves_per_wrinkle) > 2) failures.push("forehead_maximum_two_anchors");
+    if (diagnostics.curve_unique_wrinkle_ownership !== true) failures.push("forehead_interval_ownership");
+  }
+  if (failures.length) {
+    throw new Error(`皱纹引导结果未通过拓扑、交叉或线束间距门禁（失败项：${failures.join(", ")}）`);
   }
 }
 
@@ -463,7 +502,8 @@ function statusLabel(): string {
   if (state.status === "refining") return "正在计算自动微调";
   if (state.status === "evidence") return "皱纹已检测 · 自动微调未通过门禁";
   if (state.status === "ready") return "检测完成 · 待选择";
-  if (state.status === "applied") return "已应用皱纹引导微调";
+  if (state.status === "applied") return Number(state.diagnostics?.forehead_attraction_incomplete_count || 0) > 0
+    ? "已应用皱纹引导微调 · 部分额头吸附受限" : "已应用皱纹引导微调";
   if (state.status === "error") return "检测失败";
   if (isDynamicWrinkleSourceKind(sourceState.sourceKind)) {
     return `等待${dynamicWrinkleSourceLabel()}人脸`;
@@ -532,6 +572,7 @@ export function updateWrinkleUi(): void {
     const glabellarDiagnostic = state.evidenceSource === "yolo-live" && state.diagnostics
       && Number(state.diagnostics.glabellar_moved_curve_count || 0) === 0
       ? `眉间诊断：证据 ${Number(state.diagnostics.glabellar_evidence_line_count || 0)} 条，` +
+        `通用线重路由 ${Number(state.diagnostics.generic_frown_rerouted_count || 0)} 条，` +
         `几何趋势 ${Number(state.diagnostics.glabellar_classified_trend_count || 0)} 条，` +
         `候选 ${Number(state.diagnostics.glabellar_candidate_pair_count || 0)} 对，` +
         `支持通过 ${Number(state.diagnostics.glabellar_supported_curve_count || 0)} 条，` +
@@ -561,7 +602,10 @@ export function updateWrinkleUi(): void {
       : "";
     const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2 · ${processingLocation}；` +
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
-      regionalMovement + `共调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。` +
+      regionalMovement + (state.diagnostics?.forehead_attraction_version
+        ? `额头直接吸附通过 ${Number(state.diagnostics.forehead_attraction_direct_count || 0)} 个匹配，` +
+          `邻线协调 ${Number(state.diagnostics.forehead_attraction_follower_count || 0)} 条，` +
+          `受限 ${Number(state.diagnostics.forehead_attraction_incomplete_count || 0)} 个匹配；` : "") + `共调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。` +
       glabellarDiagnostic + foreheadDiagnostic;
     setWrinkleSummary(hasManualRefineChanges()
       ? `${moved} 已有医生手动修改，自动应用已锁定；可恢复后重新应用。`
@@ -579,11 +623,13 @@ export function updateWrinkleUi(): void {
   }
 }
 
-export function setWrinkleDisplayMode(value: string): void {
+export function setWrinkleDisplayMode(value: string, options: { redraw?: boolean } = {}): void {
   if (value !== "rstl" && value !== "wrinkles" && value !== "both") return;
   state.displayMode = value;
   updateWrinkleUi();
-  window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+  if (options.redraw !== false) {
+    window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+  }
 }
 
 export function shouldDrawRstlLayer(): boolean {
@@ -599,6 +645,38 @@ export function getWrinkleEvidenceLines(): readonly LiveWrinkleEvidenceLine[] {
     return liveDisplayLines;
   }
   return state.evidenceLines;
+}
+
+/** Presentation-only classification of curves that actually changed. */
+export function getRefinementHighlightColor(
+  line: { name?: string; region?: string },
+  index: number,
+): string | null {
+  if (state.status !== "applied") return null;
+  const declaredRegion = String(line.region || "");
+  // Directly generated nose-dorsum curves have no standard curve index. Their
+  // region is sufficient evidence and must be colored before baseline lookup.
+  if (declaredRegion.includes("nose_dorsum") || declaredRegion === "personalized_nose_dorsum_wrinkle_v1"
+      || String(line.name || "").includes("personalized_nose_dorsum")) return "#00C8FF";
+  if (!state.autoRefinedLines?.[index]) return null;
+  const standardLines = state.standardLines;
+  const baseline = standardLines?.[index];
+  const refined = state.autoRefinedLines[index];
+  const region = String(line.region || refined.region || "");
+  // Newly generated nose-dorsum curves have no standard baseline to compare.
+  if (!baseline) return region === "personalized_nose_dorsum_wrinkle_v1" ? "#00C8FF" : null;
+  if (JSON.stringify(baseline.pts) === JSON.stringify(refined.pts)) return null;
+  if (region.includes("forehead") || state.diagnostics?.forehead_attraction_records?.some(
+    (record: Record<string, unknown>) => record.final_accepted === true && record.rstl_curve_name === line.name)) {
+    return "#FF7A00";
+  }
+  if (region === "orbital_brow_upturn_v11") return "#39E875";
+  const noseIndices = new Set<number>(state.diagnostics?.nose_hybrid_refinement?.movedCurveIndices || []);
+  if (region.includes("nose") || region === "brow_lower_bridge"
+      || noseIndices.has(index) || region === "personalized_nose_dorsum_wrinkle_v1") {
+    return "#00C8FF";
+  }
+  return null;
 }
 
 export function updateLiveWrinkleMeshTracking(
@@ -689,6 +767,8 @@ export function captureWrinkleDisplayState(): WrinkleDisplayResumeState {
       points: line.points.map((point) => [point[0], point[1]]),
     })),
     standardLines: state.standardLines ? cloneEditableLines(state.standardLines) : null,
+    displayStandardLines: state.displayStandardLines
+      ? cloneEditableLines(state.displayStandardLines) : null,
     autoRefinedLines: state.autoRefinedLines ? cloneEditableLines(state.autoRefinedLines) : null,
     movedCurveCount: state.movedCurveCount,
     movedPointCount: state.movedPointCount,
@@ -700,6 +780,7 @@ export function captureWrinkleDisplayState(): WrinkleDisplayResumeState {
     timings: state.timings,
     provider: state.provider,
     reproducibility: state.reproducibility,
+    pipelineDiagnostics: state.pipelineDiagnostics,
     detectionId: state.detectionId,
     refinementContext: state.refinementContext,
     trackedLines: state.trackedLines.map((line) => ({
@@ -731,6 +812,8 @@ export function restoreWrinkleDisplayState(snapshot: WrinkleDisplayResumeState):
     points: line.points.map((point) => [point[0], point[1]]),
   }));
   state.standardLines = interrupted || !snapshot.standardLines ? null : cloneEditableLines(snapshot.standardLines);
+  state.displayStandardLines = interrupted || !snapshot.displayStandardLines
+    ? null : cloneEditableLines(snapshot.displayStandardLines);
   state.autoRefinedLines = interrupted || !snapshot.autoRefinedLines ? null : cloneEditableLines(snapshot.autoRefinedLines);
   state.movedCurveCount = interrupted ? 0 : snapshot.movedCurveCount;
   state.movedPointCount = interrupted ? 0 : snapshot.movedPointCount;
@@ -742,6 +825,7 @@ export function restoreWrinkleDisplayState(snapshot: WrinkleDisplayResumeState):
   state.timings = interrupted ? null : snapshot.timings;
   state.provider = interrupted ? null : snapshot.provider;
   state.reproducibility = interrupted ? null : snapshot.reproducibility;
+  state.pipelineDiagnostics = interrupted ? null : snapshot.pipelineDiagnostics;
   state.detectionId = interrupted ? null : snapshot.detectionId;
   state.refinementContext = interrupted ? null : snapshot.refinementContext;
   state.trackedLines = interrupted ? [] : snapshot.trackedLines.map((line) => ({
@@ -788,6 +872,7 @@ export function getLiveWrinkleAnalysisDebugSnapshot() {
     refinementPerformance,
     provider: state.provider ? { ...state.provider } : null,
     reproducibility: state.reproducibility ? { ...state.reproducibility } : null,
+    pipelineDiagnostics: state.pipelineDiagnostics ? { ...state.pipelineDiagnostics } : null,
     detectionId: state.detectionId,
     liveTracked: state.trackedLines.length > 0,
     liveTrackingMode: "first-frame-evidence-skin-tracking-with-gated-yolo-correction",
@@ -844,6 +929,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
   state.evidenceLines = [];
   state.autoRefinedLines = null;
   state.standardLines = null;
+  state.displayStandardLines = null;
   state.movedCurveCount = 0;
   state.movedPointCount = 0;
   state.fineLineCount = 0;
@@ -854,12 +940,19 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
   state.timings = null;
   state.provider = null;
   state.reproducibility = null;
+  state.pipelineDiagnostics = null;
   state.detectionId = null;
   state.refinementContext = null;
   state.trackedLines = [];
   updateStatus("loading");
   try {
     const sourceSize = wrinkleSourceSize(source);
+    const displayedLandmarksAtStart = sourceState.sourceKind === "image"
+      ? sourceState.imageCacheLM
+      : sourceState.lastLM;
+    const displayedStandardAtStart = displayedLandmarksAtStart?.length
+      ? currentDisplayedStandardLines(displayedLandmarksAtStart)
+      : null;
     const landmarks = await detectV9ReferenceLandmarks(
       source,
       sourceSize.width,
@@ -867,6 +960,7 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
     );
     if (generation !== state.generation) return;
     state.standardLines = currentStandardLines(landmarks);
+    state.displayStandardLines = displayedStandardAtStart;
     const working = buildWrinkleWorkingFrame(
       source,
       sourceSize.width,
@@ -921,6 +1015,19 @@ async function runCurrentWrinkleAnalysis({ force = false }: { force?: boolean } 
         browserBaselineSha256: evidence.summary.browserBaselineSha256,
         v10InputImageSha256: evidence.summary.v10InputImageSha256,
         lineCountByAnatomicalClass: evidence.summary.lineCountByAnatomicalClass,
+      };
+      state.pipelineDiagnostics = {
+        rawDetectionCount: evidence.summary.rawDetectionCount,
+        rawYoloClassMaskPixels: evidence.summary.rawYoloClassMaskPixels,
+        baselineLineCount: evidence.summary.baselineLineCount,
+        baselineRejectedComponentCount: evidence.summary.baselineRejectedComponentCount,
+        adaptedLineCount: evidence.summary.adaptedLineCount,
+        adaptedLineCountByClass: evidence.summary.adaptedLineCountByClass,
+        singleClassRejectedLineCount: evidence.summary.singleClassRejectedLineCount,
+        visibleLineCount: evidence.summary.visibleLineCount ?? evidence.summary.fineLineCount,
+        excludedNonTargetLineCount: evidence.summary.excludedNonTargetLineCount,
+        yoloDiagnostics: evidence.summary.yoloDiagnostics,
+        yoloScores: evidence.summary.yoloScores,
       };
       window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
     };
@@ -1343,11 +1450,15 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
     updateWrinkleUi();
     return;
   }
-  if (state.autoRefinedLines) {
+  // Reuse the completed result for this detection. Restoring standard RSTL only
+  // changes the displayed baseline; it must not discard or recompute the cached
+  // automatic refinement. A new detection/reset clears autoRefinedLines below.
+  if (state.autoRefinedLines?.length && state.diagnostics && state.audit) {
     replaceStaticRefineBaseline(state.autoRefinedLines, { liveBaseline: state.standardLines });
     updateStatus("applied");
-    countMetric("wrinkle.singleFrame.cachedRefinementApplied");
+    countMetric("wrinkle.singleFrame.appliedCached");
     window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+    publishDebugSnapshot();
     return;
   }
   const generation = state.generation;
@@ -1382,9 +1493,12 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
         || refined.curves.length < refined.standardCurveCount) {
       throw new Error("皱纹引导结果未保持 RSTL 曲线数量");
     }
+    const noseHybrid = refined.diagnostics.nose_hybrid_refinement as
+      { movedCurveIndices?: number[] } | undefined;
+    const noseMovedIndices = new Set(noseHybrid?.movedCurveIndices || []);
     const autoRefinedLines = state.standardLines.map((line, index) => {
       const yoloScoped = refined.diagnostics.refinement_scope === YOLO_GUIDED_RSTL_SCOPE;
-      if (yoloScoped && !isYoloGuidedRstlSeed(line)) {
+      if (yoloScoped && !isYoloGuidedRstlSeed(line) && !noseMovedIndices.has(index)) {
         return {
           ...line,
           hiddenPointRuns: line.hiddenPointRuns.map((run) => [run[0], run[1]] as [number, number]),
@@ -1457,7 +1571,7 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
 
 export function restoreStandardRstl(): void {
   if (!state.standardLines) return;
-  replaceStaticRefineBaseline(state.standardLines);
+  replaceStaticRefineBaseline(state.displayStandardLines || state.standardLines);
   updateStatus(state.detectionId ? "detected" : "ready");
   countMetric("wrinkle.singleFrame.standardRestored");
 }
@@ -1483,6 +1597,7 @@ export function resetLiveWrinkleAnalysis(): void {
   state.displayMode = sourceState.sourceKind === "video" ? "wrinkles" : "both";
   state.evidenceLines = [];
   state.standardLines = null;
+  state.displayStandardLines = null;
   state.autoRefinedLines = null;
   state.movedCurveCount = 0;
   state.movedPointCount = 0;
