@@ -293,16 +293,21 @@
     "status": "verified",
     "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
     "manifestPath": "local_outputs/recovery-packages/pr244-master-20261117/manifest.json",
-    "manifestSha256": "35c0fb0e408afbe1b039b9141d50bd8be600f0aad438fb7d1629da58beaf8ada",
+    "manifestSha256": "2c7a35fbd70bd599ebd7c9d9af23a8de90d69a44c8e5cf576c087e374580e460",
     "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
     "verifiedAt": "2026-11-17T14:26:12.443Z",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
     "note": "Self-contained frozen source snapshot; no inherited package. Registration is frozen before binding this manifest to avoid a hash cycle."
   },
   "scopeBoundaryReview": {
-    "status": "pending",
+    "status": "confirmed",
+    "manifestSha256": "2c7a35fbd70bd599ebd7c9d9af23a8de90d69a44c8e5cf576c087e374580e460",
+    "confirmedAt": "2026-11-17T15:05:58.128Z",
+    "confirmationKind": "explicit_operator_master_integration_request",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "note": "New master integration needs scope confirmation; previous PR245 and PR244 confirmations remain historical."
+    "operatorStatement": "当前pr先于245拉取，但是pr245处理优先于pr244并已完成合并，请拉取新的master并对当前pr244进行修正及推送工作",
+    "scope": "Only integration of master@70460bc8779b864473954c62078e0463a8322449; all 48 shared-code paths flagged against the old PR head are identical to that master. No new shared-algorithm edits are accepted by this record.",
+    "recordedAtMeaning": "Time this existing direct integration request was bound to the verified manifest; not the original message timestamp or an effect evaluation."
   },
   "operatorEvaluation": {
     "status": "pending",
@@ -3769,7 +3774,7 @@
   "sourceFingerprint": {
     "encoding": "utf8",
     "normalization": "CRLF-to-LF",
-    "previousSourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
+    "previousSourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
     "currentSourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
     "capturedAt": "2026-11-17T14:13:52.769Z",
     "reason": "Integrate merged PR245 master while retaining PR244 lesion algorithm."
@@ -3949,9 +3954,45 @@
     }
   ],
   "automatedValidation": {
-    "status": "pending",
+    "status": "partial",
+    "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
+    "testedHead": "07678c0a80427106e983b4e14c6b4af25fd92b42",
+    "passed": [
+      "npm test",
+      "node tools/test_algorithm_release_gate.mjs",
+      "committed recovery archive: 264 byte/hash checks",
+      "archive checkout negative control",
+      "npm run test:browser"
+    ],
+    "note": "Browser result is separately reported in the PR evidence matrix. Operator evaluation and editor-save confirmation remain pending; automated checks do not replace them.",
+    "browserStatus": "PASS",
+    "browserStatistics": {
+      "production": {
+        "startTime": "2026-11-17T14:58:00.623Z",
+        "duration": 401483.51999999996,
+        "expected": 43,
+        "skipped": 2,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "source-1": {
+        "startTime": "2026-11-17T15:04:43.558Z",
+        "duration": 8519.347,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "source-2": {
+        "startTime": "2026-11-17T15:04:53.265Z",
+        "duration": 13709.151,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    }
   },
   "incisionDirection": {
     "version": "0.1.0-candidate.1",
@@ -4344,7 +4385,7 @@
     "submissionScope": "一份正式综合PR，暂不合并；原范围后续必要修复可沿同分支增补同一PR，每次重核当前Head CI。"
   },
   "masterIntegration20261117": {
-    "status": "local-validation-pending",
+    "status": "local-engineering-validation-complete-human-evidence-pending",
     "base": "70460bc8779b864473954c62078e0463a8322449",
     "previousPrHead": "0adbe4f20acdea8e51faa5c005660e93ca35d01f",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
@@ -4359,7 +4400,7 @@
           "完整局部轮廓"
         ],
         "status": "candidate",
-        "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
+        "sourceDigest": "b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016",
         "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
         "changeSlug": "repeated-supported-contained-local-pigment",
         "previous": {
@@ -4952,6 +4993,33 @@
         "triangles.json": "b43e2584038e84345eb9f8579718ef258fa3538123798a720e5a424f0e300e5c",
         "topology_mediapipe_468.json": "fc89084fcdaf1e4b0b453a87965c8a8c0331ee1c9338e8bc4c1308d198c7cca3"
       }
+    },
+    "assetByteAudit": {
+      "localWindowsDigest": "5624e9a65b0af308fdbcee752d04a777dd5479f84c13c216c423779dd4352fb8",
+      "gitBlobs": [
+        {
+          "ref": "HEAD",
+          "assetDigest": "59c6b3d59e05f3142985b4efae782707c268f0611b34ea8670d0a444f9b28c4b"
+        },
+        {
+          "ref": "origin/master",
+          "assetDigest": "59c6b3d59e05f3142985b4efae782707c268f0611b34ea8670d0a444f9b28c4b"
+        },
+        {
+          "ref": "origin/pr244-head",
+          "assetDigest": "17c19f73efb04efde02560e785164f7ae8ebdcdec363c635bacfeeb8c42bc958"
+        }
+      ],
+      "differences": [
+        {
+          "file": "atlas_rstl.json",
+          "onlyEol": true
+        },
+        {
+          "file": "atlas_langer.json",
+          "onlyEol": true
+        }
+      ]
     }
   }
 }

@@ -181,7 +181,7 @@
     {
       "relativePath": "docs/quality/controlled-marker-release.json",
       "bytes": 341864,
-      "sha256": "ef5b1aed7b1801d4e353d10952f1f3e4f6f8e6d639c1ffac151143663aa15bcc"
+      "sha256": "1bbdda2f901405b6f9ac92b4f19ec294556de6f69b144f2b933aea954df1aec2"
     },
     {
       "relativePath": "docs/tracks/INCISION_WORKFLOW.md",
@@ -1470,5 +1470,10 @@
     "只复制项目责任范围配置列出的肿物识别、切口生成、切口微调和 UI 设计材料；范围外工作区改动不在本包内。",
     "外部依赖文件仅为当前运行恢复而保存，不改变其团队责任归属，也不代表其效果已验收。",
     "存档和运行身份不代表算法效果、真机效果、医学结论或临床验收通过。"
-  ]
+  ],
+  "registrationMetadataRevision": {
+    "previousManifestSha256": "35c0fb0e408afbe1b039b9141d50bd8be600f0aad438fb7d1629da58beaf8ada",
+    "preservedInCommit": "07678c0a80427106e983b4e14c6b4af25fd92b42",
+    "reason": "Pre-publication correction: restore previous PR registration from its immutable Git object; runtime sources and algorithm identity unchanged."
+  }
 }
