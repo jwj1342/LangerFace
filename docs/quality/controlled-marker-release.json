@@ -310,21 +310,23 @@
     "recordedAtMeaning": "Time this existing direct integration request was bound to the verified manifest; not the original message timestamp or an effect evaluation."
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "effectResult": "not-revalidated",
+    "effectResult": "partial-failed",
     "knownFailures": [
       "MO004回传压缩图固定5点10mm全部拒识，原图同条件成功；历史真实手机实际RGBA尚缺",
       "原图MO004扫描范围敏感性仍开放",
       "MK002、MK003鼻翼及其他边界精度/跨落点问题未整组验收",
       "0.104.2/3/4缩图候选已否决并恢复0.104.1，不进入活动产品"
     ],
-    "note": "The combined candidate has not received operator evaluation. Previous known failures remain open.",
+    "note": "操作者已查看当前候选，接受其作为带已知拒识和弱边界限制的研发候选；未完成医学、真机和私有模型验收。该接受不表示整组效果或专业验收通过。",
+    "confirmedAt": "2026-11-19T04:12:17+08:00",
     "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
   },
   "editorSaveConfirmation": {
-    "status": "pending",
+    "status": "confirmed",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
+    "confirmedAt": "2026-11-19T04:12:17+08:00",
     "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
   },
   "history": [
@@ -3957,7 +3959,7 @@
     "status": "partial",
     "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "testedHead": "07678c0a80427106e983b4e14c6b4af25fd92b42",
+    "testedHead": "581809628ef33ecc9fb7a48bd3bb2a0365edd434",
     "passed": [
       "npm test",
       "node tools/test_algorithm_release_gate.mjs",
@@ -3965,7 +3967,7 @@
       "archive checkout negative control",
       "npm run test:browser"
     ],
-    "note": "Browser result is separately reported in the PR evidence matrix. Operator evaluation and editor-save confirmation remain pending; automated checks do not replace them.",
+    "note": "Browser result is separately reported in the PR evidence matrix. The operator evaluation and editor-save confirmation are now recorded against the current sourceDigest. The full npm/browser results remain evidence from the source-equivalent candidate before the master merge; the current merge adds the validated CI checkout fix only. Automated checks do not replace medical, real-device, or private-model acceptance.",
     "browserStatus": "PASS",
     "browserStatistics": {
       "production": {
