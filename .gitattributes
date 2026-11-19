@@ -1,2 +1,6 @@
 # Generated review asset; inspect tools/build_rstl_direction_prior.py and tests instead.
 assets/rstl_mediapipe_direction_prior.json linguist-generated=true
+# Preserve the checkout bytes bound to the verified algorithm recovery archives.
+docs/quality/algorithm-archive-scope.json text eol=crlf
+# Frozen recovery evidence is hashed as raw bytes, including line endings.
+local_outputs/recovery-packages/pr244-master-20261117/** -text

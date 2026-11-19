@@ -583,7 +583,7 @@ export function regularizeSolidBoundary(result: ControlledMarkerDetection): Cont
 // 深凹陷、明显不规则形状或双向位移超过等面积半径22%时保留原轮廓。
 // 面积保持及后续原扫描/颜色支持门禁仍必需，光滑不代表医学正确。
 /** 对已接受的闭合轮廓做低频形状整理。这里只改善几何表现，不提高医学可信度；已有面积和最大位移限制继续生效。 */
-export function regularizeAcceptedBoundary(result: ControlledMarkerDetection): ControlledMarkerDetection {
+export function regularizeAcceptedBoundary(result: ControlledMarkerDetection, allowSupportedSolidAspect = false): ControlledMarkerDetection {
   if (!result.ok || !["dark_component", "enclosed_region"].includes(result.geometry_mode || "")
     || result.boundary.length < 24
     || result.boundary.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return result;
@@ -591,7 +591,8 @@ export function regularizeAcceptedBoundary(result: ControlledMarkerDetection): C
   if (preserved !== result) return preserved;
   const original = boundaryGeometry(result.boundary);
   if (!original || original.area < 30
-    || Math.min(original.bbox.width, original.bbox.height) / Math.max(original.bbox.width, original.bbox.height) < 0.62
+    || (!(allowSupportedSolidAspect && result.geometry_mode === "dark_component")
+      && Math.min(original.bbox.width, original.bbox.height) / Math.max(original.bbox.width, original.bbox.height) < 0.62)
     || boundaryCompactness(result.boundary) < 0.60) return result;
   const sampled = resampleClosedBoundary(result.boundary, 64);
   const mean = sampled.reduce((sum, point) => ({ x: sum.x + point.x / 64, y: sum.y + point.y / 64 }), { x: 0, y: 0 });
@@ -2822,10 +2823,14 @@ function recoverScanSolidCandidate(
   analysisRadius: number, scanRadius: number, witness: ControlledMarkerDetection,
   pixelBoundary = false,
 ): ControlledMarkerDetection | null {
+  const recoverClippedSmallScan = !pixelBoundary && scanRadius < analysisRadius
+    && witness.ok && witness.geometry_mode === "dark_component"
+    && witness.boundary.some(point => Math.hypot(point.x - seed.x, point.y - seed.y) > scanRadius);
   const proposals: ControlledMarkerDetection[] = [];
   recoverSolidComponentNearSeed(image, seed, witness, {
     ...options, roiRadius: scanRadius,
     __solidAnalysisRadius: analysisRadius, __solidProposalCollector: proposals,
+    ...(recoverClippedSmallScan ? { __requireUnclippedSolidProposal: true } : {}),
   } as ControlledMarkerOptions);
   // A scan-wide threshold can merge a lesion into a shadow or wrinkle. Use
   // overlapping fixed-scale regions only to propose centres; clipped dark
@@ -2845,7 +2850,7 @@ function recoverScanSolidCandidate(
       y: Math.round(seed.y / step) * step + dy,
     };
     if (localSeed.x < 0 || localSeed.y < 0 || localSeed.x >= image.width || localSeed.y >= image.height
-      || (!pixelBoundary && Math.hypot(dx, dy) > scanRadius)) continue;
+      || (!pixelBoundary && Math.hypot(dx, dy) > (recoverClippedSmallScan ? analysisRadius : scanRadius))) continue;
     const local: ControlledMarkerDetection[] = [];
     recoverSolidComponentNearSeed(image, localSeed, witness, {
       ...options, roiRadius: analysisRadius,

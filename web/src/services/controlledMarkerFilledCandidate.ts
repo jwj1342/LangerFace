@@ -129,7 +129,7 @@ finally {
 /** 从边界计算面积、最长边、长宽比、紧致度、包围盒和顶点平均中心。这里的center不是严格的面积质心；它用于本实现的径向采样，不应冒充解剖中心。 */
 function geometry(b: MarkerPoint[]) { const xs = b.map(p => p.x), ys = b.map(p => p.y), x = Math.min(...xs), y = Math.min(...ys), width = Math.max(...xs) - x, height = Math.max(...ys) - y, area = polygonArea(b), diameter = Math.max(width, height), perimeter = b.reduce((s, p, i) => s + Math.hypot(p.x - b[(i + 1) % b.length].x, p.y - b[(i + 1) % b.length].y), 0); return { area, diameter, aspect: Math.min(width, height) / diameter, compactness: 4 * Math.PI * area / (perimeter * perimeter), bbox: { x, y, width, height }, center: { x: b.reduce((s, p) => s + p.x, 0) / b.length, y: b.reduce((s, p) => s + p.y, 0) / b.length } }; }
 /** 用原照片检验一个候选：先查尺寸/形状和原扫描覆盖，再比较内部核心与外侧背景的颜色、噪声和边缘变化。色差足够却没有清楚边界时仍拒绝，以免把阴影当作肿物。失败时返回baseline只是保留调用方的参照，必须同时读route和reasons，不能把返回对象非空当作接受。 */
-function evaluateOne(image: MarkerImageData, seed: MarkerPoint, scanRadius: number, analysisRadius: number, baseline: ControlledMarkerDetection, candidate: Candidate): Evaluation {
+function evaluateOne(image: MarkerImageData, seed: MarkerPoint, scanRadius: number, analysisRadius: number, baseline: ControlledMarkerDetection, candidate: Candidate, regularizeBoundary = true): Evaluation {
     const b = candidate.boundary || [], reasons = [];
     if (!candidate.ok || !simple(b))
         return { result: baseline, route: 'retain_baseline', reasons: ['no_simple_candidate'] };
@@ -216,6 +216,9 @@ function evaluateOne(image: MarkerImageData, seed: MarkerPoint, scanRadius: numb
     const features = { ...g, foreground, bg, difference, noiseEstimate, snr, stepMedian, stepSupport, narrowWideEdgeRatio, corePixels: core.length, backgroundPixels: background.length, chromaticFraction, darkSurroundRun };
     if (reasons.length)
         return { result: baseline, route: 'retain_baseline', reasons, features };
+    // Final-boundary rechecking returns a verdict, without generating or scoring another result.
+    if (!regularizeBoundary)
+        return { result: baseline, route: 'verified_final_boundary', reasons: [], features };
     const source: ControlledMarkerDetection = { ...baseline, ok: true, failure_code: null, geometry_mode: 'dark_component', warnings: [], diagnostics: { ...(baseline.diagnostics || {}) }, boundary: b, center: g.center, area_px: g.area, bbox: g.bbox }, regularized = regularizeAcceptedBoundary(source), boundary = regularized === source ? regularizeSolidBoundary(source).boundary : regularized.boundary;
     const finalGeometry = geometry(boundary), result: ControlledMarkerDetection = { ...baseline, ok: true, failure_code: null, geometry_mode: 'dark_component', boundary, center: finalGeometry.center, bbox: finalGeometry.bbox, area_px: finalGeometry.area, warnings: [...(baseline.warnings || []), 'relative_color_filled_candidate'], diagnostics: { ...(baseline.diagnostics || {}), relative_color_candidate: true, ...regularized.diagnostics } };
     return { result, route: 'relative_color_filled_candidate', reasons: [], features, regularization: { method: regularized === source ? 'local_corner_only' : 'existing_bounded_periodic_low_frequency', ...regularized.diagnostics } };
@@ -588,6 +591,45 @@ function shouldPreserveOriginalBaselineAgainstBroadCandidate(
         && candidateArea > originalArea * 1.8;
 }
 
+/** Reuse the bounded shape method only after the original chain keeps a verified solid boundary. */
+function regularizeFinalVerifiedBoundary(
+    image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions,
+    recovered: ControlledMarkerDetection, result: ControlledMarkerDetection,
+): ControlledMarkerDetection {
+    const diagnostics = result.diagnostics as Record<string, unknown> | undefined;
+    if (!result.ok || result.geometry_mode !== 'dark_component'
+        || result.boundary !== recovered.boundary
+        || diagnostics?.filled_candidate_route !== 'validated_legacy_filled_candidate'
+        || result.warnings.includes('scan_solid_direct_proposal_recovered')
+        || diagnostics?.scan_solid_direct_proposal === true
+        || result.warnings.includes('solid_boundary_envelope_recovered')
+        || 'solid_boundary_envelope_support_ratio' in (diagnostics || {})
+        || regularizeAcceptedBoundary(result) !== result)
+        return result;
+    const original = geometry(result.boundary);
+    if (original.aspect >= .62) return result;
+    const trial = regularizeAcceptedBoundary(result, true);
+    if (trial === result || trial.boundary === result.boundary) return result;
+    const analysis = Number(options.analysisRoiRadius || options.roiRadius || 36);
+    const scan = Number(result.scan?.radius_px || options.roiRadius || analysis);
+    const checked = evaluateOne(image, seed, scan, analysis, result, trial, false);
+    if (checked.route !== 'verified_final_boundary') return result;
+    const finalGeometry = geometry(trial.boundary);
+    const trialDiagnostics = trial.diagnostics as Record<string, unknown> | undefined;
+    return { ...result, boundary: trial.boundary, center: finalGeometry.center,
+        bbox: finalGeometry.bbox, area_px: finalGeometry.area,
+        marker_area_px: Math.round(finalGeometry.area), marker_bbox: finalGeometry.bbox,
+        seed_relation: pointInPolygon(seed, trial.boundary) ? 'enclosed'
+            : distanceToBoundary(seed, trial.boundary) <= 3 ? 'on_marker' : 'near_marker',
+        warnings: [...new Set([...result.warnings, 'final_supported_boundary_low_frequency_regularized'])],
+        diagnostics: { ...result.diagnostics,
+            final_boundary_regularization: 'existing_bounded_periodic_low_frequency',
+            final_boundary_area_ratio: trialDiagnostics?.accepted_boundary_area_ratio,
+            final_boundary_blend: trialDiagnostics?.accepted_boundary_blend,
+            final_boundary_max_displacement_ratio: trialDiagnostics?.accepted_boundary_max_displacement_ratio,
+        } as ControlledMarkerDetection['diagnostics'] };
+}
+
 /** 正式入口：先执行既有分割与门禁，再对少数强核心恢复分支补原像素复核。 */
 export async function refineFilledCandidate(
     image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions,
@@ -608,5 +650,11 @@ export async function refineFilledCandidate(
         };
     }
     const recovered = refineRecoveredPixelBoundary(image, seed, options, result);
-    return refineAppearanceCandidate(image, seed, options, recovered);
+    const final = await refineAppearanceCandidate(image, seed, options, recovered);
+    if (final.warnings.some(warning => warning.includes('unavailable'))) return final;
+    try {
+        return regularizeFinalVerifiedBoundary(image, seed, options, recovered, final);
+    } catch {
+        return final;
+    }
 }

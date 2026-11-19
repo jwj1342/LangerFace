@@ -84,6 +84,8 @@ jobs:
       - run: node tools/test_automerge_policy.mjs
       - working-directory: web
         run: npm ci
+      - name: Verify algorithm release gate and archive checkout regressions
+        run: node tools/test_algorithm_release_gate.mjs
       - name: Verify latest algorithm PR gate
         working-directory: web
         run: npm run verify:algorithm-release:pr

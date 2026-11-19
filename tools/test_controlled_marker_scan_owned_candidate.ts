@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { evaluateCandidate } from '../web/src/services/controlledMarkerFilledCandidate.ts';
+import { __controlledMarkerColorForTests } from '../web/src/services/controlledMarkerDetectionColorV035.ts';
+import { detectControlledMarkerWithProfileAsync } from '../web/src/services/controlledMarkerDetectionProfile.ts';
 const width=192,height=192,data=new Uint8ClampedArray(width*height*4);
 for(let y=0;y<height;y++)for(let x=0;x<width;x++)data.set(Math.hypot(x-96,y-96)<=18?[67,47,39,255]:[211,174,150,255],(y*width+x)*4);
 const boundary=Array.from({length:64},(_,i)=>({x:96+18*Math.cos(i*Math.PI/32),y:96+18*Math.sin(i*Math.PI/32)}));
@@ -20,3 +22,38 @@ assert.equal(preserved.result.ok,true,'strong recovered solid baseline must rema
 assert.equal(preserved.route,'preserved_supported_baseline_boundary','strong recovered boundary must not be replaced by a smaller filled proposal');
 assert.equal(Math.round(preserved.result.area_px),Math.round(recoveredBaseline.area_px));
 console.log('scan-owned candidate: center, inner edge, outer edge and outside clicks accepted');
+
+// Exercise the small-scan recovery entry explicitly, rather than relying on
+// the full detector to happen to produce an out-of-scan initial witness.
+const crossingBoundary = Array.from({length:64}, (_,i) => ({
+ x:96+30*Math.cos(i*Math.PI/32), y:96+30*Math.sin(i*Math.PI/32),
+}));
+const crossingWitness:any = {...baseline,boundary:crossingBoundary,area_px:Math.PI*900,
+ bbox:{x:66,y:66,width:60,height:60}};
+const smallOptions = {roiRadius:23,analysisRoiRadius:36,scanDiameterMm:5};
+for (const core of [false,true]) {
+ const pixels = new Uint8ClampedArray(width*height*4);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+  const distance=Math.hypot(x-96,y-96);
+  const color=distance<=30 ? core&&distance<=12 ? [35,25,20] : [90,65,50] : [211,174,150];
+  pixels.set([...color,255],(y*width+x)*4);
+ }
+ const image={width,height,data:pixels};
+ const proposal=__controlledMarkerColorForTests.recoverScanSolidCandidate(
+  image,{x:96,y:96},smallOptions,36,23,crossingWitness);
+ if(core) {
+  assert.equal(proposal?.area_px,437,'complete core evidence must remain available');
+  assert.equal(proposal?.diagnostics?.scan_solid_proposal_count,9,'crossing witness must exercise expanded observations');
+ } else assert.equal(proposal,null,'a clipped large solid alone is not a small complete target');
+ const final=await detectControlledMarkerWithProfileAsync('small-lesion-boundary-candidate',image,{x:96,y:96},smallOptions);
+ assert.equal(final.ok,false,'an enclosed dark core cannot certify the larger out-of-scan body');
+}
+
+for(const radius of [21.84,21.86]) {
+ const edge=Array.from({length:64},(_,i)=>({x:96+radius*Math.cos(i*Math.PI/32),y:96+radius*Math.sin(i*Math.PI/32)}));
+ const candidate={...baseline,boundary:edge,area_px:Math.PI*radius*radius};
+ const evaluated=evaluateCandidate({width,height,data},{x:96,y:96},23,36,candidate,candidate);
+ assert.equal(evaluated.reasons.includes('not_enclosed_within_scan'),radius>23*.95,
+  'small-scan recovery must preserve the final 95 percent enclosure contract');
+}
+console.log('small scan: crossing-witness entry, complete-body rejection and enclosure threshold preserved');
