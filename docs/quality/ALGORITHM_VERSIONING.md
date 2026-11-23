@@ -1,4 +1,6 @@
-## RSTL / wrinkle performance PR preparation (2026-11-23) {#rstl-wrinkle-performance-20261123}
+<a id="rstl-wrinkle-performance-20261123"></a>
+
+## RSTL / wrinkle performance PR preparation (2026-11-23)
 
 Base: `1333db5eaa11ad80af14cb7238d736f0ad7f9df1`. Only RSTL/wrinkle runtime files and necessary tests/documentation change. The user explicitly requested a PR for the three performance changes; this authorizes their scope, not human effect acceptance. Model resolution, thresholds, iteration counts, crossing guards and marker algorithms/assets remain unchanged. No patient image or benchmark screenshot is submitted.
 
