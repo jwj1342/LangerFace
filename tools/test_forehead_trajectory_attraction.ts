@@ -1,3 +1,4 @@
+import './test_forehead_curve_distance.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { refineForeheadTrajectories, foreheadCurveDistance } from '../web/src/services/personalized/foreheadTrajectoryAttraction.ts';

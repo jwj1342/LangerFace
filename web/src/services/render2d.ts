@@ -118,13 +118,15 @@ function smooth0119EndpointDisplayLines(lines: readonly DisplayMappedLine[], hei
     // original direction jump can simply move to the first untouched point.
     const startWindow = is0118 ? window + 1 : window;
     for (let pass = 0; pass < passes; pass += 1) {
-      const next = points.map((point) => [...point] as Vec3);
+      const next = [...points];
       for (let index = 1; index < startWindow; index += 1) {
+        next[index] = [...points[index]] as Vec3;
         next[index][0] = 0.25 * points[index - 1][0] + 0.5 * points[index][0] + 0.25 * points[index + 1][0];
         next[index][1] = 0.25 * points[index - 1][1] + 0.5 * points[index][1] + 0.25 * points[index + 1][1];
       }
       for (let index = is0118 ? points.length : points.length - window + 1;
         index < points.length - 1; index += 1) {
+        next[index] = [...points[index]] as Vec3;
         next[index][0] = 0.25 * points[index - 1][0] + 0.5 * points[index][0] + 0.25 * points[index + 1][0];
         next[index][1] = 0.25 * points[index - 1][1] + 0.5 * points[index][1] + 0.25 * points[index + 1][1];
       }
