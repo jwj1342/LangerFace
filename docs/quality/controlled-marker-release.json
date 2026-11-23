@@ -309,16 +309,19 @@
     "scope": "Only the RSTL/wrinkle performance changes identified in the annotated request and necessary tests/docs. This is implementation/submission scope authorization, not effect acceptance."
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
-    "note": "Current effect acceptance not supplied; old master approval retained as historical evidence only."
+    "confirmedAt": "2026-11-23T07:37:51.076147+00:00",
+    "operatorStatement": "已实际查看并接受，涉及文件均已保存",
+    "scope": "RSTL/wrinkle performance changes only, explicitly accepted in direct response to the PR #247 current-version question. No marker or medical effect acceptance is inferred."
   },
   "editorSaveConfirmation": {
-    "status": "pending",
+    "status": "confirmed",
     "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
-    "note": "All agent-written edits are saved on disk; no claim about user editor buffers."
+    "confirmedAt": "2026-11-23T07:37:51.076147+00:00",
+    "operatorStatement": "已实际查看并接受，涉及文件均已保存"
   },
   "history": [
     {
