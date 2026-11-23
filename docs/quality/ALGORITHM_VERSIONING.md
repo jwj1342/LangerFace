@@ -1,3 +1,15 @@
+<a id="rstl-wrinkle-performance-recovery-eol-20261123"></a>
+
+## PR #247 recovery checkout line endings (2026-11-23)
+
+The previous verifier compared restored files with working-tree bytes. Actual clean checkouts of the same commit reproduce the review finding: `core.autocrlf=false` passes, while `true` converts active source to CRLF and fails the endpoint-source hash comparison despite identical LF Git blobs. The package itself remains byte-exact.
+
+The verifier now compares restored source to `git cat-file blob HEAD:<path>`. Manifest SHA-256 and every archived file's raw byte length/SHA-256 remain strict and unchanged; no newline normalization is applied to recovery evidence. Frozen archives are retained unchanged.
+
+`node tools/test_rstl_performance_recovery_checkout.mjs` makes two independent real Git clones/checkouts of the current committed Head, with `core.autocrlf=false` and `true`. It asserts actual LF/CRLF working-tree bytes and LF Git blobs, then runs the full clean-base recovery verifier in each checkout. Both modes must pass both restored test entrypoints (18 endpoint cases, 240 distance comparisons and live/forehead trajectory regressions). The matrix is imported by the existing CI release-gate regression and uses committed code; uncommitted verifier edits are not silently copied into its clones. This exercises Git's conversion modes on the local host and Linux CI, not native Windows OS execution.
+
+Only recovery validation, its regression matrix and this documentation change. Product runtime/source digest `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`, archive identity, strict archive checks and existing human acceptance remain unchanged. No new runtime acceptance is inferred or needed. New Head CI results are reported independently in the PR.
+
 <a id="rstl-wrinkle-performance-recovery-fix-20261123"></a>
 
 ## PR #247 recovery dependency repair (2026-11-23)

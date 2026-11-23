@@ -41,7 +41,10 @@ try {
     copyFileSync(source, target);
   }
   for (const name of required) {
-    assert.equal(sha256(readFileSync(join(restored, name))), sha256(readFileSync(join(root, name))),
+    // Compare with committed source bytes. A clean Windows checkout can use
+    // CRLF even though both the Git blob and the frozen archive contain LF.
+    const committed = execFileSync('git', ['-C', root, 'cat-file', 'blob', `HEAD:${name}`]);
+    assert.equal(sha256(readFileSync(join(restored, name))), sha256(committed),
       `${name}: restored tests and implementation match current PR`);
   }
   for (const name of ['tools/test_live_wrinkle_refinement.ts', 'tools/test_forehead_trajectory_attraction.ts']) {
