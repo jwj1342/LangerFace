@@ -1,0 +1,855 @@
+import './test_rstl_endpoint_smoothing.ts';
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+import {
+  fromWrinkleWorkingPoint,
+  toWrinkleWorkingPoint,
+  wrinkleSourceSize,
+  wrinkleWorkingTransform,
+} from "../web/src/services/liveWrinkleMath.ts";
+import { runGeneralLiveWrinklePipeline } from
+  "../web/src/services/personalized/liveWrinklePipeline.ts";
+import { V6_RSTL_ALGORITHM } from
+  "../web/src/services/personalized/v6RstlRefinementV9.ts";
+import {
+  latestV9RstlRefinementOptions,
+  LATEST_WRINKLE_REFINEMENT_PROFILE,
+  yoloGuidedV9RstlRefinementOptions,
+} from
+  "../web/src/services/personalized/v9RstlRefinementProfile.ts";
+import {
+  YoloWrinkleOnnx,
+  YOLO_WRINKLE_ONNX_VERSION,
+} from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
+import {
+  buildPrecomputedFineWrinkleEvidence,
+  validatedPrecomputedFineWrinkleSummary,
+} from "../web/src/services/personalized/precomputedFineWrinkleEvidence.ts";
+import {
+  guardMergedYoloGuidedRstlCurves,
+  isYoloGuidedRstlSeed,
+  mergeYoloGuidedRstlCurves,
+  reconcileYoloGuidedAuditAfterGlobalGuard,
+  YOLO_GUIDED_RSTL_SCOPE,
+} from "../web/src/services/personalized/yoloGuidedRstlScope.ts";
+
+const waitUntil = async (predicate: () => boolean, message: string): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  assert.fail(message);
+};
+
+const emptyYoloOutputs = () => ({
+  prediction: {
+    dims: [1, 39, 100],
+    data: new Float32Array(3900),
+    dispose() {},
+  },
+  prototype: {
+    dims: [1, 32, 1, 1],
+    data: new Float32Array(32),
+    dispose() {},
+  },
+});
+
+class FakeTensor {
+  data: Float32Array;
+  dims: readonly number[];
+
+  constructor(_type: string, data: Float32Array, dims: readonly number[]) {
+    this.data = data;
+    this.dims = dims;
+  }
+
+  dispose(): void {}
+}
+{
+  const seeds = [
+    { name: "moved", region: "orbital_brow_upturn_v11", pts: [[0, 0], [2, 0]] },
+    { name: "untouched", region: "cheek_gap_density_v53", pts: [[0, 5], [10, 5]] },
+  ];
+  const guarded = guardMergedYoloGuidedRstlCurves(seeds, [
+    { ...seeds[0], pts: [[0, 0], [10, 10]] },
+    seeds[1],
+  ]);
+  assert.deepEqual(guarded.curves[1].pts, seeds[1].pts,
+    "a non-target curve is never changed by the global guard");
+  assert.deepEqual(guarded.curves[0].pts, seeds[0].pts,
+    "a changed target curve that creates a new global crossing is rolled back");
+  assert.equal(guarded.rolledBackCurveIndices.length, 1);
+  assert.equal(guarded.newIntersectionPairCount, 0);
+  assert.equal(guarded.curves.filter((curve, index) =>
+    JSON.stringify(curve.pts) !== JSON.stringify(seeds[index].pts)).length, 0,
+  "the final moved-curve count must reflect rollback geometry");
+  const audit = reconcileYoloGuidedAuditAfterGlobalGuard({
+    wrinkleTrends: [{
+      id: 0,
+      finalAccepted: true,
+      finalStatus: "accepted",
+      acceptedCurveIndices: [0],
+      candidateCurveIndices: [0],
+      rejectionReason: null,
+    }],
+    matchRecords: [{
+      wrinkle_segment_id: 0,
+      rstl_curve_index: 0,
+      final_accepted: true,
+      final_status: "accepted",
+      rejection_reason: null,
+    }, {
+      wrinkle_segment_id: 1,
+      rstl_curve_index: 0,
+      final_accepted: false,
+      final_status: "rejected_before_refinement",
+      rejection_reason: "insufficient_segment_support",
+    }],
+    curveSupportRecords: [{ curve_index: 0, minimum_support_passed: true }],
+  }, [0], guarded.rolledBackCurveIndices);
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].final_accepted, false);
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].final_status,
+    "rolled_back");
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[0].rollback_reason,
+    "global_intersection_guard");
+  assert.equal((audit?.matchRecords as Array<Record<string, unknown>>)[1].final_status,
+    "rejected_before_refinement", "an unrelated rejected candidate must retain its reason");
+  assert.equal((audit?.wrinkleTrends as Array<Record<string, unknown>>)[0].finalAccepted, false);
+  assert.equal((audit?.wrinkleTrends as Array<Record<string, unknown>>)[0].finalStatus,
+    "rolled_back");
+  assert.equal((audit?.curveSupportRecords as Array<Record<string, unknown>>)[0].final_status,
+    "rolled_back");
+}
+
+const transform = {
+  scale: 0.5,
+  offsetX: 12,
+  offsetY: 38,
+};
+const sourcePoint = [320, 180] as const;
+const workingPoint = toWrinkleWorkingPoint(sourcePoint, transform);
+assert.deepEqual(workingPoint, [172, 128]);
+assert.deepEqual(fromWrinkleWorkingPoint(workingPoint, transform), sourcePoint);
+
+assert.deepEqual(
+  wrinkleSourceSize({ naturalWidth: 3024, naturalHeight: 4032, width: 640, height: 480 } as any),
+  { width: 3024, height: 4032 },
+  "uploaded images must use intrinsic pixels instead of responsive display dimensions",
+);
+assert.deepEqual(
+  wrinkleSourceSize({ videoWidth: 1920, videoHeight: 1080, width: 640, height: 360 } as any),
+  { width: 1920, height: 1080 },
+  "video sources must use their intrinsic frame dimensions",
+);
+const portraitTransform = wrinkleWorkingTransform(3024, 4032);
+assert.deepEqual(portraitTransform, {
+  size: 1280,
+  scale: 1280 / 4032,
+  targetWidth: 960,
+  targetHeight: 1280,
+  offsetX: 160,
+  offsetY: 0,
+});
+assert.deepEqual(
+  wrinkleWorkingTransform(3024, 4032),
+  portraitTransform,
+  "the same source must produce the same working frame regardless of viewport size",
+);
+
+const panel = fs.readFileSync(
+  new URL("../web/src/components/LiveWrinklePanel.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(panel, /只显示 RSTL/);
+assert.match(panel, /只显示皱纹/);
+assert.match(panel, /RSTL 与皱纹同时显示/);
+assert.match(panel, /皱纹引导自动微调/);
+assert.match(panel, /<ButtonRow className="live-wrinkle-actions">/,
+  "the two wrinkle actions use their dedicated equal-width row");
+assert.match(panel, /id="wrinkleSummary"/,
+  "the panel retains the dynamic wrinkle-result container");
+assert.match(panel, /className="hidden"[\s\S]*?id="wrinkleSummary"[\s\S]*?aria-hidden="true"/,
+  "wrinkle feedback starts hidden and is made visible only for actionable states");
+for (const removedCopy of [
+  "皱纹检测与可选微调",
+  "照片、视频和摄像头均使用 YOLO 皱纹检测",
+  "照片在点击“检测皱纹”后才会启动 YOLO",
+  "仅使用 YOLO 的额头、眉间和鼻背皱纹",
+  "鱼尾纹不参与检测或微调",
+  "医生手动微调（2D）",
+  "当前皱纹检测在浏览器内完成",
+]) {
+  assert.doesNotMatch(panel, new RegExp(removedCopy), `the compact wrinkle panel omits ${removedCopy}`);
+}
+
+const refinePanel = fs.readFileSync(
+  new URL("../web/src/components/LiveRefinePanel.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(refinePanel, /<ButtonRow className="live-refine-primary-actions">[\s\S]*?id="refine2dBtn"[^>]*>微调<\/Button>[\s\S]*?id="refineUndoBtn"[^>]*>撤销<\/Button>[\s\S]*?id="refineResetBtn"[^>]*>恢复<\/Button>[\s\S]*?<\/ButtonRow>/,
+  "the approved manual toolbar keeps refine, undo and reset in one row");
+assert.match(refinePanel, /<Hint id="refine2dHint">点按“微调”后，单指拖动线条；双指可缩放图片。<\/Hint>/,
+  "the approved manual hint explains the single and two-finger actions");
+assert.match(refinePanel, /<ButtonRow className="live-refine-modes">[\s\S]*?id="refinePointBtn"[^>]*>拖点<\/Button>[\s\S]*?<\/ButtonRow>/,
+  "the manual refinement card keeps the drag-point mode selectable");
+assert.match(refinePanel, /<div className="live-refine-point-count hidden" id="refinePointCountWrap">[\s\S]*?拖点数量[\s\S]*?id="refinePointCount" type="range" min="1" max="30"/,
+  "the drag-point count slider remains available in the visible refinement panel");
+assert.match(refinePanel, /className="live-refine-internal" aria-hidden="true"/,
+  "internal runtime controls remain outside the visible toolbar");
+assert.doesNotMatch(refinePanel, /医生手动微调（2D）|手动拖动、隐藏或逐点调整当前结果|也可将鼠标放在图片上滚动缩放|以选中点为中心，连续控制指定数量的点|默认只修改选中的一根线/,
+  "the manual refinement card omits its redundant heading and introduction");
+
+const qualityPanel = fs.readFileSync(
+  new URL("../web/src/components/LiveQualityPanel.tsx", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(qualityPanel, /全程本地运行|不上传任何画面/,
+  "the live page must not contradict the V10 processing-location disclosure");
+assert.match(qualityPanel, /className="hidden"/);
+assert.match(qualityPanel, /data-quality-runtime="true"/);
+for (const runtimeId of [
+  "qualityVal",
+  "qualityBar",
+  "statState",
+  "statFace",
+  "statYaw",
+  "statLines",
+  "incisionOverlayQa",
+  "incisionOverlayQaState",
+  "incisionOverlayQaDetail",
+]) {
+  assert.match(qualityPanel, new RegExp(`id="${runtimeId}"`), `quality runtime retains #${runtimeId}`);
+}
+assert.doesNotMatch(qualityPanel, /追踪质量|跟踪质量参考|姿态与光照自适应/,
+  "quality diagnostics remain available to the runtime without a visible card");
+
+const runtime = fs.readFileSync(
+  new URL("../web/src/services/liveRuntime.ts", import.meta.url),
+  "utf8",
+);
+assert.match(runtime, /analyzeCurrentWrinkles/);
+assert.match(runtime, /applyWrinkleGuidedRefinement/);
+assert.doesNotMatch(runtime, /if \(!isRefineActive\(\)\) toggleRefine2d\(\)/);
+assert.match(runtime, /beginFrozenRefineSession\(\)/,
+  "every frozen frame must start a fresh geometry session");
+assert.match(runtime, /function handleTemplateChange[\s\S]*resetRefineForNewSource\(\);[\s\S]*resetLiveWrinkleAnalysis\(\);/,
+  "changing the atlas must invalidate refinement and wrinkle results from the previous geometry");
+assert.doesNotMatch(runtime, /preloadLiveWrinkleModel|scheduleWrinkleModelPreload|requestIdleCallback/,
+  "the 47 MB wrinkle model must remain lazy until the user requests wrinkle detection");
+
+const pipelineSource = fs.readFileSync(
+  new URL("../web/src/services/pipelineSource.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(pipelineSource, /sourceSha256|crypto\.subtle\.digest\(\s*"SHA-256"/,
+  "the shared upload path must not hash every image for one experiment sample");
+assert.doesNotMatch(pipelineSource, /sourceFile/,
+  "the shared upload path must not retain files for controlled-image branching");
+
+const renderRuntime = fs.readFileSync(
+  new URL("../web/src/services/render2d.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(renderRuntime, /WRINKLE_PHOTO_SHA256|sourceSpecificForeheadVisible/,
+  "the shared RSTL renderer must not switch geometry visibility for one image hash");
+assert.match(renderRuntime, /ln\.hiddenPointRuns\?\.some/,
+  "the deployed renderer must honor the latest nose-root intersection visibility gaps");
+assert.match(renderRuntime,
+  /const baselineDisplayLines = smooth0119EndpointDisplayLines\(mapped, H\);[\s\S]*?const allDisplayLines = smooth0119EndpointDisplayLines\(getDisplayLines\(mapped\), H\);[\s\S]*?setLatestAutoLines\(baselineDisplayLines\)/,
+  "redraws must preserve an untransported automatic baseline while rendering transported display lines");
+assert.doesNotMatch(renderRuntime, /setLatestAutoLines\(allDisplayLines\)/,
+  "already transported display lines must never become the next automatic baseline");
+
+const refineRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveRefine2d.ts", import.meta.url),
+  "utf8",
+);
+assert.match(refineRuntime, /s\.liveBaselineLines \|\| s\.latestAutoLines/,
+  "live transport must use the standard frozen-frame baseline when wrinkle guidance replaces the reset baseline");
+assert.match(refineRuntime, /s\.liveBaselineLines = null;[\s\S]*s\.selected = null;[\s\S]*s\.dirty = false;/,
+  "a later freeze must discard stale baseline geometry and manual state");
+
+const analysisRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveWrinkleAnalysis.ts", import.meta.url),
+  "utf8",
+);
+const pipelineLoop = fs.readFileSync(
+  new URL("../web/src/services/pipelineLoop.ts", import.meta.url),
+  "utf8",
+);
+const refineMathRuntime = fs.readFileSync(
+  new URL("../web/src/services/liveRefineMath.ts", import.meta.url),
+  "utf8",
+);
+const pipelineSourceRuntime = fs.readFileSync(
+  new URL("../web/src/services/pipelineSource.ts", import.meta.url),
+  "utf8",
+);
+assert.match(analysisRuntime,
+  /replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)/,
+  "applying wrinkle guidance must build a camera display transport from the accepted standard-frame baseline");
+assert.match(refineMathRuntime, /addedLines[\s\S]*anchorLineName[\s\S]*anchorPosition/,
+  "generated wrinkle-guided RSTL lines must follow named standard curves instead of frozen screen pixels");
+assert.match(pipelineSourceRuntime,
+  /captureCurrentStaticSource\(\);[\s\S]*stopSource\(\{ preserveOperation: true, preserveStaticResume: true \}\)/,
+  "photo-to-camera source replacement must snapshot the photo before clearing its refinement transport");
+assert.doesNotMatch(pipelineSourceRuntime,
+  /currentLiveSourceKind\(\) === "image"[\s\S]*?hasLiveRefinementForCamera\(\)/,
+  "camera startup does not reuse photo-specific refinement transport");
+assert.match(pipelineSourceRuntime,
+  /stopSource\(\{ preserveOperation: true, preserveStaticResume: true \}\)[\s\S]*?setSource\(els\.video, "camera",[\s\S]*?release: \(\) => stopCameraStream\(stream\)/,
+  "camera source starts without a refinement-preservation option");
+assert.match(analysisRuntime, /delegate: "CPU"/,
+  "single-frame refinement must use deterministic CPU landmarks");
+assert.match(analysisRuntime, /runningMode: "IMAGE"/,
+  "single-frame refinement must not reuse the live VIDEO detector");
+assert.match(analysisRuntime, /outputFaceBlendshapes: false/);
+assert.match(analysisRuntime, /detectV9ReferenceLandmarks/,
+  "v9 refinement must remap the atlas from the dedicated reference landmarks");
+assert.match(analysisRuntime,
+  /const sourceSize = wrinkleSourceSize\(source\)[\s\S]*detectV9ReferenceLandmarks\([\s\S]*sourceSize\.width,[\s\S]*sourceSize\.height,[\s\S]*buildWrinkleWorkingFrame\(\s*source,\s*sourceSize\.width,\s*sourceSize\.height/,
+  "wrinkle pixels and landmarks must use intrinsic source dimensions on every viewport");
+assert.doesNotMatch(analysisRuntime,
+  /detectV9ReferenceLandmarks\([\s\S]{0,160}els\.canvas\.(?:width|height)|buildWrinkleWorkingFrame\(source, els\.canvas/,
+  "responsive canvas dimensions must not change the wrinkle algorithm input");
+assert.match(analysisRuntime, /workingRgbaSha256[\s\S]*landmarksSha256[\s\S]*standardRstlSha256/,
+  "the debug snapshot must expose privacy-safe reproducibility fingerprints");
+assert.match(analysisRuntime, /\.\.\.RSTL_STANDARD_MAPPING_OPTIONS/,
+  "live wrinkle refinement must use the same v8.1.96 forehead mapping as the experiment");
+assert.match(analysisRuntime, /from "\.\/personalized\/v6RstlRefinementV9\.ts"/,
+  "the deployed live page must gate results with the latest V9 algorithm identifier");
+assert.doesNotMatch(analysisRuntime,
+  /WRINKLE_PHOTO_SHA256|canonicalWrinkleV10Evidence|wrinkleV10FineLinesUrl|buildPrecomputedFineWrinkleEvidence|wrinkle-v10|DIRECT_NOSE_DORSUM_FINE_LINE_IDS/,
+  "the released live path must never select precomputed evidence for one image");
+assert.match(analysisRuntime,
+  /createLiveWrinklePipelineWorkerClient[\s\S]*wrinkleWorkerInstance\(\)\.detect\(\{/,
+  "the deployed live page must route every source through the non-blocking worker client");
+assert.doesNotMatch(analysisRuntime, /runGeneralLiveWrinklePipeline|new YoloWrinkleOnnx/,
+  "YOLO, centerline extraction and V9 refinement must not execute on the live page thread");
+assert.match(analysisRuntime, /commitEvidence[\s\S]*state\.evidenceLines = evidence\.lines\.map[\s\S]*assertRefinementGate/,
+  "validated wrinkle evidence must be retained for the later refinement action");
+assert.match(analysisRuntime,
+  /if \(event\.type === "evidence"\) return;[\s\S]*pipelineCompleted = true;[\s\S]*commitEvidence\(pipeline\.evidence\);[\s\S]*updateStatus\("detected"\)/,
+  "the detect action must stop after making wrinkle evidence visible");
+assert.match(analysisRuntime,
+  /applyWrinkleGuidedRefinement[\s\S]*updateStatus\("refining"\)[\s\S]*wrinkleWorkerInstance\(\)\.refine\(\{/,
+  "refinement must start only from the explicit refinement action");
+assert.match(analysisRuntime,
+  /applyWrinkleGuidedRefinement[\s\S]*if \(state\.autoRefinedLines\?\.length && state\.diagnostics && state\.audit\)[\s\S]*replaceStaticRefineBaseline\(state\.autoRefinedLines, \{ liveBaseline: state\.standardLines \}\)[\s\S]*updateStatus\("applied"\)[\s\S]*return;[\s\S]*updateStatus\("refining"\)/,
+  "restoring and reapplying must reuse the cached refinement without rerunning the worker");
+assert.match(analysisRuntime,
+  /updateLiveWrinkleTracking[\s\S]*mode: "yolo-only"/,
+  "video and camera frames must use the YOLO-only detection mode");
+assert.match(analysisRuntime, /value === "camera" \|\| value === "video"/,
+  "video and camera must share the dynamic wrinkle tracking policy");
+assert.match(analysisRuntime,
+  /forehead_moved_curve_count[\s\S]*glabellar_moved_curve_count[\s\S]*nose_bridge_moved_curve_count/,
+  "the result summary must expose separate forehead, glabellar and nose movement counts");
+assert.match(analysisRuntime,
+  /function setWrinkleSummary\(message: string, visible: boolean\)[\s\S]*classList\.toggle\("hidden", !visible\)[\s\S]*setAttribute\("aria-hidden", visible \? "false" : "true"\)/,
+  "actionable wrinkle failures and processing feedback can be made visible");
+assert.match(analysisRuntime,
+  /message === "YOLO 未提取到有效皱纹中心线"[\s\S]*liveDetectionAttempted = false;[\s\S]*updateStatus\("live-empty"/,
+  "an empty camera detection must remain non-fatal and schedule another attempt");
+assert.match(analysisRuntime,
+  /LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS = 2[\s\S]*elapsed < LIVE_YOLO_INITIAL_RETRY_INTERVAL_SECONDS/,
+  "empty initial detections must retry at a bounded cadence");
+assert.match(pipelineLoop, /sourceKind === "camera" \|\| sourceKind === "video"/,
+  "the frame loop must schedule wrinkle tracking for video and camera frames");
+assert.match(pipelineLoop,
+  /updateLiveWrinkleTracking\(wrinkleLandmarks \|\| \[\], timeMs\);[\s\S]*updateLiveWrinkleMeshTracking\(els\.canvas, wrinkleLandmarks \|\| \[\]\)/,
+  "wrinkles must use current unsmoothed landmarks and clear the overlay when face detection fails");
+assert.match(pipelineLoop, /detectForVideo\(els\.canvas, timeMs\)/,
+  "face landmarks must come from the frozen pixels displayed this frame");
+assert.match(pipelineLoop, /wrinkleLandmarks = currentLandmarks\.map[\s\S]*smoother\.filter/,
+  "wrinkle landmarks must be copied before optional RSTL smoothing");
+assert.match(analysisRuntime,
+  /if \(liveDetectionAttempted\) \{\s*scheduleLiveWrinkleCorrection[\s\S]*if \(liveDetectionInFlight\) return;/,
+  "first-frame extraction must transition only to low-frequency correction");
+assert.match(analysisRuntime, /const source = els\.canvas;/,
+  "asynchronous wrinkle inference must capture the same displayed frame as the face detector");
+assert.doesNotMatch(pipelineLoop, /buildLowLatencyWrinkleLandmarks|updateLiveWrinkleTextureTracking/,
+  "the live wrinkle overlay must not estimate motion independently of the current frame");
+assert.match(analysisRuntime,
+  /liveTrackingMode: "first-frame-evidence-skin-tracking-with-gated-yolo-correction"[\s\S]*textureFlowTracking: "opencv-pyramidal-lk-forward-backward"/,
+  "live diagnostics must identify first-frame extraction, guarded correction and skin tracking");
+assert.match(analysisRuntime,
+  /LIVE_YOLO_CORRECTION_INTERVAL_SECONDS = 2[\s\S]*evaluateWrinkleCorrection[\s\S]*if \(!gate\.accepted\)/,
+  "periodic YOLO results must pass confidence gating before replacing tracked lines");
+assert.match(analysisRuntime,
+  /if \(!gate\.accepted\)[\s\S]*return;[\s\S]*candidateTracker = await WrinkleOpticalFlowTracker\.create/,
+  "a rejected correction must retain the current tracker and visible wrinkle lines");
+assert.match(analysisRuntime,
+  /function liveWrinkleProcessingMode\([^)]*\)[^{]*\{\s*return "tracking";/,
+  "the deployed live runtime must stay on first-frame detection plus per-frame tracking");
+assert.doesNotMatch(analysisRuntime, /searchParams\.get\("wrinkleMode"\)/,
+  "URL parameters must not reactivate the rejected framewise experiment");
+assert.doesNotMatch(analysisRuntime, /phase: "maintenance"/,
+  "later frames must not alter the extracted lines using texture snapping");
+assert.match(analysisRuntime, /skinTracker\.update\(frame, meshLines, mediaTime\)/,
+  "skin tracking must be tied to the displayed video frame with mesh motion as its prior");
+assert.doesNotMatch(analysisRuntime, /bundlePropagation: true/,
+  "live refinement must not propagate one wrinkle to neighboring RSTL curves");
+assert.match(analysisRuntime, /maximum_selected_rstl_curves_per_wrinkle\) > 2/,
+  "the V9 live safety gate must reject more than the intended bilateral assignment");
+assert.match(analysisRuntime, /bundle_follower_moved_curve_count \|\| 0\) > 0/,
+  "the live safety gate must reject bundle follower movement");
+assert.match(analysisRuntime, /if \(state\.evidenceLines\.length > 0\)[\s\S]*updateStatus\("evidence", message\)/,
+  "a rejected refinement must retain wrinkle evidence and report a non-fatal evidence state");
+assert.match(analysisRuntime, /resetLiveWrinkleAnalysis\(\);[\s\S]*await Promise\.allSettled\(\[\.\.\.activeAnalyses\]\)/,
+  "route disposal must terminate worker work before awaiting active analysis cleanup");
+assert.match(analysisRuntime, /state\.generation \+= 1;[\s\S]*terminateWrinkleWorker\(\)/,
+  "a source generation change must terminate stale worker computation");
+
+const workerRuntime = fs.readFileSync(
+  new URL("../web/src/workers/liveWrinklePipeline.worker.ts", import.meta.url),
+  "utf8",
+);
+assert.equal((analysisRuntime.match(/mode: "yolo-only"/g) || []).length, 4,
+  "all current detection implementations must select YOLO-only");
+assert.match(analysisRuntime, /cacheForRefinement: true/,
+  "photo detection must retain its YOLO baseline for explicit refinement");
+assert.doesNotMatch(analysisRuntime, /mode: "full"|snapWrinkleLinesToRidges/,
+  "active detection cannot request V10 or snap lines to traditional image ridges");
+assert.match(workerRuntime, /sourceImageRgba: request.mode === "yolo-only" \? undefined : request.pixels/,
+  "YOLO-only centerlines must not use image-supported endpoint recovery");
+assert.doesNotMatch(analysisRuntime, /if \(!pipeline.detectionId\) throw/,
+  "YOLO photo detection must succeed without a server detection id");
+assert.match(workerRuntime, /const visibleLines = keepFaceRegionWrinkleLines\(adaptedLines, detectionLandmarks\);/,
+  "YOLO centerlines inside the face must be displayed without additional regional filtering");
+assert.match(workerRuntime, /const guidanceLines = keepTargetWrinkleLines\(/,
+  "RSTL refinement must still select anatomical guidance separately");
+assert.match(workerRuntime, /async function seedYoloEvidence[\s\S]*cachedYoloDetection/,
+  "browser and server detections must share the same refinement cache path");
+assert.match(workerRuntime, /isYoloGuidedRstlSeed\(seed\)/,
+  "YOLO guidance must restrict the set of RSTL curves passed to refinement");
+assert.match(workerRuntime,
+  /foreheadEvidence: buildYoloGuidanceEvidence\([\s\S]*"forehead"[\s\S]*glabellarEvidence: buildYoloGuidanceEvidence\([\s\S]*"frown"[\s\S]*noseDorsumLines: guidanceLines\.filter/,
+  "forehead and glabellar evidence plus direct nose-dorsum lines must be cached separately");
+assert.match(workerRuntime,
+  /const glabellar = refineChannel\(\s*glabellarSeeds,\s*cachedYolo\.glabellarEvidence,\s*"glabellar"[\s\S]*const forehead = cachedYolo\.foreheadEvidence && foreheadSeeds\.length[\s\S]*refineForeheadTrajectories/,
+  "forehead and glabellar evidence must be refined independently");
+assert.match(workerRuntime,
+  /cachedYolo\.noseDorsumLines\.length[\s\S]*?const noseHybrid = refineNoseHybrid[\s\S]*?lines:cachedYolo\.noseDorsumLines/,
+  "YOLO nose-dorsum lines must use the reviewed direct RSTL path");
+assert.match(workerRuntime,
+  /const directNose = noseHybrid\.direct[\s\S]*directNose\?\.curves\.map/,
+  "YOLO direct nose curves must be appended through the reviewed hybrid path");
+assert.match(workerRuntime,
+  /eyePolygons:\[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR\]/,
+  "YOLO direct nose refinement must receive both eye contours for its geometry guard");
+assert.match(workerRuntime,
+  /nose_bridge_evidence_line_count: cachedYolo\.noseDorsumLines\.length/,
+  "YOLO refinement audit must retain the direct nose evidence count");
+assert.equal(YOLO_GUIDED_RSTL_SCOPE, "yolo_forehead_glabellar_with_direct_nose");
+assert.equal(isYoloGuidedRstlSeed({ region: "forehead_bridge_arc_v15" }), true);
+assert.equal(isYoloGuidedRstlSeed({ region: "orbital_brow_upturn_v11" }), true);
+assert.equal(isYoloGuidedRstlSeed({ region: "nose_root_cross_v9" }), false,
+  "standard nose-root curves remain fixed; direct nose-dorsum curves are appended instead");
+assert.equal(isYoloGuidedRstlSeed({ region: "lateral_canthus_short_arc_v65" }), false,
+  "eye-corner RSTL must not enter YOLO-guided refinement");
+assert.equal(isYoloGuidedRstlSeed({ region: "cheek_gap_density_v53" }), false);
+{
+  const options = latestV9RstlRefinementOptions(622);
+  assert.equal(options.curvatureFairingGlabellarMaximumTurnDegrees, 8,
+    "the shared V9 profile must retain its established glabellar turn gate");
+  assert.equal(options.curvatureFairingGlabellarMaximumMeanAdherencePx, 2.6,
+    "the shared V9 profile must not inherit YOLO-only adherence relaxation");
+  assert.equal(options.curvatureFairingGlabellarMaximumP90AdherencePx, 7,
+    "the shared V9 profile must not inherit the YOLO-only P90 relaxation");
+  assert.equal(options.curvatureFairingForeheadMaximumP90AdherencePx, 3,
+    "the glabellar relaxation must not weaken forehead fairing gates");
+  const yoloOptions = yoloGuidedV9RstlRefinementOptions(622);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumTurnDegrees, 20);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumMeanAdherencePx, 3);
+  assert.equal(yoloOptions.curvatureFairingGlabellarMaximumP90AdherencePx, 11);
+  assert.equal(yoloOptions.glabellarAdherenceMeanThresholdPx, 3);
+  assert.equal(yoloOptions.glabellarAdherenceP90ThresholdPx, 11);
+}
+{
+  const scopedSeeds = [
+    { name: "forehead", region: "forehead_bridge_arc_v15", pts: [[1, 1], [2, 1]] },
+    { name: "eye-corner", region: "lateral_canthus_short_arc_v65", pts: [[3, 3], [4, 3]] },
+    { name: "glabellar", region: "orbital_brow_upturn_v11", pts: [[5, 5], [6, 5]] },
+    { name: "cheek", region: "cheek_gap_density_v53", pts: [[7, 7], [8, 7]] },
+  ];
+  const merged = mergeYoloGuidedRstlCurves(scopedSeeds, [
+    { pts: [[1, 2], [2, 2]] },
+    { pts: [[5, 6], [6, 6]] },
+  ]);
+  assert.deepEqual(merged[0].pts, [[1, 2], [2, 2]]);
+  assert.deepEqual(merged[2].pts, [[5, 6], [6, 6]]);
+  assert.deepEqual(merged[1].pts, scopedSeeds[1].pts,
+    "eye-corner RSTL coordinates must remain byte-for-byte equivalent");
+  assert.deepEqual(merged[3].pts, scopedSeeds[3].pts,
+    "non-target facial RSTL coordinates must remain unchanged");
+  assert.throws(() => mergeYoloGuidedRstlCurves(scopedSeeds, [{ pts: [[1, 2]] }]),
+    /结果数量与输入不一致/);
+}
+assert.match(workerRuntime, /browserBaselineSha256[\s\S]*v10InputImageSha256/,
+  "the worker must expose baseline and V10 input fingerprints for cross-machine comparison");
+assert.match(workerRuntime,
+  /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.mjs\?url/,
+  "the deployed worker must bundle the ONNX Runtime WASM module explicitly");
+assert.match(workerRuntime,
+  /onnxruntime-web\/dist\/ort-wasm-simd-threaded\.wasm\?url/,
+  "the deployed worker must bundle the ONNX Runtime WASM binary explicitly");
+assert.match(workerRuntime,
+  /wasmPaths:\s*\{\s*mjs:\s*ortWasmModuleUrl,\s*wasm:\s*ortWasmBinaryUrl\s*\}/,
+  "the deployed worker detector must use the bundled ONNX Runtime WASM assets");
+const yoloRuntime = fs.readFileSync(
+  new URL("../web/src/services/personalized/yoloWrinkleOnnx.ts", import.meta.url),
+  "utf8",
+);
+assert.match(yoloRuntime, /runtime\.env\.wasm\.numThreads = 1/,
+  "browser YOLO must use one WASM thread on every machine");
+assert.match(yoloRuntime, /runtime\.env\.wasm\.proxy = false/,
+  "browser YOLO must not vary execution through a proxy worker");
+const workerClientRuntime = fs.readFileSync(
+  new URL("../web/src/services/personalized/liveWrinklePipelineWorkerClient.ts", import.meta.url),
+  "utf8",
+);
+const localDetectorPlugin = fs.readFileSync(
+  new URL("../web/dev/localWrinkleV10Plugin.ts", import.meta.url),
+  "utf8",
+);
+const liveFourRegionDetector = fs.readFileSync(
+  new URL("./run_live_four_region_wrinkle.py", import.meta.url),
+  "utf8",
+);
+const fourRegionExperiment = fs.readFileSync(
+  new URL("./run_wrinkle_four_class_experiment.py", import.meta.url),
+  "utf8",
+);
+assert.match(workerRuntime,
+  /async detect[\s\S]*detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*request\.mode === "yolo-only"[\s\S]*dynamicFourRegionDetection/,
+  "the worker must provide a YOLO-only camera branch before optional four-region detection");
+assert.match(workerRuntime,
+  /async refine[\s\S]*cachedFullDetection[\s\S]*refineV6/,
+  "the worker must expose refinement as a separate operation over cached detection evidence");
+assert.match(workerRuntime, /requestedWrinkleConfidence\(\)[\s\S]*new YoloWrinkleOnnx\(/,
+  "the worker must use the same released YOLO model and confidence threshold");
+assert.match(workerRuntime, /WRINKLE_V10_ENDPOINT/,
+  "the worker must request per-image V10 evidence from the unified provider");
+assert.match(workerRuntime, /const noseHybrid = refineNoseHybrid[\s\S]*const directNose = noseHybrid\.direct/,
+  "nasal-dorsum wrinkles must generate direct RSTL curves");
+assert.doesNotMatch(workerRuntime, /noseLines\.length\s*!==\s*3|鼻背纹应生成 3 条/,
+  "live direct generation must follow the current image instead of requiring three nose wrinkles");
+assert.match(workerRuntime, /eyePolygons:\[LEFT_EYE_CONTOUR,RIGHT_EYE_CONTOUR\]/,
+  "direct nasal RSTL must retain the reviewed eye geometry guard");
+assert.match(workerRuntime, /Comlink\.expose\(api\)/,
+  "the wrinkle pipeline must be exposed from a real Web Worker boundary");
+assert.match(workerRuntime, /fourRegionDetectionMs[\s\S]*totalMs/,
+  "the worker must report detection timings for reproducible performance regression");
+assert.match(workerRuntime, /minimumLineLengthPx: 20/);
+assert.match(workerRuntime, /minimumLineLengthPxByClass: \{ frown: 16 \}/,
+  "short glabellar lines use the reviewed lower extraction threshold");
+assert.match(workerRuntime, /latestV9RstlRefinementOptions\(request\.faceWidthPx\)/);
+assert.match(workerRuntime,
+  /options: yoloGuidedV9RstlRefinementOptions\(request\.faceWidthPx\)/,
+  "YOLO-guided refinement must use its isolated glabellar threshold overrides");
+assert.match(workerRuntime,
+  /reconcileYoloGuidedAuditAfterGlobalGuard\([\s\S]*globalGuard\.rolledBackCurveIndices/,
+  "the worker must reconcile channel audits after merged-geometry rollback");
+assert.match(workerClientRuntime, /const workerUrl = new URL[\s\S]*new Worker\(workerUrl/);
+assert.match(workerClientRuntime, /api\.detect[\s\S]*Comlink\.transfer\(request, \[request\.pixels\.buffer as ArrayBuffer\]\)/,
+  "the full-resolution input must be transferred without a main-thread copy or resize");
+assert.match(workerClientRuntime, /seedYoloEvidence[\s\S]*api\.seedYoloEvidence/,
+  "server image centerlines must seed the same worker refinement cache");
+assert.match(analysisRuntime,
+  /STATIC_WRINKLE_MAXIMUM_SIZE\s*=\s*LIVE_YOLO_INPUT_SIZE/,
+  "static refinement must share the released YOLO working-size ceiling");
+assert.match(analysisRuntime,
+  /VITE_SERVER_COMPUTE[\s\S]*sourceState\.imageFile[\s\S]*detectServerImageWrinkles/,
+  "static server detection must upload original encoded bytes for deterministic server decoding");
+assert.match(analysisRuntime,
+  /fetch\(["']\/api\/gpu\/wrinkles\/image["'][\s\S]*seedYoloEvidence/,
+  "server-decoded centerlines must be cached for the existing explicit refinement flow");
+assert.match(pipelineSource,
+  /sourceState\.imageFile = file;\s*setSource\(prepared\.source, "image"/,
+  "the original encoded photo must be retained before analysis starts");
+assert.match(pipelineSource,
+  /sourceState\.imageFile = resume\.imageFile;\s*setSource\(resume\.source, "image"/,
+  "restoring a photo after camera use must restore its encoded bytes before analysis resumes");
+assert.match(workerClientRuntime, /worker\.terminate\(\)/,
+  "source replacement must be able to terminate stale CPU work immediately");
+assert.match(localDetectorPlugin,
+  /class PersistentDetector[\s\S]*"--serve"[\s\S]*detector\.start\(\)/,
+  "the local V10 bridge must keep one prewarmed Python detector alive");
+assert.match(liveFourRegionDetector,
+  /def serve\([\s\S]*four_class\.warm_unet\(checkpoint\)[\s\S]*for raw_line in sys\.stdin/,
+  "the Python detector must warm the immutable UNet before accepting requests");
+assert.match(fourRegionExperiment,
+  /_UNET_CACHE[\s\S]*def warm_unet\([\s\S]*def run_unet\([\s\S]*_cached_unet/,
+  "the four-region detector must reuse the exact loaded checkpoint between images");
+
+const generalPipelineRuntime = fs.readFileSync(
+  new URL("../web/src/services/personalized/liveWrinklePipeline.ts", import.meta.url),
+  "utf8",
+);
+assert.match(generalPipelineRuntime,
+  /await detector\.load[\s\S]*await detector\.detect[\s\S]*extractFineWrinkleLines[\s\S]*refineV6/,
+  "the general pipeline must execute detector, centerline extraction and V9 refinement in order");
+assert.doesNotMatch(generalPipelineRuntime,
+  /WRINKLE_PHOTO_SHA256|wrinkle_fine_lines_v10_wrinkle|PrecomputedFineWrinkle/,
+  "the general pipeline API must not accept controlled precomputed evidence");
+
+{
+  const size = 64;
+  const markers: number[] = [];
+  let loadCalls = 0;
+  let detectCalls = 0;
+  const detector = {
+    async load() { loadCalls += 1; },
+    async detect(imageData: ImageData) {
+      detectCalls += 1;
+      const marker = Number(imageData.data[0]);
+      markers.push(marker);
+      const forehead = new Uint8Array(size * size);
+      const y = marker === 1 ? 22 : 30;
+      for (let x = 5; x <= 58; x += 1) forehead[y * size + x] = 1;
+      return {
+        version: YOLO_WRINKLE_ONNX_VERSION,
+        classMasks: {
+          forehead,
+          frown: new Uint8Array(size * size),
+          wrinkle: new Uint8Array(size * size),
+        },
+      };
+    },
+  };
+  const seeds = [{
+    name: "general-live-test-curve",
+    region: "forehead",
+    pts: Array.from({ length: 12 }, (_, index) => [5 + index * 5, 26]),
+  }];
+  const makeImageData = (marker: number) => ({
+    width: size,
+    height: size,
+    data: Uint8ClampedArray.from({ length: size * size * 4 }, (_, index) =>
+      index === 0 ? marker : 0),
+  }) as ImageData;
+
+  const first = await runGeneralLiveWrinklePipeline({
+    detector,
+    imageData: makeImageData(1),
+    seeds,
+    size,
+    faceWidthPx: 52,
+  });
+  const second = await runGeneralLiveWrinklePipeline({
+    detector,
+    imageData: makeImageData(2),
+    seeds,
+    size,
+    faceWidthPx: 52,
+  });
+  assert.equal(loadCalls, 2, "every input must enter the detector pipeline");
+  assert.equal(detectCalls, 2, "every input must run inference rather than reuse an answer");
+  assert.deepEqual(markers, [1, 2], "the detector must receive each distinct input image");
+  assert.equal(first.evidence.lines.length, 1);
+  assert.equal(second.evidence.lines.length, 1);
+  assert.notDeepEqual(first.evidence.lines[0].points, second.evidence.lines[0].points,
+    "different detector masks must produce different extracted centerlines");
+  assert.equal(first.refined.diagnostics.algorithm, V6_RSTL_ALGORITHM);
+  assert.equal(second.refined.diagnostics.algorithm, V6_RSTL_ALGORITHM);
+  assert.equal(first.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
+  assert.equal(second.refinementProfile, LATEST_WRINKLE_REFINEMENT_PROFILE);
+}
+
+const webPackage = JSON.parse(fs.readFileSync(
+  new URL("../web/package.json", import.meta.url),
+  "utf8",
+));
+assert.match(webPackage.scripts.predev,
+  /^npm run verify:algorithm-release:dev && node \.\.\/tools\/report_default_marker_profile\.mjs dev && node \.\.\/tools\/check_web_dependency_isolation\.mjs$/,
+  "the dev server must report the default profile before rejecting dependencies shared across worktrees");
+assert.match(webPackage.scripts.dev, /vite --force\b/,
+  "the dev server must rebuild optimizer output instead of reusing copied worktree caches");
+
+{
+  // The helper and checked-in evidence remain available to the explicit
+  // single-image compat experiment; this block does not authorize live-page use.
+  const payload = JSON.parse(fs.readFileSync(
+    new URL("../web/assets/wrinkle_fine_lines_v10_wrinkle.json", import.meta.url),
+    "utf8",
+  ));
+  const evidence = buildPrecomputedFineWrinkleEvidence(
+    payload,
+    1254,
+    "1c6a677ea8aa2ebccd871ea39a7507ae64d9f64e83b03c389f6b18854fae5458",
+  );
+  const imageSha256 = "1c6a677ea8aa2ebccd871ea39a7507ae64d9f64e83b03c389f6b18854fae5458";
+  assert.deepEqual(validatedPrecomputedFineWrinkleSummary(payload, 1254, imageSha256),
+    evidence.summary, "summary-only detection must preserve the validated display summary");
+  assert.equal(evidence.lines.length, 26, "the canonical v10 evidence must preserve all centerlines");
+  assert.ok(evidence.rasterPixelCount > 0);
+  assert.throws(() => buildPrecomputedFineWrinkleEvidence(payload, 1254, "different-image"),
+    /different image/, "precomputed evidence cannot be reused for another image hash");
+  assert.throws(() => validatedPrecomputedFineWrinkleSummary(payload, 1254, "different-image"),
+    /different image/, "summary-only detection must retain the image ownership check");
+  assert.throws(() => validatedPrecomputedFineWrinkleSummary(payload, 1253, imageSha256),
+    /different working coordinate size/, "summary-only detection must retain the size check");
+  assert.throws(() => validatedPrecomputedFineWrinkleSummary({ ...payload, lines: [] },
+    1254, imageSha256), /invalid lines/,
+  "summary-only detection must still reject missing centerlines");
+}
+
+{
+  const imageSha256 = "sparse-raster-test";
+  const source = { imageSha256, width: 8, height: 8 };
+  const evidence = buildPrecomputedFineWrinkleEvidence({
+    schemaVersion: "langerface.wrinkle-fine-lines.v1",
+    source,
+    lines: [
+      { id: "horizontal", class: "forehead", points: [[1, 1], [3, 1]] },
+      { id: "vertical", class: "frown", points: [[2, 0], [2, 2]] },
+    ],
+  }, 8, imageSha256);
+  const crossing = 1 * 8 + 2;
+  const blank = 7 * 8 + 7;
+  assert.equal(evidence.rasterPixelCount, 5,
+    "overlapping segments must count each rendered pixel only once");
+  assert.equal(evidence.mask.reduce((sum, value) => sum + value, 0), 5);
+  assert.equal(evidence.mask[crossing], 1);
+  assert.equal(evidence.confidence[crossing], 1);
+  assert.equal(evidence.classMasks.forehead[crossing], 1);
+  assert.equal(evidence.classMasks.frown[crossing], 1);
+  assert.equal(evidence.directionQ[crossing * 2], 0,
+    "opposing axial directions must cancel at a crossing");
+  assert.equal(evidence.directionQ[crossing * 2 + 1], 0);
+  assert.equal(evidence.directionQ[(1 * 8 + 1) * 2], 1);
+  assert.equal(evidence.directionQ[(0 * 8 + 2) * 2], -1);
+  assert.equal(evidence.mask[blank], 0);
+  assert.equal(evidence.confidence[blank], 0);
+  assert.equal(evidence.directionQ[blank * 2], 0);
+  assert.equal(evidence.directionQ[blank * 2 + 1], 0);
+  const emptyRaster = buildPrecomputedFineWrinkleEvidence({
+    schemaVersion: "langerface.wrinkle-fine-lines.v1",
+    source,
+    lines: [{ id: "point", class: "forehead", points: [[1, 1], [1, 1]] }],
+  }, 8, imageSha256);
+  assert.equal(emptyRaster.rasterPixelCount, 0,
+    "zero-length segments must not enter the rendered-pixel list");
+  assert.equal(emptyRaster.mask.reduce((sum, value) => sum + value, 0), 0);
+}
+
+{
+  let fetchCalls = 0;
+  let createCalls = 0;
+  let releaseCalls = 0;
+  let releaseFetch!: () => void;
+  let releaseFirstSession!: () => void;
+  const fetchGate = new Promise<void>((resolve) => { releaseFetch = resolve; });
+  const firstSessionReleaseGate = new Promise<void>((resolve) => { releaseFirstSession = resolve; });
+  const progressA: number[] = [];
+  const progressB: number[] = [];
+  const runtime = {
+    Tensor: FakeTensor,
+    InferenceSession: {
+      async create() {
+        const sessionNumber = ++createCalls;
+        return {
+          inputNames: ["images"],
+          async run() { return emptyYoloOutputs(); },
+          async release() {
+            releaseCalls += 1;
+            if (sessionNumber === 1) await firstSessionReleaseGate;
+          },
+        };
+      },
+    },
+  };
+  const model = new YoloWrinkleOnnx({
+    chunkUrls: ["model-part"],
+    expectedModelBytes: 4,
+    verifySha256: false,
+    runtime,
+    fetchImpl: (async () => {
+      fetchCalls += 1;
+      await fetchGate;
+      return {
+        ok: true,
+        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
+      } as Response;
+    }) as typeof fetch,
+  });
+
+  const firstLoad = model.load((progress) => progressA.push(progress.loadedChunks));
+  const duplicateLoad = model.load((progress) => progressB.push(progress.loadedChunks));
+  await waitUntil(() => fetchCalls === 1, "the shared model load should start once");
+  releaseFetch();
+  await Promise.all([firstLoad, duplicateLoad]);
+  assert.equal(fetchCalls, 1, "concurrent loads fetch the model once");
+  assert.equal(createCalls, 1, "concurrent loads create one ONNX session");
+  assert.deepEqual(progressA, [1]);
+  assert.deepEqual(progressB, [1], "all active source generations receive shared load progress");
+
+  const closing = model.close();
+  await waitUntil(() => releaseCalls === 1, "close should release the active session");
+  const reloadAfterClose = model.load();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(createCalls, 1, "a load during close waits for session release");
+  releaseFirstSession();
+  await Promise.all([closing, reloadAfterClose]);
+  assert.equal(createCalls, 2, "loading after close creates exactly one replacement session");
+  assert.equal(fetchCalls, 2, "closed sessions do not leave a permanent model-load cache");
+  await model.close();
+  assert.equal(releaseCalls, 2);
+}
+
+{
+  const releases: Array<() => void> = [];
+  let activeRuns = 0;
+  let maximumActiveRuns = 0;
+  let sessionReleases = 0;
+  const session = {
+    inputNames: ["images"],
+    async run() {
+      activeRuns += 1;
+      maximumActiveRuns = Math.max(maximumActiveRuns, activeRuns);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      activeRuns -= 1;
+      return emptyYoloOutputs();
+    },
+    async release() { sessionReleases += 1; },
+  };
+  const model = new YoloWrinkleOnnx({
+    inputSize: 2,
+    verifySha256: false,
+    runtime: { Tensor: FakeTensor, InferenceSession: { async create() { return session; } } },
+    session,
+  });
+  const imageData = {
+    width: 2,
+    height: 2,
+    data: new Uint8ClampedArray(16),
+  } as ImageData;
+  let sourceGeneration = 0;
+  const committed: string[] = [];
+  const analyze = async (source: string) => {
+    const generation = ++sourceGeneration;
+    await model.detect(imageData);
+    if (generation === sourceGeneration) committed.push(source);
+  };
+
+  const staleAnalysis = analyze("old-source");
+  await waitUntil(() => releases.length === 1, "the old source should enter inference");
+  sourceGeneration += 1; // Immediate source replacement/reset.
+  const freshAnalysis = analyze("new-freeze");
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(releases.length, 1, "a new freeze cannot run concurrently on the same session");
+  releases[0]();
+  await waitUntil(() => releases.length === 2, "the new freeze should run after stale inference finishes");
+  const closing = model.close();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(sessionReleases, 0, "route disposal cannot release a session during inference");
+  releases[1]();
+  await Promise.all([staleAnalysis, freshAnalysis, closing]);
+  assert.equal(maximumActiveRuns, 1, "ONNX session.run calls remain serialized across sources");
+  assert.equal(sessionReleases, 1, "the session is released once after queued inference completes");
+  assert.deepEqual(committed, ["new-freeze"], "only the current source owns the inference result");
+}
+
+console.log("single-frame wrinkle display and refinement tests passed");

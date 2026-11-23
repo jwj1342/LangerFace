@@ -175,3 +175,4 @@ for (const autocrlf of ['false', 'input', 'true']) {
 }
 console.log('archive scope checkout: LF/input/CRLF environments retain exact archive bytes and reject content changes');
 console.log(`frozen recovery archive: ${archiveManifest.copied.length} copies verified; raw bytes preserved in three Git checkout modes`);
+await import('./test_rstl_performance_recovery.mjs');

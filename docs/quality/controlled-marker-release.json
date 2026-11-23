@@ -292,21 +292,21 @@
   "archive": {
     "status": "verified",
     "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
-    "manifestPath": "local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/manifest.json",
-    "manifestSha256": "d48fdf26ff631a417ca80710b548c1449d6dde1e33e13923fb6bcc6089491580",
-    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
-    "verifiedAt": "2026-11-23T07:31:38.699989+00:00",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
-    "note": "Existing scope retained. RSTL/wrinkle performance source snapshot separately preserved; no frozen archive modified."
+    "manifestPath": "local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/manifest.json",
+    "manifestSha256": "416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230",
+    "scopeConfigSha256": "81e074193fada64bb8ac1aafc6a47d379be58fd174945484d88a3df77e480ce8",
+    "verifiedAt": "2026-11-23T08:01:47.141116+00:00",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-recovery-fix-20261123",
+    "note": "Self-contained replacement archive includes explicitly listed RSTL performance tests, matching runtime implementations and fixture. Previous frozen archive retained unchanged."
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "d48fdf26ff631a417ca80710b548c1449d6dde1e33e13923fb6bcc6089491580",
-    "confirmedAt": "2026-11-23T07:31:38.699989+00:00",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
-    "confirmationKind": "explicit_user_rstl_wrinkle_performance_pr_request",
-    "operatorStatement": "把你刚刚完成的这些改进，提交成pr",
-    "scope": "Only the RSTL/wrinkle performance changes identified in the annotated request and necessary tests/docs. This is implementation/submission scope authorization, not effect acceptance."
+    "manifestSha256": "416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230",
+    "confirmedAt": "2026-11-23T08:01:47.141116+00:00",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-recovery-fix-20261123",
+    "confirmationKind": "explicit_user_recovery_dependency_fix",
+    "operatorStatement": "好的，请修复这个问题",
+    "scope": "Repair the missing RSTL/wrinkle recovery dependencies and verify on the recorded clean base; no runtime or ownership changes."
   },
   "operatorEvaluation": {
     "status": "accepted",
@@ -5064,6 +5064,16 @@
         "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
       }
     },
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123"
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
+    "previousRecoveryArchive": {
+      "status": "verified",
+      "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
+      "manifestPath": "local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/manifest.json",
+      "manifestSha256": "d48fdf26ff631a417ca80710b548c1449d6dde1e33e13923fb6bcc6089491580",
+      "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+      "verifiedAt": "2026-11-23T07:31:38.699989+00:00",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
+      "note": "Existing scope retained. RSTL/wrinkle performance source snapshot separately preserved; no frozen archive modified."
+    }
   }
 }

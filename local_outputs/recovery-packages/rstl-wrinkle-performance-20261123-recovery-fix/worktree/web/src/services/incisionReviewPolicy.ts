@@ -1,0 +1,211 @@
+import { workflowTraceGate } from "./incisionWorkflowTools.ts";
+
+type AnyRecord = Record<string, any>;
+
+function hardViolations(result: AnyRecord | null | undefined): AnyRecord[] {
+  const values = [
+    result?.guardrails?.hard_violations,
+    result?.candidate?.hard_violations,
+    result?.hard_violations,
+  ].flatMap((source) => Array.isArray(source) ? source : []);
+  const seen = new Set<string>();
+  return values.filter((item: AnyRecord) => {
+    const key = JSON.stringify([item?.code || "unknown", item?.location || null]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function summarizeGuardrails(guardrails: AnyRecord = {}) {
+  const warnings = Array.isArray(guardrails.warnings) ? guardrails.warnings : [];
+  const high = warnings.filter((warning: AnyRecord) => warning.severity === "high");
+  const medium = warnings.filter((warning: AnyRecord) => warning.severity === "medium");
+  return {
+    passed: Boolean(guardrails.passed),
+    high_count: high.length,
+    medium_count: medium.length,
+    high_codes: high.map((warning: AnyRecord) => warning.code),
+    medium_codes: medium.map((warning: AnyRecord) => warning.code),
+    warnings: warnings.map((warning: AnyRecord) => ({
+      code: warning.code,
+      severity: warning.severity,
+      message: warning.message || "",
+    })),
+    suggested_overrides: guardrails.suggested_overrides || [],
+  };
+}
+
+export function assessDiagnosticReviewAcknowledgement({
+  reviewer,
+  notes,
+}: {
+  reviewer: string;
+  notes: string;
+}): { ok: boolean; attention: "reviewer" | "notes" | null; message: string } {
+  if (!reviewer.trim()) {
+    return {
+      ok: false,
+      attention: "reviewer",
+      message: "记录红色阻断审阅前请填写审阅人。",
+    };
+  }
+  if (!notes.trim()) {
+    return {
+      ok: false,
+      attention: "notes",
+      message: "红色虚线表示候选已被规则阻断；记录本次阻断审阅前请填写审阅备注。",
+    };
+  }
+  return { ok: true, attention: null, message: "" };
+}
+
+export function assessReviewReadiness({
+  status,
+  result,
+  reviewer,
+  notes,
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
+}: {
+  status: string;
+  result: AnyRecord | null | undefined;
+  reviewer: string;
+  notes: string;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
+}): { ok: boolean; attention: "reviewer" | "decision" | "notes" | null; message: string } {
+  if (!result) return { ok: false, attention: null, message: "没有可审阅的候选" };
+  if (!reviewer.trim()) return { ok: false, attention: "reviewer", message: "保存候选记录前请填写审阅人。" };
+  if (status !== "approved_for_discussion") return { ok: true, attention: null, message: "" };
+
+  if (!allowReferenceCandidates && result?.candidate?.metrics?.photo_visibility_limited_candidate === true) {
+    return {
+      ok: false,
+      attention: "decision",
+      message: "当前为视野受限参考：可保存为待确认草案；补充另一视角并复核隐藏区域后，方可确认或进入实时叠加。",
+    };
+  }
+
+  if (!allowReferenceCandidates && result?.candidate?.metrics?.photo_reference_candidate === true) {
+    return {
+      ok: false,
+      attention: "decision",
+      message: "当前为受限参考候选，不满足标准 3:1 梭形要求；可保存为待确认草案，但不能直接确认或发送到实时叠加。",
+    };
+  }
+
+  const violations = hardViolations(result);
+  if (violations.length > 0) {
+    return { ok: false, attention: null, message: `候选存在 ${violations.length} 项不可覆盖的工程几何错误；请修复后再确认。` };
+  }
+
+  const traceGate = workflowTraceGate(result);
+  if (!traceGate.passed) {
+    return { ok: false, attention: null, message: "候选生成过程记录不完整或顺序异常，请重新计算后再确认。" };
+  }
+  if (requireHighRiskNotes && summarizeGuardrails(result.guardrails).high_count > 0 && !notes.trim()) {
+    return { ok: false, attention: "notes", message: "当前候选有高风险保护提示；确认前请填写审阅备注或覆盖原因。" };
+  }
+  return { ok: true, attention: null, message: "" };
+}
+
+export function reviewForCandidateRecord({
+  review,
+  result,
+  forceDraft = false,
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
+}: {
+  review: AnyRecord;
+  result: AnyRecord | null | undefined;
+  forceDraft?: boolean;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
+}) {
+  const readiness = assessReviewReadiness({
+    status: review.status || "pending_clinician_confirmation",
+    result,
+    reviewer: String(review.reviewer || ""),
+    notes: String(review.notes || ""),
+    allowReferenceCandidates,
+    requireHighRiskNotes,
+  });
+  if (!forceDraft && readiness.ok) return { review, readiness, downgraded: false };
+  return {
+    review: {
+      ...review,
+      status: "pending_clinician_confirmation",
+      reviewed_at: null,
+    },
+    readiness,
+    downgraded: review.status !== "pending_clinician_confirmation",
+  };
+}
+
+export function buildReviewGate({
+  review,
+  result,
+  topologyId,
+  topologyVersion,
+  allowReferenceCandidates = false,
+  requireHighRiskNotes = true,
+}: {
+  review: AnyRecord;
+  result: AnyRecord;
+  topologyId?: string | null;
+  topologyVersion?: string | null;
+  allowReferenceCandidates?: boolean;
+  requireHighRiskNotes?: boolean;
+}) {
+  const summary = summarizeGuardrails(result.guardrails);
+  const traceGate = workflowTraceGate(result);
+  const reviewerRequired = true;
+  const notesRequired = requireHighRiskNotes && review.status === "approved_for_discussion" && summary.high_count > 0;
+  const reviewerPresent = Boolean(review.reviewer);
+  const notesPresent = Boolean(review.notes);
+  const violations = hardViolations(result);
+  const referenceCandidate = result?.candidate?.metrics?.photo_reference_candidate === true;
+  const visibilityLimitedCandidate = result?.candidate?.metrics?.photo_visibility_limited_candidate === true;
+  const restrictedReferenceCandidate = !allowReferenceCandidates && (referenceCandidate || visibilityLimitedCandidate);
+  const approvalReady = review.status === "approved_for_discussion"
+    && !restrictedReferenceCandidate
+    && violations.length === 0
+    && traceGate.passed
+    && (!reviewerRequired || reviewerPresent)
+    && (!notesRequired || notesPresent);
+  const liveOverlayReady = approvalReady;
+  return {
+    reviewer_required: reviewerRequired,
+    reviewer_present: reviewerPresent,
+    notes_required_for_high_guardrails: notesRequired,
+    notes_present: notesPresent,
+    high_guardrail_codes: summary.high_codes,
+    hard_violation_count: violations.length,
+    hard_violation_codes: violations.map((item: AnyRecord) => item.code).filter(Boolean),
+    workflow_trace_gate_passed: traceGate.passed,
+    workflow_trace_gate_missing: traceGate.missing_actions.map((item: AnyRecord) => item.key),
+    approval_ready: approvalReady,
+    live_overlay_ready: liveOverlayReady,
+    live_overlay_blocked_reason: !allowReferenceCandidates && visibilityLimitedCandidate
+      ? "visibility_limited_reference_candidate"
+      : !allowReferenceCandidates && referenceCandidate
+        ? "nonstandard_reference_candidate"
+      : violations.length > 0
+        ? "engineering_hard_violation"
+        : null,
+    active_topology_id: topologyId || null,
+    active_topology_version: topologyVersion || null,
+    reason: liveOverlayReady
+      ? "approved_candidate_ready_for_research_overlay"
+      : !allowReferenceCandidates && visibilityLimitedCandidate
+        ? "visibility_limited_reference_candidate_requires_additional_view"
+        : !allowReferenceCandidates && referenceCandidate
+          ? "nonstandard_reference_candidate_requires_clinician_workflow"
+        : violations.length > 0
+          ? "engineering_hard_violation"
+          : traceGate.passed
+            ? "pending_clinician_confirmation_or_missing_required_review_context"
+            : "workflow_trace_gate_failed",
+  };
+}

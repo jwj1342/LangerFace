@@ -16,7 +16,14 @@
     "web/src/services/liveCanvasInteraction.ts",
     "web/src/services/liveRefine2d.ts",
     "web/src/services/liveRuntime.ts",
-    "web/src/services/liveState.ts"
+    "web/src/services/liveState.ts",
+    "tools/test_rstl_endpoint_smoothing.ts",
+    "web/src/services/render2d.ts",
+    "tools/test_forehead_curve_distance.ts",
+    "tools/test_forehead_trajectory_attraction.ts",
+    "web/src/services/personalized/foreheadTrajectoryAttraction.ts",
+    "tools/fixtures/forehead-attraction/yellow-geometry.json",
+    "tools/test_rstl_performance_recovery.mjs"
   ],
   "includePrefixes": [
     ".planning/2026-09-16-task-1-lesion-recognition/",
