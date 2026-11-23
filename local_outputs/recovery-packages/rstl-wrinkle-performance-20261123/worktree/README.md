@@ -1,0 +1,454 @@
+# 面部朗格线迁移 · Facial Langer/RSTL Line Projection
+
+[![CI](https://github.com/jwj1342/LangerFace/actions/workflows/ci.yml/badge.svg)](https://github.com/jwj1342/LangerFace/actions/workflows/ci.yml)
+
+把皮肤张力线（主流程为 **RSTL**，并保留 **Langer** 对照图谱）**稳定地、贴合地**叠加到人脸的照片、视频或实时摄像头画面上，
+作为面部手术**切口规划的决策辅助可视化**——医生能直观看到沿哪个方向下刀疤痕最小、恢复最好。
+
+> ⚠️ **医学声明**：本工具是决策辅助可视化，**不是**手术指令，**不是**受监管的医疗器械。
+> 内置线条图谱为**示意性首版（未经临床验证）**，方向参考 Borges RSTL，几何为近似，
+> 必须经临床医生用标注工具校验后方可参考。最终切口由主刀医生负责。详见[已知局限与医学声明](#已知局限与医学声明)。
+
+---
+
+单页工作流的临时草稿只恢复照片和可解析的肿物输入；旧候选、微调及批准状态不恢复，历史记录仅供审计。重新选择肿物或调整有效参数后，重新生成并审阅。活动候选降级、删除或清空时会撤销实时叠加。
+
+Python 与 Web 的受控标记梭形规划使用共享几何案例核对照片直径优先、边界尺度回退和中心不变的契约；这不表示两端全部安全门禁等价。详见[切口工作流](docs/tracks/INCISION_WORKFLOW.md)。
+
+## 目录
+- [项目定位](#项目定位)
+- [系统模块与数据流](#系统模块与数据流)
+- [临床目标与 Stage 2 路线](#临床目标与-stage-2-路线)
+- [它能做什么](#它能做什么)
+- [核心原理（为什么稳，而非"图一乐"）](#核心原理)
+- [技术路线](#技术路线)
+- [快速开始 / 复现](#快速开始--复现)
+- [使用方式](#使用方式)
+- [线条图谱（数据）](#线条图谱数据)
+- [目录结构](#目录结构)
+- [验证与测试](#验证与测试)
+- [已知局限与医学声明](#已知局限与医学声明)
+- [持续集成与部署（CI/CD）](#持续集成与部署cicd)
+- [开发文档](#开发文档)
+- [文档维护约定](#文档维护约定)
+
+---
+
+## 项目定位
+
+LangerFace 是一个面向面部手术规划研究的计算机视觉原型。它把医学上可校验、可编辑的 RSTL 图谱编码到 MediaPipe 标准脸网格上，再在照片、视频或实时摄像头画面中将图谱稳定映射到当前人脸。经典 Langer 图谱仍作为对照 / 教学资产保留，但当前网页主 demo 只暴露 RSTL。
+
+项目分成三层：
+
+1. **领域数据层**：`assets/` 与 `web/assets/` 保存标准脸、关键点模型、三角拓扑和线条图谱。
+2. **核心算法层**：`src/langerface/` 与 `web/src/services/geometry*.ts` 实现关键点输入、重心坐标映射、平滑、遮挡、渲染与 3D 配准。
+3. **用户界面层**：`web/` 提供唯一正式前端；`src/langerface/apps/` 只保留 CLI 和 OpenCV webcam 入口。
+
+当前主线是 **Stage 1：稳定显示面部 RSTL 皮肤张力线**。Stage 2 已进入受限工程闭环：围绕医生手动输入的面部皮肤肿物，按结构化临床规则生成可解释、可编辑、可审阅的候选切口线，并可把候选短期传递到照片 / 视频 / 摄像头实时叠加层。2026-08-17 当前产品开发与阶段联合验收进一步限定为单个、轮廓清楚、整体近似圆形（允许轻度椭圆）的皮表肿物；明显狭长椭圆不自动纳入，自由轮廓、有限缺口与人工补线仍作为兼容能力保留，不承诺任意复杂形状。当前明确不实现病例大厅、患者档案、历史记录、病例级本地持久化或云端病例系统；完整 Stage 2 仍需真实肿物边界标注、3D/AR 个体化叠加与临床验证。项目不声称自动给出手术方案。标准 RSTL、MediaPipe 和浏览器 YOLO 在当前设备运行；用户手动启动线上 V10 四区域检测时，当前工作帧会发送到页面明确标示的受控 V10 服务，任务结束后临时文件删除。
+
+---
+
+## 系统模块与数据流
+
+系统按“资产与医学知识 -> 感知 -> 配准 -> 标注/模拟/规划 -> 渲染与交互”分层。当前代码重点完成 Stage 1 的张力线标注与配准；Stage 2 的脸部肿物模拟和切口设计作为同级业务模块扩展，而不是塞进 `lines/` 或 `rendering/`。
+
+| 层级 / 模块 | 当前状态 | 职责 | 主要位置 |
+|---|---|---|---|
+| 资产与医学知识层 | 已实现 | 标准脸、三角拓扑、MediaPipe 模型、RSTL 主图谱与 Langer 对照图谱 | `assets/`, `web/assets/` |
+| 感知层 | 已实现 | 从图片、视频、摄像头中提取 478 个 3D 人脸关键点；网页端还检测手部遮挡 | `src/langerface/detection/`, `web/src/services/pipeline.ts` |
+| 配准与几何层 | 已实现 | Live 2D 重心坐标贴合；FLAME 关键点拟合实验与 HeadSpace 多视角加权 Sim3 配准仅作离线研究 | `src/langerface/geometry/`, `src/langerface/registration/`, `src/langerface/flame.py`, `web/src/services/geometry*.ts`, `tools/reconstruct_3d.py`, `tools/headspace/` |
+| 面部标注 / 图谱层 | 已实现 | 生成、读取、校验和映射 RSTL/Langer 线条；网页 3D 标注只产出待复核草案，临床校验由 Python/评审流程完成 | `src/langerface/lines/`, `web/src/services/annotationModel.ts`, `web/src/services/annotateViewer.ts`, `web/src/services/annotateRuntime.ts`, `tools/annotate_atlas.py`, `tools/digitize_from_diagram.py` |
+| 肿物模拟层 | Stage 2 功能切片（#14） | 表示脸部肿物的位置、大小、深度、安全切缘和与皮肤表面的关系；当前支持手动中心点、椭圆 / 自由轮廓、来源作者和 JSON 导入导出，自动分割与临床复核仍待补 | `web/src/services/incisionCandidateTools.ts`, `web/src/services/tumorInput.ts`, `web/src/services/incisionRuntime.ts`, `web/src/services/incisionReviewPolicy.ts` |
+| 切口设计层 | Stage 2 工程闭环（#11-#22/#83/#85） | 由浏览器本地确定性 workflow 优先消费 YOLO/V6 个体化 MediaPipe RSTL（标准 RSTL 仅作显式降级），再综合肿物约束、安全切缘、敏感结构、医生编辑、审阅导出和 2D 实时叠加；不依赖 FLAME，只做决策辅助 | `assets/clinical_rules_face_incision.json`, `assets/incision_workflow_schema.json`, `web/src/services/incision*.ts` |
+| 渲染与交互层 | 已实现 / 扩展中 | Live 2D Canvas 叠加、遮挡、放大窗、录制导出；独立标注/模拟工具保留 3D 查看 | `src/langerface/rendering/`, `web/src/services/liveRuntime.ts`, `web/src/services/render2d.ts`, `web/src/services/three3d.ts` |
+| 实验演示层 | 独立工具 | RSTL 切除 -> 闭合定性软体演示（`/surgery`）；不接入 Live runtime | `web/src/routes/SurgeryRoute.tsx`, `web/src/services/softBody.ts` |
+
+整体数据流：
+
+```mermaid
+flowchart LR
+  Input[照片 / 视频 / 摄像头帧] --> Detect[人脸与手部关键点检测]
+  Assets[标准脸 / 三角拓扑 / 模型资产] --> Register[人脸配准与几何归一化]
+  Detect --> Register
+
+  Author[临床标注与图谱生成工具] --> Atlas[RSTL 主图谱 / Langer 对照图谱]
+  Assets --> Author
+  Atlas --> Map[线图谱重心坐标映射]
+  Register --> Map
+
+  Detect --> Occlusion[平滑 / 背面剔除 / 手部遮挡]
+  Map --> Occlusion
+  Occlusion --> Render[2D/3D 叠加渲染、放大窗、导出]
+
+  Register --> Recon[3D 关键点网格重建 Beta]
+  Recon --> Map
+
+  Register --> Flame[FLAME 离线拟合 / 标注研究]
+  Flame --> Render
+
+  Register --> Tumor[Stage 2: 肿物模拟]
+  Tumor --> Incision[Stage 2: 切口候选设计]
+  Atlas --> Incision
+  Incision --> Render
+```
+
+Stage 2 的设计原则是：肿物模拟只负责病灶几何与约束表达，切口设计只负责候选方案生成与可视化，最终判断仍由临床医生完成。
+
+当前验收范围与底层输入能力需要分开理解：数据结构继续支持椭圆和自由轮廓，以免破坏既有成果和审计兼容性；当前产品主线只以近似圆形（允许轻度椭圆）的皮表肿物验证识别和梭形生成。复杂不规则、明显缺口及实心黑点不计入当前阶段验收通过率。
+
+---
+
+## 临床目标与 Stage 2 路线
+
+面部皮肤肿物切除的核心问题不是“能否画出一条线”，而是**能否在保留功能和形态的前提下，把瘢痕藏到张力最低、视觉干扰最小的位置**。本项目的 Stage 2 目标是把计算机视觉和 AI 技术用在这个术前规划场景中：
+
+1. **迁移面部皮纹线**：把经临床校验的标准 RSTL 图谱迁移到患者照片、视频或实时扫描的脸上，作为切口方向的第一依据。
+2. **表示肿物约束**：由医生输入或标注皮下 / 皮表肿物的位置、直径、边界、深度、安全切缘和可直接拉拢缝合前提。
+3. **生成候选切口**：系统按规则生成线性或梭形切口候选，医生可以调整、覆盖、确认或否决。
+4. **输出可追溯记录**：导出候选线、规则依据、风险提示、医生修改和版本 provenance。
+
+两类应用情形：
+
+| 情形 | 输入 | 默认候选 |
+|---|---|---|
+| **皮下肿物** | 肿物中心 + 术前超声直径 / 深度 / 医生判断 | 平行局部 RSTL 的线性切口，不做梭形切除 |
+| **皮表肿物** | 肿物边界或类圆化直径 + 安全切缘 + 医生判断 | 梭形切口，长轴优先平行 RSTL，并约束长宽比例、尖端角和平滑对称 |
+
+当前方案 B 的皮表阶段验收输入应整体近似圆形（允许轻度椭圆），明显狭长椭圆不自动纳入。复杂自由轮廓仍可被现有契约表达和回放，但属于非阻断兼容范围；它的存在不表示当前产品承诺自动处理任意高度不规则病灶。
+
+切口方向优先级：
+
+1. **首选：RSTL**。切口长轴尽量平行松弛皮肤张力线，以降低闭合时垂直张力。
+2. **次选：自然皱襞 / 皱纹**。额纹、鱼尾纹、鼻唇沟、睑缘纹、颏纹等自然凹陷可帮助隐藏瘢痕。
+3. **次选：美学亚单位边界**。眉缘、唇红缘、发际线、鼻翼沟、耳前皱襞等结构分界处可降低视觉干扰。
+4. **敏感结构例外**。下睑、唇红缘、鼻翼等游离边缘附近，系统必须提示形态牵拉风险；医生可选择违背 RSTL 的保护性方向。
+
+安全边界：
+
+- 默认只覆盖**可直接拉拢缝合、无需皮瓣 / 植皮**的适应证范围；适应证、松弛度、创缘成活性和安全切缘由医生团队写作和确认。
+- 良性、癌前病变、恶性肿瘤的切缘策略不同，系统只记录医生输入的切缘规则，不自动判断病理性质。
+- AI/CV 输出只作为候选和提示；术前仍需医生结合触诊、皮肤松弛度、器官功能风险和病理要求确认。
+
+Stage 2 的结构化临床规则库位于 [`assets/clinical_rules_face_incision.json`](assets/clinical_rules_face_incision.json)。该资产记录区域规则、优先级、例外、来源、审核状态和最后审核日期；当前仍为 `draft_not_clinically_validated`，只用于决策辅助可视化，不是自动手术指令。Stage 2 任务拆解已同步到 [docs/planning/TODO.md](docs/planning/TODO.md) 与 GitHub Issues。
+
+---
+
+## 它能做什么
+
+- 🎥 **网页实时摄像头**：浏览器打开网址 → 开摄像头 → 张力线实时贴合人脸，做任何动作线条都跟随。
+- 🖼️ **上传照片/视频**：网页上传，叠加后返回（图片单帧、视频逐帧）。
+- 🧰 **命令行批处理**：对图片/视频文件离线渲染输出。
+- 🔬 **RSTL 主流程 + Langer 对照资产**：网页主 demo 当前只暴露 RSTL；Langer 图谱仍保留在资产、CLI 和标注器中用于对照 / 教学。
+- 🖐️ **遮挡处理**：转头时背面线条隐藏；**手挡在脸前时，手覆盖处不画线**（贴合手形掩膜，指缝保留）。
+- 🔍 **关键区域放大窗**：主画面下方 6 个放大窗（额·眉间 / 双眼周 / 鼻·鼻唇沟 / 口周 / 颏部）同屏显示细节。
+- 🚫 **Live 3D runtime 已删除**：实时扫描重建、FLAME 孪生、投影命令、隐藏控制器状态和示例重建资产均不再随 Live 工作台发布。`/live` 固定使用 MediaPipe 个体化 RSTL；`/annotate`、`/surgery` 与 `tools/fit_flame_to_landmarks.py` 等离线/独立研究工具不受影响。
+- ✍️ **网页 3D 标注**：在浏览器里于标准脸 / 3D 头模表面手绘 RSTL/Langer 候选线，可导入 JSON/OBJ/PLY 头模和 3D Slicer `.mrk.json` 曲线，导出 `validated:false` 的图谱草案（`[tri,u,v]`）或 xyz 折线；临床复核与置 `validated:true` 仍走 Python/评审流程，见 [网页 3D 标注与图谱草案导出](docs/architecture/ARCHITECTURE.md#12-网页-3d-线标注与图谱草案导出)。
+- 🧰 **无状态研究工具入口**：站点根 `/` 是 React 工具入口（`/app` 保留为兼容地址），只负责进入实时 2D、个性化 2D、切口候选和图谱维护等独立工具，不创建、恢复或保存病例。
+- 🧭 **切口 workflow 工作台**：推荐先从 `/personalized` 生成 YOLO/V6 个体化 RSTL，再进入 `/app/incision`；工作台固定使用 MediaPipe 468 表面，个体化 RSTL 是方向首选，缺失或校验失败时切换到标准 RSTL 并记录来源，不加载 FLAME。医生可放置皮下 / 皮表肿物、编辑和审阅确定性候选，并把批准结果发送到实时页叠加。
+- 🔬 **RSTL 切除 -> 闭合演示（Beta）**：`/surgery` 作为独立研究演示保留，用于解释沿 RSTL 闭合的张力直觉，不是 FEM、不是患者个体化建模，也不是自动候选生成模块。
+- 🎛️ **实时控制**：主界面暴露数据源、线密度、透明度、镜像和网格采样点；平滑、背面剔除、手部遮挡、分区着色和放大窗为底层支持或默认能力，部分调试开关当前隐藏。
+- 🔒 **本地优先、位置透明**：标准 RSTL 始终在浏览器计算；本地 Vite 的 V10 在提供网页的电脑处理，Vercel 版 V10 在页面标示的受控远程服务处理。
+
+---
+
+## 核心原理
+
+这是一个 **模板配准（template registration）** 问题，**不是**"训练模型预测线条"——也不存在这样的训练数据。
+
+1. **预训练 AI 负责感知**：用 Google MediaPipe Face Landmarker 输出 **478 个 3D 人脸关键点**（前 468 个与标准网格拓扑一致），实时、跨姿态、跨身份。
+2. **医学知识编码为"贴在标准脸上的图谱"**：张力线一次性数字化到 MediaPipe **标准脸网格**，每个线点存成 `(三角面 id, 重心坐标 u, v)`。
+3. **线条随脸网格变形**：运行时同一套三角拓扑把图谱映射到检测到的人脸上——
+   `点 = u·V0 + v·V1 + w·V2`（V 为该三角面三个检测顶点）。这是精确的**分片仿射变形**（即 AR"脸绘"技术），
+   对身份、姿态、表情天然不变，是稳定性的根基。
+4. **稳定性工程**：One-Euro 时间平滑去抖动、置信度门控淡入淡出、背面剔除、手部遮挡掩膜；外推额头弧线的皮肤掩膜会补小空洞、删除短伪段，并在总可见量达标时保留所有合格可见段，避免中部局部遮挡导致单侧缺线。
+
+> 不训练自定义模型是刻意为之：复用稳健的预训练关键点模型 + 可编辑可校验的图谱资产，
+> 才有可复现、可解释、可被临床医生修正的系统，而不是一个抖动不可控的黑盒。
+
+单帧数据流（2D 路线）：
+
+```
+图像/帧 → MediaPipe 478 关键点 → One-Euro 平滑 → 重心坐标映射(图谱) → 背面剔除 + 手部遮挡 → 抗锯齿叠加
+```
+
+---
+
+## 技术路线
+
+Live 只有 **2D 贴合**一条运行时路线：每帧把图谱按重心坐标贴到 MediaPipe 脸网格，z 仅用于背面剔除。个体化由 YOLO/V6 皱纹证据生成的 RSTL 草案提供，切口 workflow 消费同一个 `mediapipe-468` 表面；两者都不加载 FLAME。
+
+曾经保留的 3D 扫描、刚性投影和 FLAME 实时孪生 runtime 已删除。3D 仅存在于 `/annotate`、`/surgery` 以及离线重建/拟合工具等独立研究边界，不与 Live 会话共享状态。
+
+---
+
+## 快速开始 / 复现
+
+环境：**Python 3.10–3.12**（勿用 3.13，mediapipe 暂不支持）、**Node 24.15+ / npm 11+**（Vite 前端）、现代浏览器（建议 Chrome）。
+在 Compute Canada / Alliance 集群上，前端开发可先运行 `module load nodejs/24.15.0`。
+
+```bash
+# 1) 固定使用仓库 .venv（包含 V10 四区域检测所需的 PyTorch）
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -c requirements-wrinkle-lock.txt -e ".[all]"
+
+# 2) 下载 MediaPipe 资产到 assets/（标准脸 obj + 人脸/手部关键点模型，单一权威源）
+python3 tools/download_assets.py
+
+# 3) 生成正式 RSTL 图谱（v8.1.67，确定性生成器 + 结构化参考输入；需要 OpenCV/cv2）
+#    两个参数都必须显式给出：脚本内置默认值指向一份未随仓库分发的旧参考文件。
+python3 tools/build_field_atlas_standard_v1.py \
+        assets/rstl_standard_reference_v8_1_67.json assets/atlas_rstl.json
+#    ⚠️ 旧的方向场流线生成器 tools/build_field_atlas.py 会同时重写 assets/atlas_rstl.json
+#       和 assets/atlas_langer.json（默认 d_sep=0.030），即**覆盖上面这份正式 RSTL 图谱**并让
+#       tests/test_rstl_standard_v8_1_67.py 失败。只在需要重造 Langer 对照图谱时才跑它，跑完
+#       务必用上面的命令重新生成 RSTL。
+
+# 4) 导出网页端资产（triangles / atlas / canonical_vertices / 复制人脸+手部模型）
+#    MediaPipe/atlas/topology 资产由此从 assets/ 派生；改了图谱/几何务必重跑此步（CI 有一致性门禁）
+python3 tools/export_web_assets.py
+
+# 5)（可选）离线研究：用示例视频重建一个 3D 头（不会进入网页发布资产）
+python3 tools/reconstruct_3d.py local_media/IMG_3458.MOV    # -> local_outputs/recon_demo.json
+
+# 6) 测试 / 构建
+pytest -q                         # Python 端
+cd web
+npm ci
+npm run doctor:wrinkle             # 必须输出 ready: true 和预期 V10/checkpoint
+npm run build:lesion-candidate     # 候选算法生产构建，并写入运行身份清单
+npm test                           # Web TypeScript 几何/遮挡/Umeyama 对拍
+npx playwright install chromium    # 首次运行浏览器回归前安装 Chromium
+npm run test:browser               # 生产构建上的 Playwright UI/对比度回归
+cd ..
+
+# 7) 启动网页
+cd web
+npm run dev:lesion-candidate     # 候选算法 Vite dev server，默认 http://127.0.0.1:5173
+```
+
+网页依次查找 `LANGERFACE_WRINKLE_PYTHON`、已激活虚拟环境、仓库 `.venv`、
+`python3` / `python`，不依赖任何贡献者电脑的 Conda 路径。即使忘记 `source .venv/bin/activate`，
+仓库 `.venv` 也会自动被发现。启动前用 `npm run doctor:wrinkle` 核对 Python 3.10–3.12、
+`numpy/cv2/scipy/torch` 锁定版本、V10 版本和 checkpoint 哈希。浏览器打开 Vite 提示的本地地址 → 上传照片或点「摄像头」。
+首次加载会从 CDN 下载 MediaPipe wasm（数秒）；V10 checkpoint 已跟随仓库分发。
+小肿物边界候选算法必须使用 `npm run dev:lesion-candidate`，生产包必须使用
+`npm run build:lesion-candidate`。普通 `npm run dev` / `npm run build` 也先核对发布登记并默认运行
+最新候选算法；`legacy-v0.23` 只允许通过环境变量显式回退，不能作为当前算法验收证据。Vite 本地服务或
+`npm run preview` 才能挂载本地 API；普通静态服务器只托管 `dist/` 时不会运行
+Vite 的本地 Python V10 API，因而不支持四区域检测。
+
+单图皱纹/RSTL runner 只用于受控研究复放。真实人脸原图和浏览器冻结产物不会随公开仓库分发；运行前必须
+通过 `WRINKLE_LOCAL_INPUT` / `WRINKLE_LOCAL_BASELINE` 或 `WRINKLE_CROWS_INPUT` /
+`WRINKLE_CROWS_BASELINE` 指向本地受控材料。输出始终保持 `validated:false`，工程复放成功不等于临床验证。
+完整变量、目录和命令见 [个性化 RSTL：受控单图复放](docs/tracks/PERSONALIZED_RSTL.md#41-受控单图复放与直接鱼尾纹实验)。
+
+部署或交接前先在 `web/` 目录运行 `npm run doctor:wrinkle` 和
+`npm run verify:latest-wrinkle`。它们会检查本地运行环境以及当前检出是否确实包含
+RSTL v8.1.96、V10 四区域皱纹检测和 V9 `v9-regional-smooth-7.2` 微调；PR 编号或分支名称本身不能证明版本正确。
+
+---
+
+## 使用方式
+
+### 网页（推荐，实时）
+进入 `web/` 后运行 `npm run dev:lesion-candidate`，打开 Vite 提示的本地地址。普通 `npm run dev` 同样默认最新候选算法；只有显式设置 `VITE_CONTROLLED_MARKER_DETECTOR_PROFILE=legacy-v0.23` 才回退旧版：
+- **数据源**：上传照片/视频，或开摄像头；可暂停、导出（录制画布为 webm）。
+- **模板**：主 demo 只暴露 RSTL（首选）；Langer 对照图谱保留在资产、CLI 和标注器中。
+- **滑杆**：线密度、透明度；平滑参数仍在运行时存在，但主界面调试控件当前隐藏。
+- **开关**：镜像、显示网格采样点；背面剔除、手部遮挡、分区着色和细节放大窗为底层支持或默认能力，部分控件当前隐藏。
+- **研究工具入口**：进入站点根 `/`（`/app` 为兼容地址）选择独立工具；当前不提供病例新建、恢复、历史记录或云端病例库。
+- **系统设置 / 实验页**：`/settings/atlas` 提供图谱库管理壳，并把 `/annotate` 作为受控维护入口；`/settings/developer` 集中本地 workflow worker 状态和兼容工作台入口（三维模型预览入口已随 3D 网页入口一并移除）。`/surgery` 仍可查看 RSTL 切除 -> 闭合定性演示，但它只是兼容研究入口。旧 HTML 入口仅保留为 React SPA 兼容跳转页。
+- **统计**：追踪质量、状态、脸部占比、偏航估计、线束数量、fps。
+
+### 命令行
+```bash
+langerface --image face.jpg --system rstl -o out.png
+langerface --video clip.mp4 --system langer -o out.mp4
+langerface-webcam --system rstl          # 原生窗口实时（热键 t/o/s/q）
+```
+
+### 临床校验图谱（关键）
+内置图谱仅为示意。标注工具只负责修正几何、保留已加载的线并保存
+`validated:false` 草案；普通保存不能代替逐线临床复核、来源记录与签署。
+临床医生修正后还需完成逐线审阅包，finalize 会校验源文件哈希、每条线的结论/
+评分/校验者/时间/医学来源，并只写出一个单独的待 review 文件：
+```bash
+python3 tools/annotate_atlas.py --system rstl --region forehead    # 在标准脸上直接画/改
+python3 tools/digitize_from_diagram.py --system rstl --diagram ref.png  # 从文献图描线
+python3 tools/atlas_clinical_review.py build \
+  --atlas assets/atlas_rstl.json \
+  --output local_outputs/atlas_rstl_review.json \
+  --csv-output local_outputs/atlas_rstl_review.csv
+# 医生逐行填写 CSV 后，按 docs/quality/VALIDATION.md 的命令显式签署并生成候选文件。
+```
+
+只有独立的逐线临床评审全部通过，并记录评审者、角色、时间、医学来源和显式
+attestation 后，才能由受控 finalize 流程生成 `validated:true` 候选资产。不得手工
+修改布尔字段冒充验证完成；完整出口由 issue #2 跟踪。
+
+---
+
+## 线条图谱（数据）
+
+线图谱是 JSON：信封带 `topologyId` / `topologyVersion`，每条线为 `[三角面id, u, v]` 重心坐标点序列（`w = 1−u−v`），网页注入时校验拓扑身份。正式 RSTL 图谱为 **v8.1.67：133 条 / 14,315 点**（其中 14 条属 `forehead_bridge_arc_v15` 额头拱线，按参考输入里的 `doctorConstraints` 生成；该资产仍为 `validated: false`，未经临床复核），由 [`tools/build_field_atlas_standard_v1.py`](tools/build_field_atlas_standard_v1.py) 从结构化参考输入 [`assets/rstl_standard_reference_v8_1_67.json`](assets/rstl_standard_reference_v8_1_67.json) 确定性生成；Langer 对照图谱仍由 [`tools/build_field_atlas.py`](tools/build_field_atlas.py) 的方向场 + 等间距流线生成。方向遵循 **Borges RSTL** 走向、几何为近似、`validated: false`；医生修正后必须经 `atlas_clinical_review.py` 的逐线审阅与显式签署门槛，才会生成含结构化 `clinicalValidation` 记录的 `validated:true` 候选文件。
+
+> 数据格式、方向场算法与生成流程的完整说明见 [ARCHITECTURE.md «6. 图谱（数据）生成与格式»](docs/architecture/ARCHITECTURE.md)。
+
+---
+
+## 目录结构
+
+| 路径 | 作用 |
+|---|---|
+| `.claude/` | Claude Code 相关启动配置；本地私有设置文件已被 `.gitignore` 排除。 |
+| `.github/` | GitHub Actions CI；包含 Python 测试、Vite 构建和 Web TypeScript 几何对拍。 |
+| `assets/` | Python 端权威资产：MediaPipe 标准脸 obj、人脸 landmarker `.task`、RSTL/Langer atlas JSON；`assets/flame/` 仅放本地 license-gated 原始 FLAME 资产。 |
+| `docs/` | **全部跨模块项目文档集中于此**，按语义分 `onboarding/architecture/tracks/quality/clinical/planning` 六个子目录，命名统一 `UPPER_SNAKE_CASE.md`、单一职责；入口见 [docs/README.md](docs/README.md)，平铺清单见下方[开发文档索引](#开发文档)。（资产目录内的 NOTICE / MODEL_CARD / README 就地存放，不搬进 `docs/`。） |
+| `src/langerface/` | Python 核心库，按 `config/geometry/detection/lines/rendering/pipeline/media/apps` 分层。 |
+| `tests/` | pytest 测试，覆盖图谱、标准脸、映射、稳定性、渲染和 pipeline 行为。 |
+| `tools/` | 资产下载、图谱生成、web 资产导出、3D 重建、临床标注、目检和对拍脚本。 |
+| `web/` | Vite 8 + React + TypeScript 前端（唯一应用入口 `web/index.html`）；Canvas 2D + MediaPipe Tasks + Three.js / R3F。 |
+| `web/src/routes/`, `web/src/services/` | React 页面与 TypeScript 浏览器运行时；`/live`、`/personalized`、`/v6-review` 共用唯一 SPA 入口。历史 `/current/*` 只重定向到 `/live`，`tools/test_web_architecture.ts` 禁止重新加入 `.js` 运行时代码（#95）。 |
+| `web/compat/personalized/` | 个性化流程的静态算法资产（YOLO ONNX 分片与 V6 示例），不含 HTML/JavaScript/CSS 运行时。 |
+| `web/src/services/geometry*.ts` | Web TypeScript 几何子系统：atlas 映射 / 平滑 / 遮挡 / Umeyama。 |
+| `web/assets/` | 浏览器端静态资产：MediaPipe/atlas/topology 由 `tools/export_web_assets.py` 从 `assets/` 派生（勿手改，CI 有一致性门禁，见 #47）；紧凑 FLAME basis 由 `tools/build_flame_basis.py` 生成并带署名 notice。 |
+| `web/test/` | Web/Python 几何对拍用 ground truth 和本地测试图像；真实图片被忽略。 |
+| `local_media/` | 本地视频、照片和输出视频，例如 `IMG_3458.MOV`、`out_rstl.mp4`；不提交。 |
+| `logs/` | 本地运行日志；不提交。 |
+| `local_outputs/` | 本地调试输出，例如 `local_outputs/debug_frames/` 里的目检截图和拼图；不提交。 |
+| `local_archives/` | 本地压缩包、外部资料归档；不提交。 |
+
+关键文件：
+
+| 文件 | 作用 |
+|---|---|
+| `pyproject.toml` | Python 包元数据、可选依赖、console scripts、ruff/pytest 配置。 |
+| `requirements.txt` | 兼容旧流程的 Python 依赖入口；推荐使用 `pip install -e ".[all]"`。 |
+| `web/package.json` | Node 24 / Vite 8 前端脚本和 npm 依赖。 |
+| `web/vite.config.ts` | Vite 静态资产处理、生产构建和本地 dev server 配置。 |
+
+---
+
+## 验证与测试
+
+两套几何实现（Python / JS）由**逐点对拍**保证一致：`cd web && npm test`（架构无环 + 映射误差 ~5×10⁻⁵px + 背面剔除 0 不一致 + One-Euro / 拓扑契约 / FLAME / soft-body / 诊断导出）与 `pytest`（图谱完整性、仿射不变性、渲染、资产同步、可观测性）全绿即可。生产构建上的 `/surgery` 按钮状态与对比度守卫由 `cd web && npm run test:browser` 单独运行。
+
+> 各测试的职责、目检脚本与浏览器实测清单见 [CONTRIBUTING.md «运行测试»](docs/onboarding/CONTRIBUTING.md#运行测试)；跨语言对拍不变式与金标重生成见 [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md)。
+
+---
+
+## 已知局限与医学声明
+
+### 医学声明（务必先读）
+
+本系统是**面部手术切口规划的决策辅助可视化工具**：把皮肤张力线叠加到病人脸部影像上，帮助术者直观判断切口走向。
+
+- 它**不是**手术指令，**不是**自主决策系统，**不是**受监管的医疗器械（未经任何药监 / FDA / CE 认证）。
+- 最终切口位置与方向由**主刀医生**根据病人个体情况判断并负责。
+- 叠加线条为几何近似，受关键点检测误差、姿态、表情、光照影响，**仅供参考**。
+
+### 两套线系统的临床取舍
+
+当前网页主 demo 只暴露 RSTL，避免把 Langer 对照误认为面部切口首选；Langer 仍保留在资产、CLI 和标注器中用于对照 / 教学。
+
+| 系统 | 含义 | 面部适用性 |
+|---|---|---|
+| **RSTL（默认）** | Borges 松弛皮肤张力线（活体、放松状态）| 面部切口的**临床首选**参考 |
+| **Langer** | 经典 Langer 裂线（1861，尸体）| 面部多处与最佳切口方向**不一致甚至垂直**，仅作对照 / 教学 |
+
+依据 Borges & Alexander (1962/1984)：活体 RSTL 比尸体 Langer 线更适合指导面部切口；两者在鼻背、眦外、颏部、颞部等区域走向分歧明显。
+
+### 图谱校验状态
+
+⚠️ 内置图谱为**示意性首版（`validated: false`）**：由 `tools/build_field_atlas_standard_v1.py` 按 Borges RSTL 总体走向确定性生成，几何为近似，**尚未经临床验证，不得直接用于真实临床决策**。校验流程见上文[临床校验图谱](#临床校验图谱关键)，完成后图谱 `validated` 置 `true` 并在 `provenance` 记录校验者。
+
+### 切口设计临床边界
+
+Stage 2 的切口候选必须受以下边界约束：
+
+- 皮下肿物与皮表肿物分开建模；皮下肿物默认生成线性切口，皮表肿物才生成梭形切口。
+- 3:1 长轴 / 类圆化肿物直径、尖端角 30°、两侧弧线对称平滑等规则按医生团队指定实现为**可配置规则**，同时保留医生覆盖。
+- 下睑、唇红缘、鼻翼等敏感游离边缘附近，系统必须优先提示功能与形态风险；必要时可由医生选择违背 RSTL 的保护性方向。
+- 安全切缘、松弛度、可无张力自然对合、是否需要皮瓣 / 植皮等不由算法自动判断，必须由医生团队在术前评估中确认。
+
+### 技术稳定性边界（已知较弱区域）
+
+- **图谱医学准确性**是首要限制：CV 管线可做到很稳，但源图谱须临床专家验证。
+- **前额**：MediaPipe 关键点稀疏，该区线条精度较低。
+- **极端侧脸 / 大角度旋转**：背面剔除会隐藏背侧线条；接近纯侧脸时正面线条也可能漂移。
+- **外部遮挡**：已支持**手部**（贴合手形掩膜，指缝保留）；**器械、纱布、口罩**等暂不识别。
+- **强光 / 阴影 / 低分辨率**：降低关键点置信度，触发淡出。
+- **多张脸**：网页端 Face Landmarker 当前配置为单脸追踪；多人同框时只处理首个检测结果，快速进出画面时可能错配。
+- **3D / FLAME 研究**：Live 扫描、投影和实时孪生 runtime 已删除；离线拟合 basis、标注和研究预览保留。医生 FLAME 标准线迁移到个体头、Mode-B 扫描配准等不在当前路线内，重启须满足独立的 3D gate。
+- **切除闭合演示**：`/app/surgery` 是独立的标准脸定性表面软体研究演示，只解释沿 RSTL 闭合的张力直觉，不创建病例，也不能替代真实软组织 FEM、患者个体化建模或正式候选审阅。
+
+### 数据与隐私
+
+病人面部影像属敏感个人信息。本工具默认本地优先。标准 RSTL、MediaPipe、浏览器 YOLO、切口 workflow 和手动编辑在当前设备处理；通过 Tailscale 使用本地 Vite 时，V10 工作帧会发送到提供网页的局域网电脑；在 Vercel 受控部署中，用户点击“检测皱纹”后，工作帧会凭 90 秒单次令牌直接发送到远程 V10 服务。Vercel Function 不接收图像正文，远程服务不持久化工作帧并在任务结束后清理临时目录。真实部署必须启用访问控制并完成合规审查（HIPAA / GDPR / 《个人信息保护法》）。
+
+Stage 2 切口 workflow 只在浏览器本地处理肿物参数、标准化坐标、候选切口、工具调用 trace 和审阅记录；导出 JSON / 报告草案不默认包含原始照片、视频帧、摄像头画面或纹理。自然皱襞 / 病灶辅助线索只允许以低置信摘要和 metrics 进入医生审阅，不自动改变切口几何。运行时没有远程模型配置、访问密钥或模型请求。详细边界见 [`docs/clinical/PRIVACY_AND_AUDIT.md`](docs/clinical/PRIVACY_AND_AUDIT.md)。
+
+---
+
+## 持续集成与部署（CI/CD）
+
+- **CI**：push 到 `master` / `refactor/**` 或发 PR 时，[`.github/workflows/ci.yml`](.github/workflows/ci.yml) 跑四个并行 job —— `lint`（`ruff check .`）、`python-tests`（`pytest`，**Python 3.10 / 3.11 / 3.12** 矩阵，不装 mediapipe）、`js-tests`（**Node 24**：先检查普通兼容构建，再运行 `build:lesion-candidate` 并回读候选身份，最后执行 `npm test`）、`browser-tests`（Chromium UI/对比度回归）。CI 通过证明候选构建身份和工程检查通过，不替代本地样本效果验收。提交前可装 `pre-commit`（[`.pre-commit-config.yaml`](.pre-commit-config.yaml)）做本地预检。
+- **CD**：当前通过 `web/vercel.json` 关闭所有 Vercel Git 自动部署，合并到 `master` 不会发布公网版本；恢复正式公网部署及其验证统一由 [#224](https://github.com/jwj1342/LangerFace/issues/224) 跟踪。网页仍可在本地构建为 `web/dist/`；预留的 Vercel Function `web/api/wrinkle-v10.mjs` 只签发小型短期令牌和检查 provider 能力，不接收图像。
+- **隐私**：离线重建默认写入 gitignored 的 `local_outputs/recon_demo.json`，不会随 Vercel 站点发布；真实患者头模仍不得提交到仓库。
+
+> Vercel Project 设置、Production URL、branch protection 必需检查、Preview 访问策略、手动部署 fallback 与排障清单，全部见 **[CI/CD 与 Vercel 部署指南](docs/quality/CI_CD_VERCEL.md)**。
+
+## 开发文档
+
+项目文档集中在 `docs/`，按语义分成 6 个子目录：`onboarding/`（上手与协作）、`architecture/`（架构与算法）、`tracks/`（技术轨与功能专题）、`quality/`（质量与运维）、`clinical/`（临床边界与合规）、`planning/`（路线图）。文件名统一 `UPPER_SNAKE_CASE.md`，**每个文档单一职责**。
+
+> 📖 **每个子目录里有什么、该在什么时候读，见 [docs/README.md](docs/README.md)** —— 那是文档集的入口，
+> 也记录了维护契约与当前已知的文档/代码不一致项。下表为平铺索引，想用 AI 编码工具熟悉本项目可从这里按需进入：
+
+| 文档 | 职责 |
+|---|---|
+| **上手 / 协作** — `docs/onboarding/` | |
+| [ENVIRONMENT.md](docs/onboarding/ENVIRONMENT.md) | 本地 / 集群环境、venv、Node 24、测试与本地产物目录 |
+| [CONTRIBUTING.md](docs/onboarding/CONTRIBUTING.md) | 协作流程、测试约定、扩展点、PR 要求 |
+| [ENGINEERING_LESSONS.md](docs/onboarding/ENGINEERING_LESSONS.md) | 多人并行协作踩过的坑、避坑规则与提交前清单 |
+| [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
+| **架构 / 数据** — `docs/architecture/` | |
+| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | 核心算法、坐标系、2D/3D 路线、网页 3D 标注、HeadSpace 离线管线、Stage 2 路线、资产与部署 |
+| [METHODS_AND_IMPLEMENTATION_SUMMARY.md](docs/architecture/METHODS_AND_IMPLEMENTATION_SUMMARY.md) | 各核心算法的**数学公式与推导**集中参考（重心映射 / One-Euro / 遮挡 / 流线生成 / Umeyama / FLAME / 软体 / 切口几何）；模块契约见 ARCHITECTURE，测试见 CONTRIBUTING |
+| [ADR_3D_ROUTE_FEASIBILITY.md](docs/architecture/ADR_3D_ROUTE_FEASIBILITY.md) | 实时 3D 路线的算力、部署与质量 gate；2D-first + 3D 离线资产/研究查看建议，等待 #40 owner 确认 |
+| **技术轨 / 功能专题** — `docs/tracks/` | |
+| [PERSONALIZED_RSTL.md](docs/tracks/PERSONALIZED_RSTL.md) | `/personalized` 个性化 RSTL 的输入、YOLO/V6 阈值依据、失败降级、隐私边界与图谱契约 |
+| [FLAME_3D_TRACK.md](docs/tracks/FLAME_3D_TRACK.md) | 3D FLAME 配准/标注与许可边界，以及 FLAME 与当前切口工作台的隔离契约 |
+| [RSTL_3DMM_PRIOR.md](docs/tracks/RSTL_3DMM_PRIOR.md) | Borges RSTL 来源、3DMM 拓扑先验 manifest、与 #2/#13/2D-first 路线的衔接 |
+| [INCISION_WORKFLOW.md](docs/tracks/INCISION_WORKFLOW.md) | 浏览器本地确定性切口 workflow、tool trace、worker 回退和医生审阅边界 |
+| [rstl_3dmm_prior_manifest.json](assets/rstl_3dmm_prior_manifest.json) | MediaPipe/3DMM RSTL 先验资产 manifest；高密度方向场大 JSON 由远端资产或本地生成提供（历史实现见 PR #88，`validated:false`） |
+| **质量 / 运维** — `docs/quality/` | |
+| [CROSS_LANG_PARITY.md](docs/quality/CROSS_LANG_PARITY.md) | Python ⇄ Web TypeScript ⇄ 金标逐点对拍不变式与金标重生成 |
+| [OBSERVABILITY.md](docs/quality/OBSERVABILITY.md) | 浏览器诊断 JSON、结构化事件字段、计数器与运行时指标（issue #51）|
+| [CI_CD_VERCEL.md](docs/quality/CI_CD_VERCEL.md) | Vercel 设置、Preview 访问策略、branch protection 与排障 |
+| [MARKER_RUNTIME_ACCEPTANCE.md](docs/quality/MARKER_RUNTIME_ACCEPTANCE.md) | 受控标记运行身份核验、本地样本最小回归包与验收边界 |
+| [LESION_CANDIDATE_REVIEW.md](docs/quality/LESION_CANDIDATE_REVIEW.md) | 照片肿物候选与切口显示的复现、资源及未通过范围 |
+| [LABELS.md](docs/onboarding/LABELS.md) | issue / PR 标签规范 |
+| **临床 / 合规** — `docs/clinical/` | |
+| [VALIDATION.md](docs/quality/VALIDATION.md) | 临床验证数据集、Stage 1/2 指标、失败分类、人工评审表（issue #20）|
+| [PRODUCT_BOUNDARIES.md](docs/clinical/PRODUCT_BOUNDARIES.md) | 当前产品承诺边界、明确暂缓项与未来重启条件 |
+| [PRIVACY_AND_AUDIT.md](docs/clinical/PRIVACY_AND_AUDIT.md) | 敏感数据边界、禁止提交项、导出约束、审计字段（issue #21）|
+| [WRINKLE_LESION_CUES.md](docs/clinical/WRINKLE_LESION_CUES.md) | 辅助线索、Python texture warp、浏览器个性化边界与 checkpoint 许可（issue #22）|
+| **规划** — `docs/planning/` | |
+| [TODO.md](docs/planning/TODO.md) | open issues 路线图（自动和 GitHub 同步）|
+
+> 医学声明、图谱状态与临床局限见 README [已知局限与医学声明](#已知局限与医学声明)。
+
+## 文档维护约定
+
+**本仓库的 [README.md](README.md)、[docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)、[docs/onboarding/ENVIRONMENT.md](docs/onboarding/ENVIRONMENT.md) 必须与代码保持同步。**
+任何功能更新（新增/修改特性、改动数据流、增删模块或资产、调整使用方式）都要在同一改动中更新这些文档，
+确保"读文档即可了解全貌并复现项目"。医学相关变化同时更新本 README 的[已知局限与医学声明](#已知局限与医学声明)小节；路线图变化更新 [docs/planning/TODO.md](docs/planning/TODO.md)。
+
+**文档规范**（便于人与 AI 编码工具都能快速定位）：
+- 文件名统一 `UPPER_SNAKE_CASE.md`，**放在 `docs/` 的某个语义子目录里**（不要直接放 `docs/` 根）；一个文档只承担一个职责，别把不相关主题塞进同一篇。
+- 新增文档时要做两件事：加进上方[「开发文档」索引](#开发文档)表，并在 [docs/README.md](docs/README.md) 对应目录的段落里提到它；删除/重命名/移动文档时同步改这两处与所有引用它的链接。
+- 文档顶部用一句话点明本篇职责（"本文…"），与索引里的职责描述一致。
+- 以上三条由 `tools/test_docs_links.ts`（`npm test` 内）机械强制：它检查全仓 md 的仓库内相对链接是否都解析得到、`docs/` 根有没有散落文档、每个子目录与每篇文档是否都被 `docs/README.md` 索引。**移动文档后跑一次它。**

@@ -150,11 +150,19 @@ function pointSegment(p: Point, a: Point, b: Point): number {
 export function foreheadCurveDistance(a: Point[], b: Point[]): number {
   if (yoloGuardCurvesCross(a, b)) return 0;
   let minimum = Infinity;
-  for (let i = 1; i < a.length; i++) for (let j = 1; j < b.length; j++) {
-    if (Math.max(a[i - 1][0], a[i][0]) + minimum < Math.min(b[j - 1][0], b[j][0]) ||
-        Math.max(b[j - 1][0], b[j][0]) + minimum < Math.min(a[i - 1][0], a[i][0])) continue;
-    minimum = Math.min(minimum, pointSegment(a[i - 1], b[j - 1], b[j]), pointSegment(a[i], b[j - 1], b[j]),
-      pointSegment(b[j - 1], a[i - 1], a[i]), pointSegment(b[j], a[i - 1], a[i]));
+  // A segment pair separated by more than the best distance on either axis
+  // cannot improve it. Keep the original pair order and exact distance math.
+  for (let i = 1; i < a.length; i++) {
+    const minX = Math.min(a[i - 1][0], a[i][0]), maxX = Math.max(a[i - 1][0], a[i][0]);
+    const minY = Math.min(a[i - 1][1], a[i][1]), maxY = Math.max(a[i - 1][1], a[i][1]);
+    for (let j = 1; j < b.length; j++) {
+      if (maxX + minimum < Math.min(b[j - 1][0], b[j][0]) ||
+          Math.max(b[j - 1][0], b[j][0]) + minimum < minX) continue;
+      if (maxY + minimum < Math.min(b[j - 1][1], b[j][1]) ||
+          Math.max(b[j - 1][1], b[j][1]) + minimum < minY) continue;
+      minimum = Math.min(minimum, pointSegment(a[i - 1], b[j - 1], b[j]), pointSegment(a[i], b[j - 1], b[j]),
+        pointSegment(b[j - 1], a[i - 1], a[i]), pointSegment(b[j], a[i - 1], a[i]));
+    }
   }
   return minimum;
 }
@@ -242,16 +250,24 @@ export function refineForeheadTrajectories(input: {
       weights[m.curve][k] += w;
     });
   }
-  // Fixed other-region geometry constrains the same side of each segment as the baseline.
-  for (let i = 0; i < curves.length; i++) xs.forEach((x, k) => {
-    if (!valid[i][k]) return;
+  // Fixed other-region intersections depend on x and the fixed geometry, not
+  // on which RSTL is being constrained. Prepare them once in the same order.
+  const fixedBounds = xs.map(x => {
+    const bounds: Array<{ minY: number; maxY: number; y: number; clearance: number }> = [];
     for (const c of transformedFixed) for (let j = 1; j < c.pts.length; j++) {
       const a = c.pts[j - 1], b = c.pts[j], dx = b[0] - a[0];
       if (x < Math.min(a[0], b[0]) - 2 || x > Math.max(a[0], b[0]) + 2) continue;
       const t = Math.abs(dx) < 1e-9 ? .5 : clamp((x - a[0]) / dx, 0, 1), y = a[1] + t * (b[1] - a[1]);
       const clearance = Math.min(4, 1.1 * Math.hypot(1, (b[1] - a[1]) / Math.max(.1, Math.abs(dx))));
-      if (prior[i][k] < Math.min(a[1], b[1]) || prior[i][k] < y) upper[i][k] = Math.min(upper[i][k], Math.max(prior[i][k], Math.min(a[1], b[1], y) - Math.max(2, clearance)));
-      else lower[i][k] = Math.max(lower[i][k], Math.min(prior[i][k], Math.max(a[1], b[1], y) + Math.max(2, clearance)));
+      bounds.push({ minY: Math.min(a[1], b[1]), maxY: Math.max(a[1], b[1]), y, clearance });
+    }
+    return bounds;
+  });
+  for (let i = 0; i < curves.length; i++) xs.forEach((_, k) => {
+    if (!valid[i][k]) return;
+    for (const { minY, maxY, y, clearance } of fixedBounds[k]) {
+      if (prior[i][k] < minY || prior[i][k] < y) upper[i][k] = Math.min(upper[i][k], Math.max(prior[i][k], Math.min(minY, y) - Math.max(2, clearance)));
+      else lower[i][k] = Math.max(lower[i][k], Math.min(prior[i][k], Math.max(maxY, y) + Math.max(2, clearance)));
     }
   });
   // Spread a fixed-boundary correction over a local interval before projection.
@@ -304,10 +320,13 @@ export function refineForeheadTrajectories(input: {
       }
     });
   }
-  let output = original.map((c, i) => ({ ...c, pts: c.pts.map(([x, py]): Point => {
-    const delta = at(xs.map((u, k): Point => [u, y[i][k] - prior[i][k]]), x);
-    return [x, Math.abs(delta) < 1e-10 ? py : py + delta];
-  }) }));
+  let output = original.map((c, i) => {
+    const displacement = xs.map((u, k): Point => [u, y[i][k] - prior[i][k]]);
+    return { ...c, pts: c.pts.map(([x, py]): Point => {
+      const delta = at(displacement, x);
+      return [x, Math.abs(delta) < 1e-10 ? py : py + delta];
+    }) };
+  });
   if (mode === 'glabellar') {
     // The transformed-frame bounds are conservative for steep/short atlas
     // segments, while the merged guard uses the exact exported segments.
@@ -341,6 +360,8 @@ export function refineForeheadTrajectories(input: {
   // Projection must also hold after interpolation onto the original atlas vertices.
   // Repair only the neighbourhood of a compressed pair, using smooth local offsets.
   const order = curves.map((_, i) => i).sort((a, b) => at(curves[a].pts, (lo + hi) / 2) - at(curves[b].pts, (lo + hi) / 2));
+  const lowerSamples = lower.map(row => xs.map((x, k): Point => [x, row[k]]));
+  const upperSamples = upper.map(row => xs.map((x, k): Point => [x, row[k]]));
   for (let pass = 0; pass < 24; pass++) {
     let corrected = false;
     for (let n = 1; n < order.length; n++) {
@@ -362,8 +383,8 @@ export function refineForeheadTrajectories(input: {
           const radius = Math.abs(x - worstX) / (6 * unit);
           if (radius >= 3) return [x, py];
           const delta = sign * .6 * worst * Math.exp(-.5 * radius ** 2) * smoothstep(3 - radius);
-          const low = at(xs.map((u, k): Point => [u, lower[i][k]]), x);
-          const high = at(xs.map((u, k): Point => [u, upper[i][k]]), x);
+          const low = at(lowerSamples[i], x);
+          const high = at(upperSamples[i], x);
           return [x, clamp(py + delta, low, high)];
         });
       }
@@ -560,19 +581,29 @@ export function refineForeheadTrajectories(input: {
   // guard performs the authoritative continuous crossing check afterwards.
   // Keep the stricter clearance-ratio rollback for the frozen forehead path.
   const enforceClearanceRatio = mode !== 'glabellar';
+  const distanceCache = new WeakMap<Point[], WeakMap<Point[], number>>();
+  const curveDistance = (a: Point[], b: Point[]): number => {
+    let pairs = distanceCache.get(a);
+    if (!pairs) distanceCache.set(a, pairs = new WeakMap());
+    const cached = pairs.get(b);
+    if (cached !== undefined) return cached;
+    const value = foreheadCurveDistance(a, b);
+    pairs.set(b, value);
+    return value;
+  };
   for (let i = 0; i < output.length; i++) {
     if (yoloGuardSelfCrosses(output[i].pts) && !yoloGuardSelfCrosses(baselineCurves[i].pts)) failed.add(i);
     for (const c of transformedFixed) {
-      const before = foreheadCurveDistance(baselineCurves[i].pts, c.pts), after = foreheadCurveDistance(output[i].pts, c.pts);
+      const before = curveDistance(baselineCurves[i].pts, c.pts), after = curveDistance(output[i].pts, c.pts);
       if ((enforceClearanceRatio && after + 1e-5 < Math.min(1, before)) ||
           (yoloGuardCurvesCross(output[i].pts, c.pts) && !yoloGuardCurvesCross(baselineCurves[i].pts, c.pts))) {
         failed.add(i); boundaryFailures.push({ curve: i, obstacle: c.name, before, after });
       }
     }
     for (let j = 0; j < i; j++) if (yoloGuardCurvesCross(output[i].pts, output[j].pts) ||
-        (enforceClearanceRatio && foreheadCurveDistance(output[i].pts, output[j].pts) <
-          .35 * foreheadCurveDistance(baselineCurves[i].pts, baselineCurves[j].pts) - 1e-5)) {
-      failed.add(i); failed.add(j); boundaryFailures.push({ pair: [i,j], gap: foreheadCurveDistance(output[i].pts, output[j].pts), priorGap: foreheadCurveDistance(baselineCurves[i].pts, baselineCurves[j].pts) });
+        (enforceClearanceRatio && curveDistance(output[i].pts, output[j].pts) <
+          .35 * curveDistance(baselineCurves[i].pts, baselineCurves[j].pts) - 1e-5)) {
+      failed.add(i); failed.add(j); boundaryFailures.push({ pair: [i,j], gap: curveDistance(output[i].pts, output[j].pts), priorGap: curveDistance(baselineCurves[i].pts, baselineCurves[j].pts) });
     }
   }
   let changed = true;
@@ -580,8 +611,8 @@ export function refineForeheadTrajectories(input: {
     for (const i of [...failed]) for (let j = 0; j < output.length; j++) {
       if (failed.has(j)) continue;
       if (yoloGuardCurvesCross(baselineCurves[i].pts, output[j].pts) || yoloGuardCurvesCross(output[i].pts, output[j].pts) ||
-          (enforceClearanceRatio && foreheadCurveDistance(baselineCurves[i].pts, output[j].pts) <
-            .35 * foreheadCurveDistance(baselineCurves[i].pts, baselineCurves[j].pts) - 1e-5)) {
+          (enforceClearanceRatio && curveDistance(baselineCurves[i].pts, output[j].pts) <
+            .35 * curveDistance(baselineCurves[i].pts, baselineCurves[j].pts) - 1e-5)) {
         failed.add(j); changed = true;
       }
     }
@@ -653,7 +684,8 @@ export function auditFinalForeheadAttraction(result: ReturnType<typeof refineFor
       lo: r.interval[0], hi: r.interval[1], gap: r.local_spacing_px,
       score: r.selection_score, coverage: 1, distance: r.selection_distance_px, angle: r.selection_direction_degrees };
     r.after = metrics({ ...exported[m.curve], pts: graph(exported[m.curve].pts) }, t, m, size / 640);
-    const displacement = exported[m.curve].pts.map(([x,y]) => Math.abs(y - at(graph(result.curves[m.curve].pts), x)));
+    const baselineGraph = graph(result.curves[m.curve].pts);
+    const displacement = exported[m.curve].pts.map(([x,y]) => Math.abs(y - at(baselineGraph, x)));
     r.final_accepted = partialAttractionPassed(r.before, r.after) &&
       Math.abs(r.signed_mean_displacement_px) + Math.abs(mean(displacement)) <= .30 * m.gap;
     r.final_status = r.final_accepted ? 'direct_attraction_accepted' : 'constrained_incomplete';

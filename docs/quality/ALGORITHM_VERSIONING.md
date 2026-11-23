@@ -1,3 +1,39 @@
+<a id="rstl-wrinkle-performance-recovery-eol-20261123"></a>
+
+## PR #247 recovery checkout line endings (2026-11-23)
+
+The previous verifier compared restored files with working-tree bytes. Actual clean checkouts of the same commit reproduce the review finding: `core.autocrlf=false` passes, while `true` converts active source to CRLF and fails the endpoint-source hash comparison despite identical LF Git blobs. The package itself remains byte-exact.
+
+The verifier now compares restored source to `git cat-file blob HEAD:<path>`. Manifest SHA-256 and every archived file's raw byte length/SHA-256 remain strict and unchanged; no newline normalization is applied to recovery evidence. Frozen archives are retained unchanged.
+
+`node tools/test_rstl_performance_recovery_checkout.mjs` makes two independent real Git clones/checkouts of the current committed Head, with `core.autocrlf=false` and `true`. It asserts actual LF/CRLF working-tree bytes and LF Git blobs, then runs the full clean-base recovery verifier in each checkout. Both modes must pass both restored test entrypoints (18 endpoint cases, 240 distance comparisons and live/forehead trajectory regressions). The matrix is imported by the existing CI release-gate regression and uses committed code; uncommitted verifier edits are not silently copied into its clones. This exercises Git's conversion modes on the local host and Linux CI, not native Windows OS execution.
+
+Only recovery validation, its regression matrix and this documentation change. Product runtime/source digest `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`, archive identity, strict archive checks and existing human acceptance remain unchanged. No new runtime acceptance is inferred or needed. New Head CI results are reported independently in the PR.
+
+<a id="rstl-wrinkle-performance-recovery-fix-20261123"></a>
+
+## PR #247 recovery dependency repair (2026-11-23)
+
+Reviewer feedback was reproduced: extract clean Git base `1333db5eaa11ad80af14cb7238d736f0ad7f9df1`, overlay the original archive's copied files, and run `node tools/test_live_wrinkle_refinement.ts`. It exits 1 with `ERR_MODULE_NOT_FOUND` for `test_rstl_endpoint_smoothing.ts` before any assertions. A normal PR checkout masked the missing dependency.
+
+The archive scope now explicitly lists the endpoint test and matching renderer, the forehead distance/trajectory tests and matching implementation, the public geometry fixture, and the restore verifier as external recovery dependencies. Their team ownership does not change. A new self-contained archive is committed at `local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/manifest.json` (manifest SHA-256 `416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230`); the previous frozen archive remains unchanged. Recovery no longer depends on an unpublished local supplemental snapshot. The new archive's raw bytes are protected in `.gitattributes`.
+
+`node tools/test_rstl_performance_recovery.mjs` extracts that clean base into a temporary directory, verifies every copied archive file's byte length and SHA-256, overlays only those archived copies, checks required restored files against the PR implementations, and runs both `test_live_wrinkle_refinement.ts` and `test_forehead_trajectory_attraction.ts`. Both passed: 18 endpoint frozen-output/input-isolation cases, 240 exact distance comparisons, and the live refinement/forehead trajectory regressions. This verifier is imported by the existing CI release-gate regression, so an unavailable recovery dependency fails CI. The JS job fetches Git history so the recorded clean base is available even on a fresh Actions runner. No packages or files from the current checkout are overlaid outside the registered archive.
+
+This repair changes recovery metadata, documentation and tests only. Runtime source digest remains `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`; marker algorithm, assets and the user's already-bound runtime acceptance/save confirmation remain unchanged. The user's direct “好的，请修复这个问题” authorizes this dependency repair; it is not interpreted as a new product-effect or medical approval. Full-PR whitespace checking is not claimed to pass because frozen templates/CRLF scope snapshots retain their original bytes. Remote CI is reported separately for the new Head.
+
+<a id="rstl-wrinkle-performance-20261123"></a>
+
+## RSTL / wrinkle performance PR preparation (2026-11-23)
+
+Base: `1333db5eaa11ad80af14cb7238d736f0ad7f9df1`. Only RSTL/wrinkle runtime files and necessary tests/documentation change. The user explicitly requested a PR for the three performance changes; this authorizes their scope, not human effect acceptance. Model resolution, thresholds, iteration counts, crossing guards and marker algorithms/assets remain unchanged. No patient image or benchmark screenshot is submitted.
+
+Current source digest: `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`. Marker algorithm digest remains `04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd`; its version is unchanged because no marker implementation changed. The initial recovery manifest `local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/manifest.json` was incomplete and is superseded by the recovery-fix record above. The earlier `pr-source-snapshot` was local-only and is not a published recovery dependency; the replacement committed archive contains the required performance tests and implementations directly. No existing frozen archive is edited. The new default archive is committed because the existing CI archive-checkout regression requires its manifest and all frozen copies. A new `.gitattributes` entry preserves its raw bytes. The frozen template contains a pre-existing trailing space and the frozen scope JSON retains required CRLF; full-PR whitespace checking is not claimed as passing.
+
+The six-input full-output comparison against master passes exactly, including diagnostics and exported-output audit. Eighteen endpoint combinations match the original output, and 240 curve-distance comparisons match exhaustive search. Timings and limitations are recorded in `docs/tracks/PERSONALIZED_RSTL.md`. Local checks and remote CI statuses are reported separately in the PR.
+
+The inherited master operator evaluation/save confirmation applies to the old source only. In a direct response to the PR #247 current-version question, the user stated “已实际查看并接受，涉及文件均已保存”. This new acceptance/save confirmation is now bound to `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5` (recorded at 2026-11-23T07:37:51.076147+00:00); no old approval is reused. Scope authorization is bound only to this user-requested RSTL/wrinkle performance work. No marker-effect, medical or merge approval is inferred.
+
 <a id="pr244-master-refresh-20261117"></a>
 ## 2026-11-17：PR244 接续已合并 PR245 的 master
 

@@ -1,3 +1,4 @@
+import './test_rstl_endpoint_smoothing.ts';
 import assert from "node:assert/strict";
 import fs from "node:fs";
 

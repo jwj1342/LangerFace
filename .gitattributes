@@ -4,3 +4,5 @@ assets/rstl_mediapipe_direction_prior.json linguist-generated=true
 docs/quality/algorithm-archive-scope.json text eol=crlf
 # Frozen recovery evidence is hashed as raw bytes, including line endings.
 local_outputs/recovery-packages/pr244-master-20261117/** -text
+local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/** -text
+local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/** -text

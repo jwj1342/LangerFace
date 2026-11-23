@@ -11,7 +11,7 @@
       "完整局部轮廓"
     ],
     "status": "candidate",
-    "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
+    "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
     "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
     "changeSlug": "repeated-supported-contained-local-pigment",
     "previous": {
@@ -291,43 +291,37 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
-    "manifestPath": "local_outputs/recovery-packages/pr244-master-20261117/manifest.json",
-    "manifestSha256": "2c7a35fbd70bd599ebd7c9d9af23a8de90d69a44c8e5cf576c087e374580e460",
-    "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
-    "verifiedAt": "2026-11-17T14:26:12.443Z",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "note": "Self-contained frozen source snapshot; no inherited package. Registration is frozen before binding this manifest to avoid a hash cycle."
+    "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
+    "manifestPath": "local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/manifest.json",
+    "manifestSha256": "416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230",
+    "scopeConfigSha256": "81e074193fada64bb8ac1aafc6a47d379be58fd174945484d88a3df77e480ce8",
+    "verifiedAt": "2026-11-23T08:01:47.141116+00:00",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-recovery-fix-20261123",
+    "note": "Self-contained replacement archive includes explicitly listed RSTL performance tests, matching runtime implementations and fixture. Previous frozen archive retained unchanged."
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "2c7a35fbd70bd599ebd7c9d9af23a8de90d69a44c8e5cf576c087e374580e460",
-    "confirmedAt": "2026-11-17T15:05:58.128Z",
-    "confirmationKind": "explicit_operator_master_integration_request",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "operatorStatement": "当前pr先于245拉取，但是pr245处理优先于pr244并已完成合并，请拉取新的master并对当前pr244进行修正及推送工作",
-    "scope": "Only integration of master@70460bc8779b864473954c62078e0463a8322449; all 48 shared-code paths flagged against the old PR head are identical to that master. No new shared-algorithm edits are accepted by this record.",
-    "recordedAtMeaning": "Time this existing direct integration request was bound to the verified manifest; not the original message timestamp or an effect evaluation."
+    "manifestSha256": "416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230",
+    "confirmedAt": "2026-11-23T08:01:47.141116+00:00",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-recovery-fix-20261123",
+    "confirmationKind": "explicit_user_recovery_dependency_fix",
+    "operatorStatement": "好的，请修复这个问题",
+    "scope": "Repair the missing RSTL/wrinkle recovery dependencies and verify on the recorded clean base; no runtime or ownership changes."
   },
   "operatorEvaluation": {
     "status": "accepted",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "effectResult": "partial-failed",
-    "knownFailures": [
-      "MO004回传压缩图固定5点10mm全部拒识，原图同条件成功；历史真实手机实际RGBA尚缺",
-      "原图MO004扫描范围敏感性仍开放",
-      "MK002、MK003鼻翼及其他边界精度/跨落点问题未整组验收",
-      "0.104.2/3/4缩图候选已否决并恢复0.104.1，不进入活动产品"
-    ],
-    "note": "操作者已查看当前候选，接受其作为带已知拒识和弱边界限制的研发候选；未完成医学、真机和私有模型验收。该接受不表示整组效果或专业验收通过。",
-    "confirmedAt": "2026-11-19T04:12:17+08:00",
-    "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
+    "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
+    "confirmedAt": "2026-11-23T07:37:51.076147+00:00",
+    "operatorStatement": "已实际查看并接受，涉及文件均已保存",
+    "scope": "RSTL/wrinkle performance changes only, explicitly accepted in direct response to the PR #247 current-version question. No marker or medical effect acceptance is inferred."
   },
   "editorSaveConfirmation": {
     "status": "confirmed",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
-    "confirmedAt": "2026-11-19T04:12:17+08:00",
-    "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
+    "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
+    "confirmedAt": "2026-11-23T07:37:51.076147+00:00",
+    "operatorStatement": "已实际查看并接受，涉及文件均已保存"
   },
   "history": [
     {
@@ -5022,6 +5016,64 @@
           "onlyEol": true
         }
       ]
+    }
+  },
+  "rstlPerformanceIntegration": {
+    "base": "1333db5eaa11ad80af14cb7238d736f0ad7f9df1",
+    "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
+    "previousSourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
+    "previousRegistration": {
+      "archive": {
+        "status": "verified",
+        "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
+        "manifestPath": "local_outputs/recovery-packages/pr244-master-20261117/manifest.json",
+        "manifestSha256": "2c7a35fbd70bd599ebd7c9d9af23a8de90d69a44c8e5cf576c087e374580e460",
+        "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+        "verifiedAt": "2026-11-17T14:26:12.443Z",
+        "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
+        "note": "Self-contained frozen source snapshot; no inherited package. Registration is frozen before binding this manifest to avoid a hash cycle."
+      },
+      "scopeBoundaryReview": {
+        "status": "confirmed",
+        "manifestSha256": "2c7a35fbd70bd599ebd7c9d9af23a8de90d69a44c8e5cf576c087e374580e460",
+        "confirmedAt": "2026-11-17T15:05:58.128Z",
+        "confirmationKind": "explicit_operator_master_integration_request",
+        "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
+        "operatorStatement": "当前pr先于245拉取，但是pr245处理优先于pr244并已完成合并，请拉取新的master并对当前pr244进行修正及推送工作",
+        "scope": "Only integration of master@70460bc8779b864473954c62078e0463a8322449; all 48 shared-code paths flagged against the old PR head are identical to that master. No new shared-algorithm edits are accepted by this record.",
+        "recordedAtMeaning": "Time this existing direct integration request was bound to the verified manifest; not the original message timestamp or an effect evaluation."
+      },
+      "operatorEvaluation": {
+        "status": "accepted",
+        "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
+        "effectResult": "partial-failed",
+        "knownFailures": [
+          "MO004回传压缩图固定5点10mm全部拒识，原图同条件成功；历史真实手机实际RGBA尚缺",
+          "原图MO004扫描范围敏感性仍开放",
+          "MK002、MK003鼻翼及其他边界精度/跨落点问题未整组验收",
+          "0.104.2/3/4缩图候选已否决并恢复0.104.1，不进入活动产品"
+        ],
+        "note": "操作者已查看当前候选，接受其作为带已知拒识和弱边界限制的研发候选；未完成医学、真机和私有模型验收。该接受不表示整组效果或专业验收通过。",
+        "confirmedAt": "2026-11-19T04:12:17+08:00",
+        "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
+      },
+      "editorSaveConfirmation": {
+        "status": "confirmed",
+        "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr244-master-refresh-20261117",
+        "confirmedAt": "2026-11-19T04:12:17+08:00",
+        "sourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237"
+      }
+    },
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
+    "previousRecoveryArchive": {
+      "status": "verified",
+      "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
+      "manifestPath": "local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/manifest.json",
+      "manifestSha256": "d48fdf26ff631a417ca80710b548c1449d6dde1e33e13923fb6bcc6089491580",
+      "scopeConfigSha256": "69173ac5060660bbc2d5ac1e4eaa4bc1e7a0c33fea67cb81b77ccfa844d410f8",
+      "verifiedAt": "2026-11-23T07:31:38.699989+00:00",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
+      "note": "Existing scope retained. RSTL/wrinkle performance source snapshot separately preserved; no frozen archive modified."
     }
   }
 }
