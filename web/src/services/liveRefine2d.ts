@@ -263,20 +263,11 @@ export function hasManualRefineChanges(): boolean {
 
 export function getDisplayLines(
   mapped: readonly MappedAtlasLine[],
-  cameraLandmarks?: readonly Vec3[],
 ): Array<MappedAtlasLine & {
   hidden?: boolean;
   hiddenPointRuns?: Array<[number, number]>;
 }> {
   const s = state();
-  if (photoRstlProjection?.system === renderState.system && cameraLandmarks) {
-    const { lines, bound } = photoRstlProjection;
-    return mapTrackedWrinkleLines(bound, cameraLandmarks, modelState.triangles || [])
-      .map((line, index) => ({
-        ...lines[index],
-        pts: line.points.map(([x, y]): Vec3 => [x, y, 0]),
-      }));
-  }
   if (s.active) {
     if (!s.lines) setLatestAutoLines(mapped);
     return s.lines || [...mapped];
@@ -296,6 +287,16 @@ let photoRstlProjection: {
   lines: EditableRefineLine[];
   bound: ReturnType<typeof bindWrinkleLinesToFace>;
 } | null = null;
+
+export function projectPhotoRstlBaseline(cameraLandmarks: readonly Vec3[]): EditableRefineLine[] | null {
+  if (photoRstlProjection?.system !== renderState.system) return null;
+  const { lines, bound } = photoRstlProjection;
+  return mapTrackedWrinkleLines(bound, cameraLandmarks, modelState.triangles || [])
+    .map((line, index) => ({
+      ...lines[index],
+      pts: line.points.map(([x, y]): Vec3 => [x, y, 0]),
+    }));
+}
 
 export function startPhotoRstlProjection(photo: RefineDisplayResumeState, landmarks: readonly Vec3[]): void {
   const lines = photo.lines ?? photo.latestAutoLines;

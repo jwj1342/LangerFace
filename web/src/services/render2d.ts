@@ -37,6 +37,7 @@ import {
   getDisplayLines,
   isRefineActive,
   isPointRefineMode,
+  projectPhotoRstlBaseline,
   selectedLineIndex,
   selectedPointIndex,
   selectedPointWindow,
@@ -816,7 +817,8 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   const innerMouth = innerMouthTriangles(modelTriangles()); // 口裂三角面（张嘴会落进口内/牙齿），永久排除
   const staticFrame = sourceState.sourceKind === "image" || sourceState.paused;
   if (!staticFrame) staticAtlasMapping.clear();
-  const rawMapped = (staticFrame ? staticAtlasMapping.map : mapAtlas)(
+  const photoBaseline = sourceState.sourceKind === "camera" ? projectPhotoRstlBaseline(lm) : null;
+  const mapped = photoBaseline ?? (staticFrame ? staticAtlasMapping.map : mapAtlas)(
     atlasLines,
     lm,
     modelTriangles(),
@@ -824,10 +826,6 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
       ? RSTL_STANDARD_MAPPING_OPTIONS
       : { ...RSTL_STANDARD_MAPPING_OPTIONS, runtimeMode: "live" },
   );
-  // Apply the 0119 display correction after any frozen-frame/refinement
-  // cache lookup as well. In image mode getDisplayLines() may return cached
-  // lines instead of rawMapped, which would otherwise bypass this correction.
-  const mapped = rawMapped;
   if (sample) sample.stages.rstlMapping = performance.now() - begin;
   const refineActive = isRefineActive();
   // Keep the automatic-refinement baseline in the same coordinate state as
@@ -835,9 +833,11 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   // live transport; writing that result back as the baseline would apply the
   // same accepted displacement again on the next redraw.
   const baselineDisplayLines = smooth0119EndpointDisplayLines(mapped, H);
-  const allDisplayLines = smooth0119EndpointDisplayLines(
-    getDisplayLines(mapped, sourceState.sourceKind === "camera" ? lm : undefined), H,
-  );
+  // Photo-camera edits and their transport both use the displayed projection
+  // as their baseline. Avoid smoothing an already edited projection again.
+  const allDisplayLines = photoBaseline
+    ? getDisplayLines(baselineDisplayLines)
+    : smooth0119EndpointDisplayLines(getDisplayLines(mapped), H);
   if (sourceState.sourceKind === "image" || sourceState.paused) {
     setLatestAutoLines(baselineDisplayLines);
   }

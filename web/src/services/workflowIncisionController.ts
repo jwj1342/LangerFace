@@ -2344,11 +2344,15 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
   try {
     detectionPromise = worker
       ? withWorkflowTimeout(
-        worker.ready.then(() => worker.api.detectControlledMarker(
-          Comlink.transfer({ width: image.width, height: image.height, data: image.data }, [image.data.buffer]),
-          seed,
-          options,
-        )),
+        worker.ready.then(() => {
+          // Keep the original pixels for synchronous fallback and rejected-boundary recovery.
+          const data = image.data.slice();
+          return worker.api.detectControlledMarker(
+            Comlink.transfer({ width: image.width, height: image.height, data }, [data.buffer]),
+            seed,
+            options,
+          );
+        }),
         WORKFLOW_WORKER_TIMEOUT_MS,
         "切口识别线程启动或计算超时；请检查照片范围后重试。",
       ).catch((error) => {

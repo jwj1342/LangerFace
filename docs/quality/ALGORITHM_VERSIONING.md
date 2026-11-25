@@ -1,3 +1,11 @@
+<a id="pr248-review-fixes-20261125"></a>
+
+## PR #248 review follow-up (2026-11-25)
+
+The operator requested fixes for both [review findings](https://github.com/jwj1342/LangerFace/pull/248#issuecomment-7160926534), including the shared RSTL display integration. The Worker now receives a copy so post-transfer errors and rejected-boundary recovery can still use the original pixels. For the photo-camera experiment, the projected RSTL lines feed the frozen edit baseline and the existing live transport. The lesion recognition algorithm, model weights, and clinical status are unchanged.
+
+The regression tests cover an error after real buffer detachment and geometry through pause, edit, resumed motion, and a second pause without applying the edit twice. Chromium also exercised the real Worker message path with an injected post-receipt error and confirmed that the main-thread fallback produced a candidate. The previous operator evaluation remains evidence for its original source digest. Evaluation and editor save confirmation for the new source are pending.
+
 <a id="pr248-workflow-recovery-20261125"></a>
 
 ## PR #248 workflow recovery (2026-11-25)

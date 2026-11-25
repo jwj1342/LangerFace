@@ -43,6 +43,9 @@ import {
   smoothWorkflowClosedBoundary,
 } from "../web/src/services/workflowControllerUtils.ts";
 import { svgOverlayExportViewBox } from "../web/src/services/incisionExport.ts";
+import { detectControlledMarker } from "../web/src/services/controlledMarkerDetection.ts";
+import { applyCurveRefinementTransport, buildCurveRefinementTransport } from "../web/src/services/liveRefineMath.ts";
+import { bindWrinkleLinesToFace, mapTrackedWrinkleLines } from "../web/src/services/liveWrinkleTracking.ts";
 import { incisionCandidateScreenStyle, incisionOverlayScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
 import { buildPhotoSpaceDiameterEstimate, type SurfaceProjectedFusiformFit } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Vec3 } from "../web/src/services/softBody.ts";
@@ -127,6 +130,104 @@ assert.deepEqual(
 assert.match(controller, /const refs = recovered[\s\S]*?workflowSurfaceRefAtSource\(state, frame, point, true\)/,
   "the complete closed freehand outline uses the same explicit-boundary surface trust as its center");
 const markerFunction = controllerAst.statements.find((node: any) => ts.isFunctionDeclaration(node) && node.name?.text === "runControlledMarker");
+const markerWorkerBranch = markerFunction.body.statements.find((node: any) => ts.isTryStatement(node)
+  && node.getText(controllerAst).includes("detectionPromise = worker"));
+assert.ok(markerWorkerBranch, "extract the production marker dispatch and fallback");
+const runMarkerDispatch = runInNewContext(ts.transpileModule(
+  `(async function({ worker, image, seed, options, state, detectOnMainThread, detectBaselineOnMainThread }) {
+    let detectionPromise;
+    ${markerWorkerBranch.getText(controllerAst)}
+    return await detectionPromise;
+  })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText, {
+  Comlink: { transfer: (image: object, transfer: ArrayBuffer[]) => structuredClone(image, { transfer }) },
+  withWorkflowTimeout: (pending: Promise<unknown>) => pending,
+  WORKFLOW_WORKER_TIMEOUT_MS: 100,
+  setStatus() {},
+});
+const markerPixels = new Uint8ClampedArray(96 * 96 * 4).fill(255);
+for (let y = 0; y < 96; y++) {
+  for (let x = 0; x < 96; x++) {
+    const radius = Math.hypot(x - 48, y - 48);
+    if (radius < 23 && radius > 17) markerPixels.fill(12, 4 * (y * 96 + x), 4 * (y * 96 + x) + 3);
+  }
+}
+const markerImage = { width: 96, height: 96, data: markerPixels };
+const markerSeed = { x: 48, y: 48 };
+const markerOptions = { roiRadius: 36 };
+const expectedFallback = detectControlledMarker(markerImage, markerSeed, markerOptions);
+assert.equal(expectedFallback.ok, true, "the synthetic marker must be recognizable");
+let workerDelivered = false;
+const brokenWorker = {
+  ready: Promise.resolve(),
+  api: { async detectControlledMarker(payload: typeof markerImage) {
+    assert.equal(payload.data.byteLength, 96 * 96 * 4);
+    assert.equal(payload.data.some((channel) => channel === 12), true);
+    workerDelivered = true;
+    throw new Error("simulated computation failure after receiving transferred image");
+  } },
+  dispose() {},
+};
+const workerFailureState = { worker: brokenWorker, workerFailed: false };
+const resultAfterTransfer = await runMarkerDispatch({
+  worker: brokenWorker, image: markerImage, seed: markerSeed, options: markerOptions, state: workerFailureState,
+  detectOnMainThread: async () => detectControlledMarker(markerImage, markerSeed, markerOptions),
+  detectBaselineOnMainThread: () => assert.fail("the primary synchronous fallback should succeed"),
+});
+assert.equal(workerDelivered, true);
+assert.equal(workerFailureState.workerFailed, true);
+assert.equal(markerImage.data.byteLength, 96 * 96 * 4);
+assert.deepEqual(resultAfterTransfer, expectedFallback, "post-transfer failure keeps the exact fallback recognition result");
+
+const refineModule = ts.createSourceFile("liveRefine2d.ts", read("web/src/services/liveRefine2d.ts"), ts.ScriptTarget.Latest, true);
+const projectedRefineNames = ["beginFrozenRefineSession", "setLatestAutoLines", "projectPhotoRstlBaseline",
+  "startPhotoRstlProjection", "getDisplayLines", "commitRefineForLive", "toggleRefine2d"];
+const projectedRefineSource = refineModule.statements.filter((node: any) => ts.isFunctionDeclaration(node)
+  && projectedRefineNames.includes(node.name?.text))
+  .map((node: any) => node.getText(refineModule).replace(/^export /, "")).join("\n");
+const refineState: any = {};
+const refineSource = { sourceKind: "camera", paused: false, lastLM: [[0, 0, 0]], frozenFrame: {} };
+const projectedRefine = runInNewContext(ts.transpileModule(`(() => {
+  let photoRstlProjection = null;
+  ${projectedRefineSource}
+  return { ${projectedRefineNames.join(", ")} };
+})()`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  state: () => refineState, sourceState: refineSource, renderState: { system: "rstl" },
+  modelState: { triangles: [[0, 1, 2]] }, els: { canvas: { width: 200, height: 200 }, refine2dHint: {} },
+  cloneLines: structuredClone, mapTrackedWrinkleLines, bindWrinkleLinesToFace,
+  applyCurveRefinementTransport, buildCurveRefinementTransport, setRefineCanvasViewActive() {},
+  updateRefineUi() {}, requestRefineFrame() {}, sourceLabel: () => "camera",
+});
+const photoLandmarks: Vec3[] = [[0, 0, 0], [100, 0, 0], [0, 100, 0]];
+const translatedFace = (dx: number, dy: number): Vec3[] => photoLandmarks.map(([x, y]) => [x + dx, y + dy, 0]);
+const refLine = { name: "forehead", pts: [[10, 20, 0], [20, 20, 0], [30, 20, 0]], tris: [0, 0, 0] };
+projectedRefine.startPhotoRstlProjection({ lines: [refLine] }, photoLandmarks);
+const firstProjection = projectedRefine.projectPhotoRstlBaseline(translatedFace(20, 30));
+const closeTo = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} vs ${expected}`);
+closeTo(firstProjection[0].pts[1][0], 40);
+closeTo(firstProjection[0].pts[1][1], 50);
+refineSource.paused = true;
+projectedRefine.beginFrozenRefineSession();
+projectedRefine.setLatestAutoLines(firstProjection);
+projectedRefine.toggleRefine2d();
+refineState.lines[0].pts[1][1] += 8;
+closeTo(projectedRefine.getDisplayLines(firstProjection)[0].pts[1][1], 58);
+assert.equal(projectedRefine.commitRefineForLive(), true);
+refineSource.paused = false;
+const nextProjection = projectedRefine.projectPhotoRstlBaseline(translatedFace(25, 40));
+const nextDisplay = projectedRefine.getDisplayLines(nextProjection);
+closeTo(nextDisplay[0].pts[1][0], 45);
+closeTo(nextDisplay[0].pts[1][1], 68);
+closeTo(nextProjection[0].pts[1][1], 60);
+refineSource.paused = true;
+projectedRefine.beginFrozenRefineSession();
+projectedRefine.setLatestAutoLines(nextProjection);
+projectedRefine.toggleRefine2d();
+closeTo(projectedRefine.getDisplayLines(nextProjection)[0].pts[1][1], 68);
+assert.equal(projectedRefine.commitRefineForLive(), true);
+refineSource.paused = false;
+closeTo(projectedRefine.getDisplayLines(nextProjection)[0].pts[1][1], 68);
+
 const markerTry = markerFunction.body.statements.find((node: any) => ts.isTryStatement(node)
   && node.getText(controllerAst).includes("const outcome = await runWorkflow(state)"));
 const markerCompletion = markerTry.tryBlock.statements;
