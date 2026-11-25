@@ -50,7 +50,7 @@ export const EXPECTED = [
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["simplified workflow keeps one confirmed current record and removes candidate-library actions"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["PR226 v035 reviewed original generates and activates a fresh incision"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["PR226 v035 simplified workflow keeps an approved incision active in the camera stream"],"project":"chromium","suite":"production"},
-  {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["repeated photo replacement never auto-starts main-thread wrinkle YOLO"],"project":"chromium","suite":"production"},
+  {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["workflow prefetches wrinkle weights before photo upload without starting inference"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["workflow keeps reviewed photo geometry stable and reprojects read-only focus views"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["disabled workflow hints use a two-second mouse, touch, and keyboard release window"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["merged workflow preserves incision geometry, warning priority, and RSTL refresh ownership"],"project":"chromium","suite":"production"},

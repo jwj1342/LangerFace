@@ -233,8 +233,8 @@ assert.match(runtime, /applyWrinkleGuidedRefinement/);
 assert.doesNotMatch(runtime, /if \(!isRefineActive\(\)\) toggleRefine2d\(\)/);
 assert.match(runtime, /function handleTemplateChange[\s\S]*resetRefineForNewSource\(\);[\s\S]*resetLiveWrinkleAnalysis\(\);/,
   "changing the atlas must invalidate refinement and wrinkle results from the previous geometry");
-assert.doesNotMatch(runtime, /preloadLiveWrinkleModel|scheduleWrinkleModelPreload|requestIdleCallback/,
-  "the 47 MB wrinkle model must remain lazy until the user requests wrinkle detection");
+assert.match(runtime, /if \(root.querySelector\("\.workflow-workbench"\)\) \{[^}]*prefetchWrinkleModelWeights\(\)/,
+  "only the merged workflow starts the wrinkle weight download at mount");
 
 const pipelineSource = fs.readFileSync(
   new URL("../web/src/services/pipelineSource.ts", import.meta.url),

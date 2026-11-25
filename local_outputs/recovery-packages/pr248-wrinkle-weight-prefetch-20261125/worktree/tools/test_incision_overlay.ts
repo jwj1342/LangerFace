@@ -1,0 +1,262 @@
+// Dependency-free tests for canonical incision overlay projection.
+import assert from "node:assert/strict";
+import { __incisionOverlayForTests as T } from "../web/src/services/incisionOverlay.ts";
+import {
+  incisionCandidateScreenStyle,
+  incisionOverlayScreenStyle,
+  incisionOverlayStyle,
+  visibleBoundarySourceWidth,
+  visibleCandidateSourceWidth,
+} from "../web/src/services/incisionOverlayStyle.ts";
+
+const verts = [
+  [0, 0, 0],
+  [10, 0, 0],
+  [0, 10, 0],
+  [10, 10, 0],
+];
+const tris = [[0, 1, 2], [1, 3, 2]];
+const landmarks = [
+  [0, 0, 0],
+  [100, 0, 0],
+  [0, 100, 0],
+  [100, 100, 0],
+];
+
+const closedModelPolyline = [
+  [1, 1, 0],
+  [9, 1, 0],
+  [9, 9, 0],
+  [1, 9, 0],
+  [1, 1, 0],
+];
+const closedSurfaceRefs = T.polylineToSurfaceRefs(closedModelPolyline, verts, tris, 1);
+assert.equal(closedSurfaceRefs.length, closedModelPolyline.length,
+  "closed polylines retain their explicit closure point after surface mapping");
+assert.deepEqual(closedSurfaceRefs.at(-1), closedSurfaceRefs[0],
+  "the mapped closure reuses the first surface ref instead of independently re-projecting it");
+
+const record = {
+  label: "测试候选",
+  tumor: {
+    kind: "subcutaneous",
+    center: [4, 2, 0],
+    diameter_mm: 10,
+    boundary: [[3, 2, 0], [4, 3, 0], [5, 2, 0], [3, 2, 0]],
+  },
+  candidate: {
+    type: "linear",
+    polyline: [[2, 2, 0], [8, 2, 0]],
+    length_mm: 12.5,
+  },
+  guardrails: { passed: true },
+  review_status: "approved_for_discussion",
+  review: { status: "approved_for_discussion", reviewer: "测试医生", notes: "" },
+  guardrail_summary: { passed: true, high_codes: [], medium_codes: [] },
+  review_gate: {
+    reviewer_required: true,
+    reviewer_present: true,
+    notes_required_for_high_guardrails: false,
+    notes_present: false,
+    high_guardrail_codes: [],
+    approval_ready: true,
+    live_overlay_ready: true,
+    reason: "approved_candidate_ready_for_research_overlay",
+  },
+};
+
+const overlay = T.compileIncisionOverlay(record, verts, tris);
+assert.ok(T.validateIncisionOverlay(overlay), "compiled overlay is valid");
+assert.equal(overlay.audit.raw_image_sent, false, "overlay audit records no raw image export");
+assert.equal(overlay.review.status, "approved_for_discussion", "overlay carries clinician review state");
+assert.equal(overlay.review_gate.live_overlay_ready, true, "overlay carries live overlay gate");
+assert.equal(overlay.guardrail_summary.passed, true, "overlay carries guardrail summary");
+assert.equal(overlay.candidate.polyline_refs.length, 2, "candidate line is encoded as surface refs");
+assert.ok(overlay.candidate.center_ref, "candidate center is encoded as an independent surface ref");
+assert.equal(overlay.tumor.boundary_refs.length, 4, "tumor boundary is encoded as surface refs");
+
+const legacyCenterOverlay = T.compileIncisionOverlay({
+  ...record,
+  candidate: { ...record.candidate, center: undefined },
+}, verts, tris);
+assert.ok(legacyCenterOverlay, "legacy candidates without an independent center still compile");
+assert.deepEqual(
+  legacyCenterOverlay.candidate.center_ref,
+  legacyCenterOverlay.tumor.center_ref,
+  "legacy candidates use the lesion center only as a compatibility fallback",
+);
+
+const openBoundaryOverlay = T.compileIncisionOverlay({
+  ...record,
+  tumor: { ...record.tumor, boundary: record.tumor.boundary.slice(0, -1) },
+}, verts, tris);
+assert.ok(openBoundaryOverlay, "an open sampled tumor boundary still compiles for live overlay");
+assert.equal(openBoundaryOverlay.tumor.boundary_refs.length, 4,
+  "a sampled tumor ring is explicitly closed for live canvas rendering");
+assert.deepEqual(openBoundaryOverlay.tumor.boundary_refs.at(-1), openBoundaryOverlay.tumor.boundary_refs[0],
+  "live tumor boundary closure reuses the first surface reference without a projection seam");
+
+const mapped = T.mapSurfaceRefs(overlay.candidate.polyline_refs, landmarks, tris);
+assert.equal(mapped.pts.length, 2, "surface refs map to runtime landmark pixels");
+assert.ok(Math.abs(mapped.pts[0][0] - 20) < 1e-6, "first endpoint x maps through barycentric ref");
+assert.ok(Math.abs(mapped.pts[0][1] - 20) < 1e-6, "first endpoint y maps through barycentric ref");
+assert.ok(Math.abs(mapped.pts[1][0] - 80) < 1e-6, "second endpoint x maps through barycentric ref");
+assert.ok(Math.abs(mapped.pts[1][1] - 20) < 1e-6, "second endpoint y maps through barycentric ref");
+
+const shiftedLandmarks = (dx, dy) => landmarks.map(([x, y, z]) => [x + dx, y + dy, z]);
+
+const registration = T.measureIncisionOverlayRegistration(
+  overlay,
+  landmarks,
+  tris,
+  { frameWidth: 100, frameHeight: 100 },
+);
+assert.equal(registration.schema_version, "incision-overlay-registration/v0.1");
+assert.equal(registration.passed, true, "mapped overlay refs pass runtime projection registration QA");
+assert.equal(registration.reason, "runtime_projection_registration_ready");
+assert.equal(registration.tumor_center_mapped, true, "registration QA requires tumor center projection");
+assert.equal(registration.candidate_point_count, 2, "registration QA counts candidate polyline points");
+assert.equal(registration.invalid_ref_count, 0, "registration QA reports invalid surface refs");
+assert.equal(registration.out_of_frame_count, 0, "registration QA reports out-of-frame projections");
+assert.ok(registration.bbox_px.diagonal_px > 40, "registration QA exposes overlay bounding box size");
+
+const offFrameRegistration = T.measureIncisionOverlayRegistration(
+  overlay,
+  shiftedLandmarks(80, 0),
+  tris,
+  { frameWidth: 100, frameHeight: 100 },
+);
+assert.equal(offFrameRegistration.passed, false, "out-of-frame projection fails registration QA");
+assert.ok(offFrameRegistration.reasons.includes("out_of_frame_projection"));
+assert.ok(offFrameRegistration.out_of_frame_count > 0, "out-of-frame count is reported");
+
+const collapsedLandmarks = landmarks.map(() => [20, 20, 0]);
+const degenerateRegistration = T.measureIncisionOverlayRegistration(
+  overlay,
+  collapsedLandmarks,
+  tris,
+  { frameWidth: 100, frameHeight: 100 },
+);
+assert.equal(degenerateRegistration.passed, false, "collapsed runtime triangles fail registration QA");
+assert.ok(degenerateRegistration.reasons.includes("degenerate_runtime_triangle"));
+assert.ok(degenerateRegistration.reasons.includes("overlay_bbox_too_small"));
+
+const near = T.pointToSurfaceRef([11, 5, 0], verts, tris);
+assert.equal(near.tri, 1, "off-surface point snaps to nearest surface triangle");
+assert.ok(near.distance > 0, "off-surface snap records distance");
+
+const stableJitter = T.measureIncisionOverlayJitter(
+  overlay,
+  [shiftedLandmarks(0, 0), shiftedLandmarks(0.4, 0.2), shiftedLandmarks(0.1, -0.1)],
+  tris,
+  { maxRmsPx: 1, maxP95Px: 1.5, maxMaxPx: 2 },
+);
+assert.equal(stableJitter.schema_version, "incision-overlay-stability/v0.1");
+assert.equal(stableJitter.passed, true, "small frame-to-frame overlay displacement passes static jitter gate");
+assert.ok(stableJitter.tracked_point_count >= 3, "jitter report tracks tumor and candidate points");
+assert.ok(stableJitter.by_group.candidate_polyline.rms_px <= 1, "candidate jitter is reported by group");
+assert.ok(stableJitter.by_group.tumor_center.rms_px <= 1, "tumor center jitter is reported by group");
+
+const unstableFrames = [
+  shiftedLandmarks(0, 0),
+  [
+    [0, 0, 0],
+    [112, 0, 0],
+    [0, 100, 0],
+    [112, 100, 0],
+  ],
+  shiftedLandmarks(0, 0),
+];
+const unstableJitter = T.measureIncisionOverlayJitter(
+  overlay,
+  unstableFrames,
+  tris,
+  { maxRmsPx: 1, maxP95Px: 2, maxMaxPx: 3 },
+);
+assert.equal(unstableJitter.passed, false, "large frame-to-frame overlay displacement fails static jitter gate");
+assert.equal(unstableJitter.reason, "jitter_threshold_exceeded");
+assert.ok(unstableJitter.overall.max_px > 3, "unstable jitter report exposes max displacement");
+
+assert.equal(T.validateIncisionOverlay({}), false, "bad overlay is rejected");
+assert.equal(
+  T.compileIncisionOverlay({ ...record, review_gate: { ...record.review_gate, live_overlay_ready: false } }, verts, tris),
+  null,
+  "not-ready candidates are not compiled for live overlay",
+);
+assert.equal(
+  T.validateIncisionOverlay({ ...overlay, review_gate: { ...overlay.review_gate, live_overlay_ready: false } }),
+  false,
+  "not-ready overlay payloads are rejected",
+);
+
+for (const tumorKind of ["cutaneous", "subcutaneous"] as const) {
+  for (const inputMode of ["ordinary", "controlled-marker"] as const) {
+    const candidateType = tumorKind === "cutaneous" ? "fusiform" : "linear";
+    const styles = (["photo", "video", "camera"] as const).map((media) => ({
+      media,
+      inputMode,
+      style: incisionOverlayStyle(1300, candidateType),
+    }));
+    assert.deepEqual(styles[0].style, styles[1].style,
+      `${tumorKind}/${inputMode}: photo and video share candidate presentation tokens`);
+    assert.deepEqual(styles[1].style, styles[2].style,
+      `${tumorKind}/${inputMode}: video and camera share candidate presentation tokens`);
+    assert.ok(Math.abs(styles[0].style.candidate.lineWidth - styles[0].style.rstlLineWidth / 6) < 1e-9);
+    if (tumorKind === "cutaneous") {
+      assert.equal(styles[0].style.candidate.color, "#67e8f9",
+        "fusiform candidate uses the shared bright-cyan highlight stroke");
+      assert.equal(styles[0].style.candidate.haloColor, "#67e8f9",
+        "fusiform candidate keeps the highlight without adding a wider under-stroke");
+      assert.equal(styles[0].style.candidate.haloWidth, styles[0].style.candidate.lineWidth,
+        "repeated fusiform stroke increases pixel coverage without increasing nominal width");
+    }
+  }
+}
+
+assert.equal(visibleCandidateSourceWidth(0.3, 2, undefined), 0.3,
+  "non-photo media retain the shared nominal candidate width");
+assert.equal(visibleCandidateSourceWidth(0.3, 2, 1), 1,
+  "photo rendering raises a subpixel source stroke to the one CSS-pixel visibility floor");
+assert.equal(visibleCandidateSourceWidth(0.3, 2, 0.5), 1,
+  "extreme downscaling remains capped at half the RSTL width instead of producing a thick sticker outline");
+assert.equal(visibleBoundarySourceWidth(0.9, undefined), 0.9,
+  "unscaled overlay media retain the nominal tumor-boundary width");
+assert.equal(visibleBoundarySourceWidth(0.9, 0.5), 1.7,
+  "downscaled live media keep the yellow tumor boundary at a visible 0.85 CSS pixels");
+assert.deepEqual(incisionOverlayStyle(1300, "fusiform").center, {
+  color: "transparent",
+  strokeColor: "#ffffff",
+  radiusCss: 2,
+  strokeWidthCss: 1,
+}, "photo, video and camera share the visually subordinate lesion-centre token");
+assert.deepEqual(incisionOverlayStyle(1300, "fusiform").incisionCenter, {
+  color: "#f43f5e",
+  strokeColor: "#0b1118",
+  radiusCss: 6,
+  strokeWidthCss: 1,
+}, "photo, video and camera share the prominent incision-centre token");
+assert.deepEqual(incisionCandidateScreenStyle("fusiform"), {
+  color: "#67e8f9",
+  lineWidth: 1,
+  haloColor: "#67e8f9",
+  haloWidth: 1,
+}, "desktop photo fusiform keeps its one-CSS-pixel width while using the mobile highlight hue");
+const compactFullPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 1 });
+const compactCameraStyle = incisionOverlayScreenStyle("fusiform", { compact: true });
+const compactZoomedPhotoStyle = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: 2 });
+assert.deepEqual(compactFullPhotoStyle, compactCameraStyle,
+  "the full-photo view and camera use identical compact screen-space tokens");
+assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.95, "both devices share a fixed thin incision stroke");
+assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.95, "phone boundary is reduced to roughly two-thirds of the earlier width");
+assert.equal(compactFullPhotoStyle.center.radiusCss, 1.1, "phone live tumor center remains small");
+for (const zoom of [0.25, 0.5, 1, 2, 5, 6]) {
+  const style = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: zoom });
+  assert.equal(style.candidate.lineWidth, 0.95, `incision screen width stays fixed at zoom ${zoom}`);
+  assert.equal(style.boundary.lineWidth, 0.95, `boundary screen width stays fixed at zoom ${zoom}`);
+  assert.equal(style.incisionCenter.color, "transparent", "phone incision center stays hollow at any zoom");
+}
+assert.equal(compactZoomedPhotoStyle.center.strokeColor, incisionOverlayScreenStyle().center.strokeColor,
+  "phone and desktop retain the hollow white center convention");
+assert.equal(incisionOverlayScreenStyle().center.radiusCss, 2, "desktop center size remains unchanged");
+assert.equal(incisionOverlayScreenStyle().incisionCenter.radiusCss, 6, "desktop incision center remains unchanged");
+console.log("test_incision_overlay: projection contract assertions passed");

@@ -1,3 +1,11 @@
+<a id="pr248-wrinkle-weight-prefetch-20261125"></a>
+
+## PR #248 wrinkle weight prefetch (2026-11-25)
+
+The operator requested that the combined workflow preload YOLO weights on entry. The page requests the versioned model chunks at low priority and stores them in the browser cache; a manual detection reuses the in-progress download and starts inference once it settles. Failed prefetch falls back to the existing on-demand loader. The shared changes concern delivery and Worker request timing. The model, inference algorithm, and clinical boundaries are unchanged.
+
+The previous operator evaluation applies to its recorded source digest. The latest source still needs its own operator evaluation and editor save confirmation.
+
 <a id="pr248-review-fixes-20261125"></a>
 
 ## PR #248 review follow-up (2026-11-25)

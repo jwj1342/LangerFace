@@ -31,6 +31,7 @@ import type { RecordingExtraCanvas } from "./canvasRecording";
 import { createLiveRecordingActions } from "./liveRecordingActions";
 import { modelState, recordingState, renderState, sourceState, usesPhotoCameraProjection } from "./liveState";
 import { workflowPhotoCameraEnabled } from "./workflowPhotoCamera.ts";
+import { prefetchWrinkleModelWeights } from "./personalized/yoloWrinkleOnnx.ts";
 import { resetMobileWorkflowVisibility } from "./mobileWorkflowVisibility";
 import { narrowTouchWorkflowViewportActive } from "./workflowViewport";
 import { createPhotoPlanningController } from "./photoPlanningController";
@@ -507,6 +508,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   if (root.querySelector(".workflow-workbench")) {
     resetMobileWorkflowVisibility();
     setWrinkleDisplayMode("both");
+    prefetchWrinkleModelWeights();
   }
   updateRefineUi();
   updateWrinkleUi();

@@ -1,0 +1,778 @@
+<a id="pr248-wrinkle-weight-prefetch-20261125"></a>
+
+## PR #248 wrinkle weight prefetch (2026-11-25)
+
+The operator requested that the combined workflow preload YOLO weights on entry. The page requests the versioned model chunks at low priority and stores them in the browser cache; a manual detection reuses the in-progress download and starts inference once it settles. Failed prefetch falls back to the existing on-demand loader. The shared changes concern delivery and Worker request timing. The model, inference algorithm, and clinical boundaries are unchanged.
+
+The previous operator evaluation applies to its recorded source digest. The latest source still needs its own operator evaluation and editor save confirmation.
+
+<a id="pr248-review-fixes-20261125"></a>
+
+## PR #248 review follow-up (2026-11-25)
+
+The operator requested fixes for both [review findings](https://github.com/jwj1342/LangerFace/pull/248#issuecomment-7160926534), including the shared RSTL display integration. The Worker now receives a copy so post-transfer errors and rejected-boundary recovery can still use the original pixels. For the photo-camera experiment, the projected RSTL lines feed the frozen edit baseline and the existing live transport. The lesion recognition algorithm, model weights, and clinical status are unchanged.
+
+The regression tests cover an error after real buffer detachment and geometry through pause, edit, resumed motion, and a second pause without applying the edit twice. Chromium also exercised the real Worker message path with an injected post-receipt error and confirmed that the main-thread fallback produced a candidate. The previous operator evaluation remains evidence for its original source digest. Evaluation and editor save confirmation for the new source are pending.
+
+<a id="pr248-workflow-recovery-20261125"></a>
+
+## PR #248 workflow recovery (2026-11-25)
+
+The release gate requires an archive matching the current runtime. The archive at `local_outputs/recovery-packages/pr248-cbe8f55/manifest.json` records source commit `cbe8f55b9e3752c9d341168226efee55c3a088f8` and source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b`. All 272 source copies are checked against the manifest's byte lengths and SHA-256 values. The existing video fixture is fingerprinted only; its contents and model weights are not copied. Files outside the archive scope are recovered from the recorded Git commit.
+
+The manifest's dirty-worktree boundary list is empty because the archive was created from a clean checkout. The full PR diff against `5329c2aaa3cfb7e86ec1985e273b09d564d495bb` still includes shared photo/camera, rendering, model loading and browser test code outside the default archive scope. The archive verification does not supply operator confirmation.
+
+<a id="pr248-operator-confirmation-20261125"></a>
+
+On 2026-11-25, the operator replied “接受改动，符合预期，保存编辑” to the request for PR #248 scope review, practical evaluation, and editor save confirmation. The reply accepts the shared changes, records that the result met expectations, and confirms the edits were saved. This is the operator's overall assessment; no individual scenarios, device results, or clinical validation were reported. It is bound to source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b` and recovery manifest SHA-256 `37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad`.
+
+<a id="rstl-wrinkle-performance-recovery-eol-20261123"></a>
+
+## PR #247 recovery checkout line endings (2026-11-23)
+
+The previous verifier compared restored files with working-tree bytes. Actual clean checkouts of the same commit reproduce the review finding: `core.autocrlf=false` passes, while `true` converts active source to CRLF and fails the endpoint-source hash comparison despite identical LF Git blobs. The package itself remains byte-exact.
+
+The verifier now compares restored source to `git cat-file blob HEAD:<path>`. Manifest SHA-256 and every archived file's raw byte length/SHA-256 remain strict and unchanged; no newline normalization is applied to recovery evidence. Frozen archives are retained unchanged.
+
+`node tools/test_rstl_performance_recovery_checkout.mjs` makes two independent real Git clones/checkouts of the current committed Head, with `core.autocrlf=false` and `true`. It asserts actual LF/CRLF working-tree bytes and LF Git blobs, then runs the full clean-base recovery verifier in each checkout. Both modes must pass both restored test entrypoints (18 endpoint cases, 240 distance comparisons and live/forehead trajectory regressions). The matrix is imported by the existing CI release-gate regression and uses committed code; uncommitted verifier edits are not silently copied into its clones. This exercises Git's conversion modes on the local host and Linux CI, not native Windows OS execution.
+
+Only recovery validation, its regression matrix and this documentation change. Product runtime/source digest `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`, archive identity, strict archive checks and existing human acceptance remain unchanged. No new runtime acceptance is inferred or needed. New Head CI results are reported independently in the PR.
+
+<a id="rstl-wrinkle-performance-recovery-fix-20261123"></a>
+
+## PR #247 recovery dependency repair (2026-11-23)
+
+Reviewer feedback was reproduced: extract clean Git base `1333db5eaa11ad80af14cb7238d736f0ad7f9df1`, overlay the original archive's copied files, and run `node tools/test_live_wrinkle_refinement.ts`. It exits 1 with `ERR_MODULE_NOT_FOUND` for `test_rstl_endpoint_smoothing.ts` before any assertions. A normal PR checkout masked the missing dependency.
+
+The archive scope now explicitly lists the endpoint test and matching renderer, the forehead distance/trajectory tests and matching implementation, the public geometry fixture, and the restore verifier as external recovery dependencies. Their team ownership does not change. A new self-contained archive is committed at `local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/manifest.json` (manifest SHA-256 `416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230`); the previous frozen archive remains unchanged. Recovery no longer depends on an unpublished local supplemental snapshot. The new archive's raw bytes are protected in `.gitattributes`.
+
+`node tools/test_rstl_performance_recovery.mjs` extracts that clean base into a temporary directory, verifies every copied archive file's byte length and SHA-256, overlays only those archived copies, checks required restored files against the PR implementations, and runs both `test_live_wrinkle_refinement.ts` and `test_forehead_trajectory_attraction.ts`. Both passed: 18 endpoint frozen-output/input-isolation cases, 240 exact distance comparisons, and the live refinement/forehead trajectory regressions. This verifier is imported by the existing CI release-gate regression, so an unavailable recovery dependency fails CI. The JS job fetches Git history so the recorded clean base is available even on a fresh Actions runner. No packages or files from the current checkout are overlaid outside the registered archive.
+
+This repair changes recovery metadata, documentation and tests only. Runtime source digest remains `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`; marker algorithm, assets and the user's already-bound runtime acceptance/save confirmation remain unchanged. The user's direct “好的，请修复这个问题” authorizes this dependency repair; it is not interpreted as a new product-effect or medical approval. Full-PR whitespace checking is not claimed to pass because frozen templates/CRLF scope snapshots retain their original bytes. Remote CI is reported separately for the new Head.
+
+<a id="rstl-wrinkle-performance-20261123"></a>
+
+## RSTL / wrinkle performance PR preparation (2026-11-23)
+
+Base: `1333db5eaa11ad80af14cb7238d736f0ad7f9df1`. Only RSTL/wrinkle runtime files and necessary tests/documentation change. The user explicitly requested a PR for the three performance changes; this authorizes their scope, not human effect acceptance. Model resolution, thresholds, iteration counts, crossing guards and marker algorithms/assets remain unchanged. No patient image or benchmark screenshot is submitted.
+
+Current source digest: `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5`. Marker algorithm digest remains `04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd`; its version is unchanged because no marker implementation changed. The initial recovery manifest `local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/manifest.json` was incomplete and is superseded by the recovery-fix record above. The earlier `pr-source-snapshot` was local-only and is not a published recovery dependency; the replacement committed archive contains the required performance tests and implementations directly. No existing frozen archive is edited. The new default archive is committed because the existing CI archive-checkout regression requires its manifest and all frozen copies. A new `.gitattributes` entry preserves its raw bytes. The frozen template contains a pre-existing trailing space and the frozen scope JSON retains required CRLF; full-PR whitespace checking is not claimed as passing.
+
+The six-input full-output comparison against master passes exactly, including diagnostics and exported-output audit. Eighteen endpoint combinations match the original output, and 240 curve-distance comparisons match exhaustive search. Timings and limitations are recorded in `docs/tracks/PERSONALIZED_RSTL.md`. Local checks and remote CI statuses are reported separately in the PR.
+
+The inherited master operator evaluation/save confirmation applies to the old source only. In a direct response to the PR #247 current-version question, the user stated “已实际查看并接受，涉及文件均已保存”. This new acceptance/save confirmation is now bound to `5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5` (recorded at 2026-11-23T07:37:51.076147+00:00); no old approval is reused. Scope authorization is bound only to this user-requested RSTL/wrinkle performance work. No marker-effect, medical or merge approval is inferred.
+
+<a id="pr244-master-refresh-20261117"></a>
+## 2026-11-17：PR244 接续已合并 PR245 的 master
+
+以 PR244 原 Head `0adbe4f20acdea8e51faa5c005660e93ca35d01f` 接续
+`master@70460bc8779b864473954c62078e0463a8322449`。保留 master 已合入的
+RSTL、切口、皱纹与回归测试，以及 PR244 的六项肿物安全测试；不恢复已撤回的缩图候选。
+本次没有收到待处理的 Request changes，属于接手及基线更新，不是已解决审查阻断的声明。
+
+算法保持 `0.104.1-candidate.1`，算法摘要
+`04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd`；
+组合源码摘要更新为 `a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237`，
+本地 Windows 检出原始资产字节摘要为 `5624e9a65b0af308fdbcee752d04a777dd5479f84c13c216c423779dd4352fb8`。
+新 master 与整合提交的 Git 原始资产字节摘要均为
+`59c6b3d59e05f3142985b4efae782707c268f0611b34ea8670d0a444f9b28c4b`；
+本地两份 atlas JSON 与 Git 字节仅换行不同，值未变。运行身份继续绑定实际服务字节，
+不把本地摘要直接当成 Linux 部署摘要。
+资产变化来自新 master，不能沿用旧 PR244 的资产摘要或组合效果验收。
+
+发布登记按字段整合：保留原算法历史，并保存两条分支各自的旧登记作为历史证据。
+新源码的操作者评价和编辑器保存确认已按当前 sourceDigest 重新登记；旧效果及保存确认不迁移到新指纹。
+共享范围依据操作者明确要求接入已合并 PR245 的本轮指令确认，限定于新 master 的已有改动。
+恢复包对旧 PR Head 列出的 48 个范围外代码文件均与上述新 master 一致；本轮没有新增这些文件的修改。
+此范围授权不代表已观察新组合的运行效果，也不授权未来共享算法变化。
+原图/压缩图差异、弱边界及扫描敏感性问题继续开放，自动回归不代签真机或医学验收。
+
+新恢复包 `pr244-master-20261117` 为无继承的完整源码范围快照，不依赖旧私有包。
+仅此包使用 `.gitattributes` 的 `-text` 保持冻结字节；工作源码的换行策略不变。
+原因是已合并 master 的旧包在 Windows 自动换行检出后，副本字节会偏离其 manifest。
+新增回归逐项检查当前包的长度/SHA，并以实际 Git 索引及检出测试 LF manifest 与 CRLF
+源码在 `core.autocrlf=false/input/true` 下均不改变。内容篡改和人工证据门禁继续保留。
+
+本条记录整合契约，不宣称当前候选已获批准、远端 CI 已通过或人工确认已完成。
+具体本地验证及精确提交由 PR 正文的变更—验证矩阵记录；未执行项必须明确列出。
+
+2026-11-19，操作者已查看当前组合候选，接受其作为带已知拒识和弱边界限制的研发候选；
+明确未完成医学、真机和私有模型验收。该评价绑定组合源码摘要
+`a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237`，
+登记为 `partial-failed`，不表示整组效果或专业验收通过。操作者同时确认当前编辑器中的项目文件全部保存，
+没有未保存修改；保存确认绑定同一源码摘要。两项事实均对应本地候选 Head
+`581809628ef33ecc9fb7a48bd3bb2a0365edd434`，不迁移到后续源码变化。
+
+<a id="pr244-closure-20261114"></a>
+## 2026-11-14：PR244 跨平台发布核验与原图真机补证
+
+PR244 的 Linux `js-tests` 在执行默认测试前，被责任配置的原始字节指纹检查阻断。Git 中该 JSON 是 LF，Windows 已验证恢复包绑定的检出文件为 CRLF；除换行外内容完全相同。仅在 `.gitattributes` 为 `docs/quality/algorithm-archive-scope.json` 固定 `text eol=crlf`，使各平台检出均得到原恢复包登记的字节。不修改配置内容、检查器、旧 manifest 或登记指纹，也不放宽篡改检测。
+
+既有发布门禁测试新增真实 Git 索引及重新检出验证，覆盖 `core.autocrlf=false/input/true`。修改前在 LF 环境复现原指纹失败，修改后三种配置均匹配既有恢复包，JSON 值保持；配置内容变化仍在 CI 和本地恢复包路径被拒绝。该测试接入 CI 的原发布门禁之前，默认测试与原失败检测能力保留。本次工程差额由后续 Git 提交恢复，冻结恢复包不覆盖。
+
+操作者新提交的同一原图手机日志记录两次识别成功，文件字节与电脑原图一致，并认为目标识别效果一致。电脑既有三次原图识别也成功；此证据支持当前原图下载路径在该样本上可用，不代表两端解码像素、轮廓逐点全等、全部设备或医学准确性通过。旧真实手机失败的具体原因仍未全部确证，不将全部旧失败改写为压缩造成。
+
+本批手机识别记录约 17.8/12.4 秒，电脑原图约 4.8—5.8 秒；落点、像素、扫描像素半径和运行状态不同，且没有分段性能证据，不能作为受控加速基准。按操作者不退化要求，速度优化及压缩图算法改进均暂缓，未减少候选、降低分辨率或修改任何识别判据。
+
+产品源码指纹仍为 `b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016`，算法仍为 `04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd`，肿物保持 `0.104.1-candidate.1`；UI、诊断、切口、RSTL 与模型资产均无本次差额。既有知情提交研发候选的 `partial-failed` 状态保留：压缩图拒识、扫描敏感性及其他未整组验收的真实边界问题仍公开，不以这一张原图成功代签全部效果。真人材料和原始日志仅在本机保全，不随 PR 上传；本条不代表远端 CI、团队审阅或合并已经完成。
+
+<a id="pr4a-research-candidate-20261114"></a>
+## 2026-11-14：研发候选提交范围与保留失败
+
+操作者直接要求本轮无论实际效果是否达标，都先把已有可发布成果提交为正式PR并跟进CI。此决定仅支持如实提交研发候选，不表示手机识别、整组真实边界、真机或医学验收通过。当前肿物保持0.104.1-candidate.1；0.104.2/3/4缩图候选已因相邻行为变化被否决，未重新启用。
+
+组合锁定master已有的界面0.1.36、诊断导出及串行浏览器契约入口；保留本地肿物补救/覆盖边界修复与相邻安全测试。算法、诊断和界面分别维护身份；同算法指纹保持，整体源码身份与恢复包需重算绑定。相对master不新增界面或RSTL受保护功能改动，不公开真人图片、原始日志、像素或私有模型。
+
+已知反例：同照片经传输后像素内容变化，原图五个已记录落点10mm成功，回传图同条件全拒识；两输入在电脑与触控模拟的正式页面及Worker结果分别精确一致。真实手机旧像素尚未取得，不能宣称压缩或GPU是旧手机失败的唯一根因。原图对扫描范围仍敏感，其他真实边界问题继续开放。已有自动通过只支持其已测范围。
+
+操作者本次直接请求登记为explicit_known_failure_research_submission：知晓失败仍接受研发候选进入代码评审，effectResult保持partial-failed，不是效果验收通过；独立门禁审查确认该语义。旧源码的accepted和保存记录不直接迁移。操作者本次明确委派专家AI完成最终载荷技术通读和对抗式审查，执行AI及独立Agent已审查已声明范围，未发现有据新增技术阻断；操作者人工通读未执行，不填为已读。操作者随后直接回复“补充：已保存文件”，本次保存事实据此绑定当前source b2d7aebb登记，磁盘与已审候选一致；登记时间不冒充原消息发送时间。仅将已获授权的非Draft综合PR送入评审，不自动合并；原范围内后续必要手机修复可追加同一PR并重核最新Head的CI。六项既有肿物安全测试接入test:lesion-candidate-safety及默认npm test，远端CI据此持续核验，不改测试断言。恢复包和组合回归分别回读；提交不包含合并、正式发布或专业保证，下列历史记录保留原适用范围。
+
+组合源码指纹b2d7aebb88dae70d934ceb093d4e3b76afa530ca958438bfa44185496f55f016；肿物算法04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd及UI源码fb2c0a23d6a37df3df7864c0ea522326df0e5a8e843bd400f3366160d64699e1分别保持。默认npm test与六项肿物安全链通过，另七项专项全部exit0；3直径×9落点×3重复81次合成覆盖保持。恢复包263副本逐长度/SHA验证，无继承，1项既有视频fixture仅指纹；manifest 3b13b05bd5ac52d5bf63aeb0597554a580bc4e5d9cf757c9aeaa99d5b33466f8。此处只声明工程与存档结果，真实手机故障及其他失败继续开放。
+
+## 2026-11-14：撤回缩图像素读取候选，恢复0.104.1基线
+
+0.104.2、0.104.3为未部署中间候选；0.104.4仅内部验证服务，四组Chrome GPU/DPR正式UI输入一致，五个原日志点击均成功。但相邻对照MK003原点面积1666.498变1587.802，另外两点完整JSON也非全等；MO004预设normal-skin-control点(540,1190)从拒识变成接受206.288。该点没有专业标注，新增接受不能冒称医学假阳性；它违反本轮相邻行为保持要求，故否决候选，不提交操作者正式复核。
+
+候选完整提交4f3b1ec保留在backup/mo004-readback-rejected-20261114；本任务以两次明确revert在299d5b4恢复原0.104.1源码。活动源码bd37f234bfdc65b2dc6831926d0d06888bf63fa098e7f08de7015c9c8a2d3a37，算法04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd，资产保持。最高已试验0.104.4，后续新候选数字不得低于0.104.5或复用0.104.2/3/4。当前版本为明确安全回退，不是本轮修复成功。
+
+两真实日志版本/服务身份、已捕获两客户端模块及原JPEG一致，实际RGBA不同。真实手机d87像素尚未取得，Worker完整源码一致性仍缺直接证据；本机GPU缩图差异是已证独立问题，尚不能宣称其为手机失败唯一根因。原拒识、真实手机与医学验收继续开放。02:36停止新增后仅执行安全回退、服务恢复、登记与回读；原始失败、候选代码、自动检查与独立审查见既有执行卡approvedMo004DeviceParityRepair20261114。
+
+## 2026-11-14：肿物算法 0.104.1-candidate.1｜以重复支持保留完整局部轮廓
+
+当前MK003侧脸像素在不同点击点会选到小暗核或较大材料主体。仅在原完整材料主体及后续复核保持时，复用原compactPigmentRecovery的整库重复支持与冲突检查；其结果必须与已经生成的localized轮廓逐点全等、包含点击与原轮廓、被完整主体包含，且整体和八扇区均无外延。原legacy保留路径优先，不全局替换恢复结果，不改变原4倍关联、95%覆盖及颜色/形状门槛。增加独立接纳分支属于行为变化，1.0前递增MINOR：0.103.0到0.104.0；历史查重通过，人工未评价，保留candidate.1。
+
+仅适用成功relative_color小基线，或原流程已接受同一局部轮廓、前级唯一拒识原因为gradual_shading_edge的路径；后一条件还要求原拒识轮廓完整包含于局部候选。补充恢复为空、位置不同或抛错均保留此前结果，不能把覆盖失败转成成功。原Appearance套件及新增24守卫共117次直接调用通过；独立复审后把未关联relative路径收窄至面积比严格大于4，补跑2项反例与类型通过。已登记0.104.0的源码因此改变，递增PATCH至0.104.1，未部署中间版和原证据保留。最终多点、相邻及正式Worker状态、源码变化后的受限复用范围见项目唯一执行卡approvedSupportedLocalRepair20261113；未完成项不得以本节存在推定通过。
+
+仅修改Appearance选择、原测试与必要版本登记。源码bd37f234bfdc65b2dc6831926d0d06888bf63fa098e7f08de7015c9c8a2d3a37，算法04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd，资产保持。本轮未修改RSTL受保护功能、UI、切口、模型、资产、代理或远端。旧像素15mm不稳定、MK002拒识、鼻翼偏小、其他真实边界及真机/医学状态仍分别保留；本版本不是整组正式验收结论。
+
+<a id="diagnostic-export-supplement-20261112"></a>
+## 2026-11-12：诊断导出修复增补
+
+仅移植诊断导出与必要回归，不整合后续肿物算法研究。运行集成0.2.4-candidate.1；界面登记范围包含诊断服务，兼容修复由0.1.35递增PATCH至0.1.36-candidate.1，名称“诊断导出：保留运行身份与历史记录”。肿物仍0.100.3-candidate.1；既有九项问题及知情接受的原范围保留，不冒称已修。
+
+原分支名中的版本/日期及页面模块指纹可能被通用隐私扫描误认为电话，阻断下载。只在导出副本将分支转为SHA256，导入和回放用同一规则兼容旧记录；页面身份摘要及FNV格式先严格校验再在审计副本屏蔽，通用电话扫描未放宽。导出限容裁剪改用深拷贝，不再可能删除本机历史。单独诊断套件接入test:privacy，页面探针使用显式等待已完成的布尔值，保留下载超时和身份断言。
+
+原PR的test:browser生产/源码分流入口保持；没有修改UI布局、RSTL受保护功能、肿物检测、切口算法、模型或资源。刷新仍恢复同一有限诊断会话；页面实例不等同人工核验轮次，本次不实现清空或轮次重设计。仍有三处既有技术字段盲遮风险待独立修复，无真实泄露证据；本次不能称全部隐私问题结案。
+
+本地新组合test:privacy（含诊断专项）、typecheck、npm test默认全链、build、规范候选构建及产物身份回读、相邻workflow/image/runtime契约均exit0，算法/资产摘要保持。独立差额审查未发现新增有据阻断；未运行新浏览器整组，不把旧Head的CI/页面下载冒称本组合已实测。原PR门禁因两项人工事实缺失exit1的证据保留；操作者现已明确当前没有未保存文件，并限定继续既有UI/诊断增补。当前源码组合的限定接受和保存事实已登记，最终Head发布门禁另实际执行。原分支已有通过结论仅限原指纹，不直接搬成新组合通过；本次确认不代签完整算法/真机效果，PR保持Draft，不转Ready、不请求审阅或合并。恢复包在本机生成并逐文件回读，不公开原始诊断、照片、私有模型或本机路径。
+
+<a id="ui35-pr-scope-confirmation-20261111"></a>
+## 2026-11-11：PR收口｜限定继续遮挡修复与保存确认
+
+操作者看过当前源码561/880窄窗口原图和1440×960宽屏三列原图，并获知原版在内容宽度不超过1280像素时即为单列、本轮仅让561—880首行按内容增高后，明确表示：“好的，那就先把 bug 做修复，然后尽快推进 PR 的提交。”同时限定电脑端仅用于测试，只修严重影响日常测试的Bug，UI重点手机；正式版本不含电脑端是未来部署要求。本轮不新增电脑布局优化、不删既有电脑功能或47项测试，也未实现任何正式部署限制。
+
+operatorEvaluation的accepted仅表示上述看图、知晓差额后继续这份研发候选及原PR的限定决定，不写成“排版完全满意”或已完成实际交互验收。肿物算法0.100.3及算法/资产指纹未变，原固定候选九项识别问题及其先前知情接受仍保留；本次不代签算法精度、完整RSTL、真机或医学验收。操作者另在被问当前编辑器有无未保存文件时明确回答“没有”，editorSaveConfirmation据此confirmed。两项记录绑定source1e3751aeccbdfadde3ccc44b45ae2fbe775e7ac60d0bca6d89e5812ee19681b6，记录时刻不冒充原消息时刻，旧pending原件留previous。
+
+仅修改这两份登记文档，产品、测试、runner及算法/UI/运行集成版本保持。先前完整47项45通过/2原skip、两轴代码审查和同源码恢复证据继续适用；当前源码1440截图另核320/800/320三列及上传命中，进程已清理。候选Python预检失败与GitHub/Linux未验继续保留，不因本条变为通过。官方恢复包保持冻结字节，本次登记差额由精确9文件本地提交及外置完整载荷保全；本地提交不是上传、CI通过或部署，远端仍按有效授权另核。
+
+<a id="source-contract-routing-20261111"></a>
+## 2026-11-11：运行集成 0.2.3-candidate.1｜生产检查与源码契约分开执行
+
+保留原47项浏览器检查：45项继续使用生产构建预览，2项直接读取真实模块状态的契约各自使用现有npm run dev完整门禁入口单独执行，避免文件级serial首错挡住后一项。runner按文件、完整标题和项目逐项对账，保留两项旧显式skip理由；拒绝外部缩小覆盖，身份、失败、漏项与清理异常均不允许通过。只在经核验的GitHub-hosted独立checkout准备和清理临时本地Git引用，本机P不创建或挂接该协议的CI临时分支/回退引用，未执行远端动作。
+
+1440宽度的原节点顺序断言遗漏既有display:contents移动操作台占位。先观察确认唯一节点、无自身布局盒和可见后代、上传命中，再精确断言其顺序与后代约束，保留三列尺寸及未知节点失败检测。不改产品占位、算法、手机界面或质量标准。
+
+运行集成兼容修复从0.2.2递增PATCH至0.2.3-candidate.1；肿物0.100.3、UI0.1.35及算法/资产/UI源码指纹保持。package.json属于整站指纹，故重新登记源码及证据；本批7文件与此前4文件重叠两份登记，联合Diff为9路径。官方范围恢复包另生成，未被既有scope覆盖的测试入口以哈希补充件保存，不修改scope或冻结包。实际验证及新源码人工评价/保存另列，实施授权不作验收。终稿本地完整入口退出0：固定47项逐项对账，生产43通过及2项原显式跳过，两个源码契约各1通过，零重试、无额外跳过，进程归属清理后live为0。两次历史完整入口虽断言通过，但进程查询链超时/创建身份缺失导致整体失败，原件保留；最终改用限定查询权限的原生句柄读取身份并核对退出，不屏蔽错误。两轴独立审查未发现剩余有据阻断。GitHub/Linux临时引用及异常清理路径未实测，不能据本地通过声称远端CI已恢复；新源码人工评价与保存确认仍待取得。
+
+<a id="ui35-ci-repair-20261111"></a>
+## 2026-11-11：UI 0.1.35-candidate.1｜窄电脑版预览图与操作台分开
+
+原touch561条件中，工作流首行限制为72dvh，内部画布最小高度和小预览图实际超出首行并盖住下方按钮。仅在561—880 CSS像素宽度将首行改为minmax(max-content,72dvh)，保留原内容和后两行；手机隐藏规则、主画布尺寸、标注及医生拖线语义不改。旧线宽E2E断言同步既有固定0.95 CSS像素契约，保留原容差、等待及缩放/几何断言。
+
+兼容修复PATCH由0.1.34递增至0.1.35-candidate.1，查重未复用。综合源码9e4511ecfcf25c3aef8451ce91442b62e47a4a48f5ce7798ad6f145abdf5459c，UI源码7e12f3a39be77ddda968df367c08a6612527c0d9c3a49ed07d9f62bcd058c935；肿物仍0.100.3-candidate.1，算法b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a，资产9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249保持。原两项失败各3次复验通过；单worker完整47例为40通过、1失败、6跳过。新失败为旧E2E在生产预览导入开发源码模块，相关未验项继续保留，不宣称CI全绿。独立边界/活动微调/长提示/模拟摄像头3项通过，两轴只读审查未发现有证据支持的问题。共享布局边界仅按已核操作者电脑版方案及本轮隔离证据绑定confirmed；新源码人工评价和编辑器保存确认保持pending，旧accepted只保留为历史。没有远端写入，不混入A新算法，不修改旧冻结恢复包。正式发布及PR门禁另核，不以CI修复授权代签人工/医学验收。
+
+本轮新建中文恢复包“界面窄电脑版预览避让-0.1.35-待人工验收-20261111”，manifest SHA-256 0c305ea5e10b48a3487b59b1e998cdb4da44eb2fb88421f223da6161e42a5471，263份复制文件逐项核长度与SHA通过；媒体/模型仅保留原位指纹，不包含依赖环境。冻结包保留创建时字节；后续发布登记差额由本轮最终Git diff另存保全。自动证据和未解决的测试入口问题记录于本机PR专项的55号独立责任记录；私人图片和绝对路径不进PR。
+
+<a id="checkpoint-pr-acceptance-20261111"></a>
+## 2026-11-11：固定存档候选｜知情接受已知限制与既有双指语义
+
+本条仅更新发布登记和履历，不修改算法、界面、RSTL、测试、模型、责任配置或检查器。产品仍固定原存档9886e556，肿物0.100.3-candidate.1、UI0.1.34-candidate.1，源码83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad；后续算法候选不纳入本PR，不新增或复用算法版本号。
+
+操作者在获知九项原始反馈绑定同一存档源码后，明确选择：“保留存档点，如实列明问题（推荐）：符合并行推进的目标，后续算法修复另交 PR。” operatorEvaluation登记accepted，限定为接受带九项已知问题的研发候选；九项继续开放，不表示漏检、错选或边界问题已修复，也不代表完整算法精度、真机或医学验收。此前三项交互操作认可及保存确认继续有效。
+
+双指独立核验表明：在手势分流启用且存在未完成拖线时，第二指取消本次未松手拖动，再转为缩放；已完成微调、此前撤销历史和微调模式保持。取消实现和事件模块在基准中已有，本候选的兼容判断扩大coarse+hover/fine+touch等触屏条件可达性。7类条件、微调开关、3种来源、基准/候选和3次重复共252模拟事件用例断言通过；实际取消函数源码片段另核4种状态，渲染及质量刷新依赖使用空实现；现有交互回归通过。以上不替代正式页面端到端、各机型真机或完整RSTL效果验收。
+
+操作者已获知上述具体影响，明确选择：“保留既有手势（推荐）：保持原来的双指缩放规则，记录触屏覆盖变化，不改医生微调代码。” scopeBoundaryReview据此登记confirmed，绑定现有UI34恢复包manifest 59fa9605ae568eca14de88222ce7ce897ba5a01f43b758208bcdfc0401ff06f7；结合既有UI33/34实施授权及定点证据确认固定候选共享范围，不授权新增改变任何RSTL受保护功能。原pending记录保留于previous，不以零范围外文件数冒充确认。
+
+确认时间为本专项记录操作者选项回执的时刻，不作为原消息发生时间。两份新登记文档由本次独立Git提交和本地逐文件SHA恢复映射保全；冻结包保持创建时字节，不改包。私人照片、原始诊断和本地路径不随PR公开。正式PR门禁、独立审查及远端身份核验另按实际执行结果报告，不以本条文字代替通过。
+
+## 2026-11-10：发布准备登记｜存档与保存确认对齐
+
+本次仅对齐发布登记，不修改算法、界面、RSTL、模型、测试、scope配置或检查器，不新增算法/UI行为版本。固定产品源码仍为原照片工作流候选：肿物0.100.3-candidate.1，UI0.1.34-candidate.1；后续算法研究不纳入本批。
+
+archive从旧UI27登记改指现有UI34增量恢复包manifest 59fa9605ae568eca14de88222ce7ce897ba5a01f43b758208bcdfc0401ff06f7，继承UI33基础manifest 5773b9050ee5aa4299cc094911ba5c9f14e482e91e2af0e6047831c04dd07fa9。4份copied及259份inherited副本逐项读回，263份长度与SHA全部匹配。先前两项缺失是Python普通长路径读取假阴性，扩展路径及PowerShell规范路径读取成功；没有补写、重建或删除冻结包。恢复材料不含独立完整依赖环境。
+
+操作者已明确反馈当前版本的双指缩放、页面滚动、受控标记识别操作恢复正常，并明确“我没有编辑器中未保存的文件”。保存确认登记为confirmed并绑定当前源码；确认时间字段采用本专项记录原话的时间，不作为原消息发生时刻。三项操作评价有范围限制，不能替代识别边界准确或完整算法accepted。
+
+固定候选的原诊断身份与当前产品源码、算法版本及资产对应，已有九项漏检、识别偏移、错选肿物下方皮肤、轮廓偏小或外缘遗漏等人工失败反馈，仍未销项；不写成仅后续研究版问题，不用算法返回轮廓替代正确性评价。operatorEvaluation维持pending，列明实际认可的三项操作和上述失败限制。
+
+scopeBoundaryReview原confirmed的依据仅覆盖较早滚动阶段，当前包尚需将UI33/34当轮原始授权与共享保护隔离证据逐项对应，故当前登记为pending并保留旧确认历史；不因changedOutsideScope为空或本轮纯登记改动代签完整保护责任。现有定点UI/几何证据不能扩写为完整RSTL或临床效果验收。
+
+综合源码83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad，算法b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a，资产9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249保持；责任配置SHA为3d8ee606897d82990930f5f651892089a4561dd1f77020e33d730a09da6018d3。登记提交会产生新Head，最终载荷另以实际回读绑定，不把原9886e556说成登记后的Head。
+
+正式PR检查仍须真实执行，尚不得宣称通过：共享责任绑定和完整算法评价仍待满足。不伪填accepted、不修改检查器或借Draft豁免项目门禁。本地草稿可继续准备，未执行远端写入、合并或部署。原件、改前副本、验证和独立审查保留本机专项记录，私人诊断/照片不随本次登记公开。
+
+## 2026-11-10：UI 0.1.34-candidate.1｜隐藏窄屏触控开发者字幕
+
+沿用旧touch-only不限宽隐藏，并补入共享窄屏触控能力判定；修复真实触控设备因报告hover而显示画布解释字幕。初始化和旧媒体/共享viewport订阅统一读取同一条件，卸载清理两组监听。普通及生产模式保持隐藏，纯鼠标电脑开发者反馈保留；宽于560px的混合触屏沿用既有策略，不能宣称所有手机方向均隐藏。未修改CSS、布局尺寸、控件、后台诊断、核心算法、资产或RSTL受保护功能。
+
+兼容修复PATCH由0.1.33递增至0.1.34-candidate.1；综合源码83c13ae8348c00e9f51c6d4fbd491767b97d719785671a1615cf6da21d58fcad，UI源码74929cde266298e24eeeee08091593ba8b238f98f257a92f8b7a3a67bf753af9，肿物保持0.100.3-candidate.1，算法b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a、资产9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249保持。旧场景故障与修后回归由既有执行卡subtitleRepair20261110及subtitle-audit-20261110原件记录；真实手机待人工，PR仍仅本地草稿，旧失败和发布门禁不因本次提示修复消失。
+
+## 2026-11-10：UI 0.1.33-candidate.1｜跨布局保持输入焦点
+
+UI0.1.32内部回归已恢复双指、标记确认及独立滚动，但跨560断点时CSS会先隐藏portal父容器，焦点落回body。将桌面空操作容器设为display:contents，在layout effect移动原控件前不先隐藏它；手机flex及所有尺寸声明保持。固定画布、原控件与桌面Tab顺序继续沿用UI32方案。原失败保留。测试装置另纠正节点数组检查，并沿用旧两条显式工具栏行判据；原版已有的隐式14px文件名行未重新设计。
+
+兼容修复PATCH由0.1.32递增至0.1.33-candidate.1，综合源码d9a9fe5340a77c65b104be9e5c99c2cfa8958576d60db880305001c10e93e0a6，UI源码d26fe5b7f137403c5d3db7abf2032605f6a047d360d0dc2b966cf4f5b37deaf8；肿物版本、算法及资产指纹保持。自动结果、独立回读及待人工验收状态由既有执行卡及phone-gesture-diagnosis/ui-repair-20261110记录。存档不是算法/真机/医学通过，未授权远端动作。
+
+## 2026-11-10：UI 0.1.32-candidate.1｜兼容悬停报告并保留跨布局绑定
+
+真机日志显示touch已到达，但hover:none为false使旧门禁拒绝手机交互。统一窄屏加触控能力判定，不再让悬停报告否决触摸；真实事件仍需pointerType为touch。沿用原手机工具栏尺寸、两行排列、落点后确认和双指手势参数。固定画布子树，两个稳定portal容器在根/操作台间移动，保持既有侧栏控件、桌面DOM顺序及运行时绑定；手机专用操作仍只在手机模式挂载。草稿目标及显示门禁同步使用同一判定，开发者字幕策略保持。恢复范围配置补入新增判定模块和发布登记。
+
+兼容修复PATCH从0.1.31递增到0.1.32-candidate.1。综合源码92bf0b9f43971ac85757c6a055095b1a89997e64f0aa4b3167825604291d082e，UI源码61da6a6c14eede365b270bbf0026e157cde83e6c651f83d2f1df6ec8361b4e1c；肿物仍0.100.3-candidate.1，算法b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a、资产9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249不变。本轮未修改RSTL生成、检测、微调、密度/透明度或追踪规则。自动结果、失败及人工待验见既有execution-card.json.touchRegression20261109与phone-gesture-diagnosis/ui-repair-20261110；存档不代表人工或整组算法通过，未授权远端动作。
+
+## 2026-11-10：UI 0.1.31-candidate.1｜识别进行中保存故障快照
+
+UI0.1.30浏览器验证中，普通触屏的8项日志检查通过；fine主指针与touch输入的故障分支启动识别后，旧导出门禁返回“诊断记录尚在生成，请稍后导出”，导致无法取得故障现场。仅调整exportSession，允许保存进行中记录并单列pending_run_count，保留真实pending状态。exportLatest、exportBundle及复放解析门禁不变，未完成记录不能冒充完成结果或用于复放；隐私检查继续执行。
+
+UI补丁递增至0.1.31-candidate.1，综合源码8f76f12988065e0bfa09008501ad0e0af8563cbaaa0d3eb10776da7b6b0a845e、UI源码9f02b30642bd161c6b3b085b356c5eedfaff90523be98a6de222fcd35ff8a18c；肿物仍0.100.3-candidate.1，算法及资产指纹保持。本轮未改布局、设备分流、手势处理、核心算法或RSTL受保护功能。实际自动验证和交付结果回读既有执行卡及phone-gesture-diagnosis，双指故障及真机前后变化原因尚未修复/确认；PR继续暂停。
+
+## 2026-11-10：UI 0.1.30-candidate.1｜输入分流与手势现场诊断
+
+按操作者本轮明确要求，先补齐现有本机故障日志，不修改设备判定、双指处理、操作台布局或任何算法。新增浏览器媒体条件、视口、白名单布局/状态及被动指针/滚动观察；每页独立限量，整会话最多128条且512KB，单列淘汰/省略数量，不占用原识别/业务事件容量；合并时保留其他页面较新的观察。事件分发后另行采样并标注时机与来源版本，resize节流且不冒充触点结束。旧日志兼容，隐私门禁、8MB导出上限及异常隔离保留。
+
+UI兼容扩展由0.1.29递增至0.1.30-candidate.1；综合源码e750103813ee909681755ceac0acb9e00b061671dbe0e8ee0f6ed45b7585c376，UI源码8e4270cbb5c93421714295dd7508706002396a3d4dd576df94fd53be4a59ed10。肿物仍0.100.3-candidate.1，算法b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a、资产9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249保持。当前为本地诊断候选，自动验证与交付结果由项目既有execution-card.json.touchRegression20261109及phone-gesture-diagnosis责任记录回读，不把日志补齐写成手机故障已修复。PR继续暂停。本轮未修改RSTL受保护功能。
+
+## 2026-11-09：UI 0.1.29-candidate.1｜保留DOM的窄屏滚动修复
+
+独立改后审查发现UI0.1.28的新增React分支在跨560px时重建画布和上传控件，运行时仍指向已断开的旧节点；定点探针已证实。该内部候选未部署，完整Diff和失败保留。修订方案再次通过独立预审：WorkflowLayout恢复修复前字节，只在窄屏且没有手机操作pane的根容器允许纵向滚动，用sticky保持原舞台尺寸和位置；手机DOM、控制器、图层条件、尺寸公式和RSTL阈值均不改。上传提示及长文换行保留。
+
+UI兼容修复从0.1.28递增至0.1.29-candidate.1，未复用版本。综合源码22250be09792f95b7d43118f2083c7d96dcfe0a69ecf7f8dfbe3ffc444a97eab，UI源码0a943163e8671ed493a5e2aff95ffc40a3b08673803e78d5dae9b2b8b833db82；肿物仍0.100.3-candidate.1，算法和资产指纹不变。本版npm test、12模式208检查点提示组件回归、7配置原布局及真实质量链路对照、跨宽度运行时绑定通过。15个浏览器用例完整分组执行，13通过、561px及横屏缩略图越界2失败，零跳过零重试；原手机/回退滚动负控制、真实上传及切换后自由轮廓绘制通过。独立改后审查未发现核心范围新增阻断，UI28节点失联问题关闭，但整组不通过。
+
+两项缩略图失败保留，不以裁切舞台或放宽断言处理，不进行人工交付或服务替换；生产构建及最终HEAD回读见同批证据。源成果工作区218项字节保持，远端PR暂停。未验证手机真机、完整RSTL效果及医学结论；部分私有YOLO分片缺失，默认套件的manifest字节数日志不代表模型已加载。
+
+开发者测试、正式构建防误开、证据位置和验收边界沿用下节；当前详细状态以既有执行卡scrollIsolationRepair20261109及同批repair-20261109原件为准。
+
+## 2026-11-09：UI 0.1.28-candidate.1｜窄屏滚动隔离修复（未部署，已撤回）
+
+本轮按操作者明确指令，经独立子agent预审后，只恢复上次修补前的1280/560布局规则，并在宽度不超过560px时补齐既有下方操作滚动容器。手机专用控件和恢复slot继续使用原触控条件，不扩大挂载范围；上传文件名、开发者提示和长文换行修复保留。不改变画布尺寸公式、算法、RSTL质量阈值或模型资产；561px既有缩略图遮挡单列保留，舞台裁切未获预审放行，未实施。
+
+UI从0.1.27兼容修复递增PATCH至0.1.28，未复用当前或历史版本；肿物保持0.100.3-candidate.1，算法和资产指纹不变。综合源码e53f202d1e71e9370acf979ffc4eda90f9fff11cffb71c356e2e82501d725543，UI源码d36cb1ffa49c7561f511cd83fa136a102de8cd43c10acab5a0a9129f10d22a77。自动回归与改后审查进行中，人工及真机未验；此处不表示已部署或发布。
+
+开发者模式仅供本地测试查看文件名、诊断提示和导出控件，使用开发服务的developer=1入口；正式部署使用规范生产构建，并验证附加developer=1或旧别名也不能打开开发者界面。诊断记录开关与界面开关分别核验。详细计划和最终状态沿用项目local_outputs/pr4a-photo-workflow-20261106/execution-card.json的scrollIsolationRepair20261109，原失败和回归证据位于同目录phone-scroll-diagnosis/repair-20261109；不以材料登记代替自动、人工或医学验收。
+
+## 以下为UI 0.1.27历史发布候选核验
+
+本次在现有隔离发布分支保存照片工作流的最新完整成果：肿物0.100.3-candidate.1、UI0.1.27-candidate.1。未新增算法迭代；私人样本、研究记录、截图、日志、模型与本地依赖不随代码发布，旧候选及本地标签保留。
+
+操作者已确认编辑器全部保存，实际认可正常图片上传及文件名显示；其他算法整组、手机真机和医学验收未获代签。标准RSTL、皱纹检测及微调核心源码与目标Base一致，但定点工程对照已确认窄屏共享舞台布局会改变显示尺寸及手动微调过密提示：同一640像素合成图在393×726鼠标窄窗，新旧布局显示宽度为361和393像素；相同合成曲线经真实手动微调质量刷新后，新布局显示“新增邻线过密1处”，旧布局通过并隐藏警告。393像素触控对照未出现该差异。该结果仅证明此工程反例，不代表真实人脸或全设备效果。它不是临床效果结论，也不表示生成或检测算法被改。保护隔离条件尚未满足，远端发布暂停。此处不表示已提交PR、已合并或已部署新发布候选。
+
+本候选本轮npm test、12模式208检查点的提示组件回归及规范npm run build均通过。既有构建分包警告保留，不据此扩展优化。默认套件通过不能推翻共享布局反例，也不代替真实RSTL、真机或医学验收。
+
+开发者模式仅供本地测试查看文件名、诊断提示及导出控件，使用开发服务的developer=1入口；正式构建使用普通入口，并检查附加developer=1及旧别名也无法打开开发者界面。后台诊断记录是否启用与开发者界面可见性分别核对。
+
+## 2026-11-09：UI 0.1.27-candidate.1｜上传错误可见与过期清理
+
+电脑开发者工作流原未显示“不支持格式”和“损坏图片”的既有原因。仅在现有提示组件只读观察旧消息节点，精确接入这两条错误，并随原消息隐藏或正常重传清除；不直接读取仍可能保留过期文字的快照。不更改上传处理、页面布局、普通/正式/触控模式隐藏规则、后台诊断、算法或RSTL受保护功能。
+
+界面兼容修复从0.1.26递增PATCH至0.1.27，已核当前及历史未复用；人工与真机未验，保留candidate。UI源码c736a9d57cdfc9a117a0b15852c9bbc14fa0d869148e1f5b6f021092e2a0556c，综合源码c5a87de5783a1d7b822f70dab09eea92175173a51cf4ac50cab3816e75a01c55；肿物仍0.100.3-candidate.1，算法及资产指纹保持。本轮没有算法迭代或效果提升。
+
+新增真实组件隔离回归接入既有test:browser入口，覆盖DEV/生产、电脑/触控和普通/开发者/旧参数别名的12种组合。修前复现漏显，修后208个检查点通过；内存恢复旧主原因缺陷时预期失败，产品源码不受故障注入影响。该夹具不代替真实上传、产品布局或算法运行身份验收。真实页面、既有交互、生产防误开、恢复包及双端交付的最终回读统一保存于项目local_outputs/pr4a-photo-workflow-20261106/ui-upload-feedback-repair-20261109.json；远端CI与人工评价另核，不把本地通过写成远端通过。旧PR候选和标签保留，PR暂停。
+
+## 2026-11-09：UI 0.1.26-candidate.1｜完整主原因、详情去重与触控字幕隔离
+
+本轮对抗式审查补查横屏，发现原字幕用560px布局断点判设备，手机变宽可能误开解释字幕。仅把字幕判断改为粗指针且无悬停的触控条件，与页面布局分离；保留前一内部快照的主原因完整显示、同文详情去重与长文换行。电脑鼠标窄窗仍可显示开发者提示，手机横竖屏和普通/正式模式均隐藏。文件名隐私、现有布局/操作、后台诊断及全部算法保持。
+
+当前和历史查重后PATCH递增至0.1.26-candidate.1；0.1.25保留内部失败快照，不覆盖或复用版本。UI源码957305b307a914e0c81ccf86ba26fefd4f2acf68081597204c2ae007b438fa44，综合源码be7622975c7d88c4b8e69a0d15673e8fb9d1ea0543c3e4ebea0d8ef35fe786df；肿物仍0.100.3-candidate.1，算法和资产指纹保持；本轮未修改RSTL受保护功能。最终矩阵、生产防误开、恢复回读与规范交付结论见唯一责任证据：项目local_outputs/pr4a-photo-workflow-20261106/ui-status-repair-20261109.json。人工与手机真机未验，非算法效果提升。
+
+## 2026-11-09：UI 0.1.25-candidate.1｜电脑开发者完整提示与详情去重（内部中间快照）
+
+后续手机横屏扩展回归在561px触控视口发现解释字幕误开，本快照已由0.1.26替代，未作为最终交付；原恢复包和先前通过/新增失败原件保留。
+
+原组件在已有诊断详情且不忙时省略主状态，造成部分阻断原因不可见。现保留独立主提示，只去除与它完全相同的详情；解释字幕限电脑开发者模式，手机及普通模式隐藏。既有提示框增加长主状态换行，其他控件、文件名隐私、后台诊断及算法不变。UI从0.1.24递增PATCH至0.1.25，已查当前和历史未复用；人工与真机未验，保留candidate。
+
+UI源码5d18293d21c817f75b314b1184a99a362b7ddaf2e46eef56a8a920dd1063b655，综合源码3bafe02c500e1a64ca1ee2539386c220f61f61ac44589394272cc1df83afa87a；肿物保持0.100.3-candidate.1及原算法/资产指纹，本轮未修改RSTL受保护功能。真实组件回归先红后绿，覆盖四模式、主状态/详情/重复/忙碌/长文与尺寸切换、内部滚动和上传命中。短桌面上传原在首屏下方，正常/长提示位置相同，滚动可达；该装置假设已修正，未改产品布局。
+
+详细证据唯一入口：项目local_outputs/pr4a-photo-workflow-20261106/ui-status-repair-20261109.json。规范开发服务启动后可运行node tools/test_workflow_stage_status_browser.mjs <本地开发服务地址> <证据目录>；该行为回归需要DEV服务，不能用生产预览代替。恢复包、生产防误开及实际交付探针以同批收口为准。旧UI0.1.24恢复包、PR候选Head和中文标签保持，PR暂停；本轮未提交或远端发布。
+
+## 2026-11-08：UI 0.1.24-candidate.1｜窄屏滚动与既有检查兼容
+
+延续0.1.23内部候选的滚动退路及子图占位修复，保留原宽度媒体块，在内部增加pointer/hover条件，使固定一屏的样式与手机DOM采用相同条件；不修改既有照片尺寸公式，不删改静态检查，非workflow窄屏规则仍独立生效。0.1.23已完成12项新旧UI测试及三个原失败条件各三次回归；本候选只调整等效媒体结构以保持既有源码检查兼容，最终同源码验证结果见下方责任记录。版本从0.1.23递增PATCH，保留candidate，真机和人工评价待验。
+
+UI源码bcb48fe0dfeafeae18320749dd2111a57982b212658851769eaf45bd66a5aff2，综合源码3d02afce984714894c89d5a42d61d1ef36b0f1f4b7e7a376707259841fecc97f。肿物算法保持0.100.3-candidate.1，算法及模型/资产指纹未改；本轮未修改RSTL受保护实现和操作语义。回归、原始首错、测试输入节奏对照、范围核验与未验项唯一记录为项目local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json。两个UI候选恢复包是不同阶段快照，旧包不覆盖，当前运行/交付只采用0.1.24身份；未提交或远端发布。
+
+## 2026-11-08：UI 0.1.23-candidate.1｜窄屏滚动退路与子图防遮挡
+
+页面结构要求宽度、主要指针和悬停条件同时满足才生成手机操作区，旧固定高度样式只检查宽度，导致窄屏回退分支被裁切。本次统一条件，回退布局按照片和子图实际内容占高，保留正常手机固定照片区及独立操作滚动；子图不隐藏。复用现有手势测试，补窄屏回退、560/561、短屏/横屏、上传控件命中及锁滚负控制。UI兼容修复从0.1.22递增PATCH且未复用；肿物仍0.100.3-candidate.1，算法指纹b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a、模型及资产保持。本轮未修改RSTL受保护实现或操作语义。
+
+UI源码15379386b47bfb68aaf1941f92d7943fabeee19a1d211b42da157480f7e97009，综合源码940e1b0eb152d0bb1de04a42912ac1fb35345e1bf2206e74dec98968dc07e9b3。自动检查进行中，真机和人工评价待验；实际结论与原始失败见项目既有证据local_outputs/pr4a-photo-workflow-20261106/phone-scroll-diagnosis/repair-20261108/repair-result.json。测试输入的瞬时滑动会影响紧接着的点击，节奏对照证据单列，不作为产品或手机根因结论。未提交、未远端发布。
+
+## 2026-11-06：UI 0.1.22-candidate.1｜照片检测阻断反馈与本机日志
+
+原多人脸检测失败只更新隐藏旧提示框，开发者工作流未收到原因。本次仅在工作流读取同源检测快照，将多人脸、无人脸及检测异常说明送到既有双端开发者状态栏，并通过既有持久日志记录固定原因码、尝试次数、来源修订及受阻动作。成功换图清除旧失败；普通模式继续隐藏诊断，模型/预处理/单脸门禁及RSTL、肿物/切口算法保持。UI兼容修复递增PATCH，人工与手机真机未验。UI源码cef4ddf23c421475adce1a030ca9eba50b2def5243a4ef097aedb953ac6a280e；综合源码989af056356aa2a96ebe652a9b607a5e2f03e95eb088060af0bdd8522f08c371；肿物算法仍0.100.3-candidate.1。修前失败及后续验证见工作区外项目证据local_outputs/vh1-009-upload-diagnosis-20261106/developer-feedback-repair；未提交或远端发布。
+
+## 2026-11-06：UI 0.1.21-candidate.1｜双端标注统一线宽与样式
+
+操作者要求手机与电脑的核心算法及标注细节一致。核实旧规则已覆盖核心算法，旧样式仍按compact区分0.95/1.33 CSS px、配色/描边和无照片尺寸时的中心点。统一共享样式及CSS回退：照片切口线与肿物边界均固定0.95 CSS px，颜色、描边和中心标记不再由设备类型选择；照片中心仍按实际投影尺寸缩放，细小目标遮挡限制保留。布局、鼠标/触控命中及RSTL不变，肿物识别、切口生成/微调代码未改。UI兼容修复递增PATCH至0.1.21-candidate.1，真机待验。UI源码24ff01618f0129f277a1bf33103578082b41dad2a0e73edb9170c575ee0b60b3，综合源码528ba442b65160f4798ce214dc2bb94a22a72095a2da7c9288da430f6a899b26；肿物算法仍为0.100.3-candidate.1。恢复入口local_outputs/recovery-packages/UI0.1.21-candidate.1-双端标注一致-20261106-r2/manifest.json；证据见local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/双端一致性_20261106/核验报告.md。双端等价不表示原识别失败已修复或医学通过。
+
+## 2026-11-06：UI 0.1.20-candidate.1｜缩放时保持固定切口线宽
+
+照片模式切口候选线改用固定屏幕宽度，桌面1.33 CSS px、紧凑端0.95 CSS px；缩放只改变照片和几何的显示大小，不再放大线宽。中心点继续随照片缩放，实时画布默认、切口几何、肿物识别及RSTL保持。界面兼容修复从0.1.19递增PATCH，人工视觉评价未完成，保留candidate.1。UI源码指纹为9d3b17355da7d8dc1160e0f3b8b332076b868779fa7b3523cd47506f77fd2889；综合源码e848ca777bcf3c4c3a0371cd6f2d32f2b5b43d6c0e9d7e4ab43b5ce7a4993983。肿物算法仍为0.100.3-candidate.1，未因显示变更递增。恢复包：local_outputs/recovery-packages/UI0.1.20-candidate.1-固定切口线宽-20261106/manifest.json。定向测试和部署证据见local_outputs/reference-method-consolidation-20261105/人工反馈批次_20261105/incision-line-width-scope-20261106.json。
+
+## 2026-11-05：0.100.3-candidate.1｜孤立色素候选纠偏
+
+同一算法族的局部纠偏修复，PATCH从2递增到3，已查历史未复用；人工及专业评价未完成，保留candidate.1。只在原复核无主体且未拒识时，采用已有独立色素候选纠正同对象凹陷恢复轮廓；不强制圆形、不改变扫描完整性与其他候选路径。①②的保留局部主体试验造成002回归，未接入；③可选未修。正式产品核验与存档以本批报告为准，不能称整组通过。
+
+本节算法阶段源码指纹为5d31a91eab3a189fbd866c475c728bc5afe279c6d5a729af42cfbf8a7e4f84ed；algorithmDigest=b657bb7d6d8964d23806d5321c5b919359d7bea5501fef1267588ec61fc75e2a。算法范围仍仅外观肿物模块，原恢复包为local_outputs/recovery-packages/0.100.3-candidate.1-孤立色素候选纠偏-20261105/manifest.json。后续界面变更的综合源码指纹与恢复包见上方UI记录，不改变该算法身份。
+
+## 2026-11-05：0.100.2-candidate.1｜限幅后目标归属保护
+
+同一对象保护的兼容修复，数字PATCH递增且未复用；人工评价未完成，保留candidate。完整主体通过原扫描门禁后，如限幅输出丢失已接受局部目标中心，保留原已评估局部结果；不修改不完整扫描、安全拒识、候选生成及面积阈值。继承同对象候选保留。138条件隔离对照及10保护、36工程负例通过；正式异步138同条件对照4处改善、134输出保持，未发现已测退化；仍有2个零重叠、11拒识及792未测，不代表整组或医学验收。
+
+sourceDigest=5b805f20997b987f426adce8c67ff14f2d7f5bf60fa346fe64b93488f8a1e768；algorithmDigest=bee2d7af786ebef9f0df9bcbfad30358b16a2889984dc6f95fb9a65dc26725f1。原图、参考、UI、切口及RSTL未改；无远端操作。证据以本批最终报告和正式入口结果为准。
+
+## 2026-11-05：0.100.1-candidate.1｜同对象候选保留
+
+保留第一项同对象候选选择，第二项外观复核已撤回，算法实现与0.100.0-candidate.2一致。现有门禁比较MAJOR.MINOR.PATCH，要求数字部分高于全部历史；只递增candidate编号被拒绝。按兼容纠错递增PATCH至0.100.1，不修改门禁、不删除历史版本；人工评价仍pending。原candidate.2矩阵已主动中止，其结果仅作历史；最终版本重新运行必要验证。身份和恢复包以controlled-marker-release.json当前登记及本批诊断与修复报告为准。
+
+## 2026-11-05：0.100.0-candidate.2｜同对象候选保留
+
+撤回candidate.1中第二项外观复核改动，保留第一项同对象选择；预发布号1→2严格递增，不能复用旧身份。仅保留已有共同门禁支持的同对象候选，避免被无关面积或闭环优先级替换。独立小目标复核尝试造成历史不完整扫描被接受，已逐字节撤回；不修改扫描完整性门禁。仍存在已知目标偏离与完整覆盖拒识，未通过整组验收。
+
+47号历史不完整扫描run20、25，在保存的0.99.5与仅第一项改动时均拒识，合并第二项时均接受；同RGBA、seed、参数三路对照证实新增回归。外观复核源码恢复到修复前快照SHA-256 38f9a39a87b8f614f469abf17fed2c265bfbf5cee85ade604e3599d8339b3806。旧candidate.1证据与恢复包保留作失败历史，不代签candidate.2。最终效果、保护回归和未测项见本批报告；人工与编辑器保存确认保持pending。
+
+sourceDigest=396f341046c02729fb002fd428eba6399f9320013551bee537be178b8117cbc8；algorithmDigest=20f58400d2155ca45e3b1bba0a70d2aaae3a3408266f669b798a42d9bdc201a3。本轮未修改UI、RSTL、切口几何、模型、原图或参考图，无远端写入。
+
+## 2026-11-05：0.100.0-candidate.1｜同对象候选保留与独立小目标复核
+
+1.0前识别行为变化递增MINOR：0.99.5→0.100.0；人工评价未完成，使用candidate.1。同步候选按已通过门禁的同对象证据保留，防止不相交的大暗区或闭环替换；外观复核仅在局部色素候选八方向均无延续且大区域中心位于其外时保留已接受目标。扫描覆盖、尺寸、笔圈及质量门槛保持；尚有既有失败，未完成整组验收。
+
+私有同像素对照已将四处20mm目标偏离改为对应目标接受，并恢复024-T03的15mm完整覆盖拒识；正常001-T01、005-T01小边界保护和006-T02的20mm条件保持。93个中心条件仅完成第一项私有试验，仍有006-T02/024-T03的25mm既有零重叠，不能冒充新源码全通过。正式产品回归进行中，证据以 `local_outputs/reference-method-consolidation-20261105/修复批次_20261105/本批状态.json` 和 `local_outputs/reference-method-consolidation-20261105/修复批次_20261105/product-matrix.jsonl` 为准。
+
+sourceDigest=4221a3e21bbdbd418772de6b61171cdf8c74101f473d167df7a497f85f63704a；algorithmDigest=ecd129d306d2b9418d917f0e54cdcf6edd4f337a0a1c2c5262fd2e773f1c631f。未修改UI、RSTL、切口几何、模型、原图或参考图；没有远端写入、整组人工部署或专业验收。新恢复包登记前开发/部署门禁应保持失败。
+
+## 2026-10-30：0.99.2-candidate.1｜候选计算缓存与无损提速
+
+兼容修复递增PATCH 0.99.1→0.99.2，尚无新的人工边界评价，使用candidate.1。仅优化候选计算路径：同一次Patch预处理复用Lab/材质视图，复用图像无关的椭圆半径分箱与同一提案集合内的中值/Lab计算，并以原生数值排序替代等价的通用排序。候选集合、边界平滑、凹陷检查、扫描覆盖、拒识门禁和模型依赖保持；不宣称识别精度、医学效果或全面低于5秒。
+
+001/002固定条件与40个多落点/多半径条件的序列化结果与优化前一致；6个精确条件和40个矩阵条件均保留拒识与接受路径。离线单次算法测量约2.8—7.9秒，部分小半径进入3—5秒，大半径仍可能超过5秒；不包含浏览器、解码、模型加载或手机全过程。高光外缘、完整人工边界、真机、独立留出集和医学确认仍未完成。
+
+证据：`local_outputs/diagnosis-30-1/feedback67-continuation-20261029/feedback8/product-regression-20261030.json`、`latency-stage.json`；源码指纹`cce9e21091cf7404a84e03b74d4ba2fc33b9a0e5f28adde2a8b463ac8cbc665c`；算法指纹`2dfe350a9953e1cbd9ecbc64ee5152c9edc3b3cd5d7ee7bea5b73e5758dd32d0`。本轮未修改UI、切口、RSTL、模型或资产；未Commit、未Push、未部署。
+
+## 2026-10-29：0.99.1-candidate.1｜低色彩连通阴影复核
+
+兼容纠错递增PATCH 0.99.0→0.99.1，尚无人工评价，使用candidate.1。保留近点击候选与明暗主体方法。低色彩不是拒绝条件；仅对低色彩候选进一步沿16方向检查边界外4/7/10像素，连续三方向仍深暗才认为缺少独立闭合外缘。原扫描覆盖、尺寸、边界及笔圈门禁保持。
+
+同像素58历史条件的接受状态、轮廓及中心完全保持；原鼻唇沟阴影控制点由接受变为拒识。另一个闭合小色点仍被接受，医学属性和是否属于操作者目标未知，不以尺寸/位置特判删除。灰黑紧凑目标、旋转及明暗反例见测试。仅支持所测工程行为，完整医学外缘、全图集、真机未验。
+
+证据：local_outputs/diagnosis-30-1/feedback67-continuation-20261029/extension-*；源码指纹3b6a3a2b15f874d1fbb1e24f0a67238138f726c29792ec957d1f39c854dc7328；算法指纹cfcb73e908f477f706410a1196097e4db8644823c1da3065efd1ed6ab639482d。UI/RSTL/切口/模型不变，无提交/远端写入。
+
+## 2026-10-29：0.99.0-candidate.1｜近点击候选保留与明暗主体复核
+
+本次修改肿物识别行为，按1.0前规则递增MINOR：0.98→0.99；尚无新人工评价，使用candidate.1，不复用旧版本。UI、切口生成/微调、RSTL及模型不变。
+
+近点击图像锚点避免扫描变大后被远处强峰挤出；已有局部对象约束候选关联。对小暗片分别复核Lab明暗主体，弱色路径要求独立外环支持及两个锚点轮廓共识，不以扫描圆或手工参考补边。无符号色差会扩大普通阴影的反例已保留，最终限制为局部色素碎片恢复，不覆盖已有材质主体。
+
+历史6/7组当前同像素58条件（8幅原图）对照：7条下巴边界变化，其余51条面积/接受状态保持；原3条扫描不足仍拒识。001下巴约370→994px²、002约414→900px²，只代表覆盖到原先遗漏的可见表面，不是医学准确率。15/20/25mm各9偏移两对象均27/27输出相同轮廓。敏感重复、静态/阴阳性及正式产品链见本轮证据目录；不得据此推断全图集、独立留出或真机通过。
+
+证据：`local_outputs/diagnosis-30-1/feedback67-continuation-20261029`；源码指纹`7e2a057e13b74d9432cb7923a5aff8a296f508c8bbe87903d51ac514cabd5d8a`；算法指纹`650ee36daa4bcb4faf6dacc29598700f78063de7bb9feab016c94f5cf2fd405e`。发布门禁仍需当前指纹人工评价及编辑器保存确认；本轮不提交、不推送。
+
+## 2026-10-28：UI 0.1.19-candidate.1｜几何改变后撤销旧审阅状态
+
+独立切口页的审阅下拉框原来同时维护 React 本地状态和控制器状态。长度改变后，控制器已撤销旧确认，但 React 的旧值可能在提交编辑时再次写回。下拉框改为由控制器同步的非受控 DOM 值，消除这份滞后副本；审阅状态文字仍读取控制器快照。未改切口几何、肿物算法、主工作流确认语义、RSTL 或资产。肿物版本保持 0.98.0-candidate.4，独立 UI 兼容修复递增 PATCH 至 0.1.19-candidate.1，综合源码指纹同步更新。
+
+回归不再要求几何变更后保留旧确认，改为同时核对下拉框与控制器的待确认状态和实际长度。旧 10mm 扫描测试同步为已批准的 5mm 契约，保留扫描覆盖拒识及居中断言，新增键盘档位检查。CI 浏览器套件串行调度真实 WebGL/模型用例，保留用例、断言和超时；并行初始化失败原始记录保留，不宣称并发产品运行已验证。新源码的操作者评价、完整回归和 PR 远端状态分别登记，不复用旧指纹的接受结论。
+
+## 2026-10-25：UI 0.1.17-candidate.1｜照片标记同比缩放与小目标遮挡限制
+
+张医生反馈要求肿物标记随照片等比例缩放、不完全盖住肿物。照片工作流SVG此前在屏幕坐标中使用固定或封顶线宽，本次仅把线宽、描边、中心点和诊断虚线绑定实际照片显示宽度（含适应画布、缩放、局部裁剪），并按可见边界包围框短边限制笔画和中心点。桌面和手机同尺寸照片使用相同尺寸规则，原配色保持；live画布默认、独立切口照片canvas、识别/切口几何、RSTL六项和资产未改。兼容显示修复递增UI PATCH，不递增肿物0.93或运行集成0.2.2。新回归在修前因缩小线宽不同比失败，修后通过；组合验证、资源限制及人工状态见[审查说明](OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md)。候选显示修复不等于医生原PNG来源已确认，也不解决皱纹微调、算法整组失败或医学验收。
+
+## 2026-10-25：图片与视频导出补齐可见叠加
+
+运行集成递增为 `0.2.2-candidate.1`（兼容导出修复，PATCH递增）；肿物仍为 `0.93.0-candidate.1`，UI仍为 `0.1.16-candidate.1`，算法与资产摘要保持。导出主画布和工作流SVG，覆盖当前可见肿物边界、切口及其叠加；隐藏/清除结果不导出，镜像与缩放按当前视图映射。视频逐帧等待合成，取消准备及旧异步帧不恢复录制。未修改RSTL六项或页面表现。
+
+8组桌面/手机模拟、镜像、缩放PNG像素检查与2组实际编码视频动态叠加检查通过，原导出/隐私/路由/类型回归通过。可复现测试及限制见[审查说明](OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md)。本地提交与开发服务部署不等于远端发布、真机保存或医学效果验收；操作者报告照片标记体验无明显问题，导出没有单独人工验收记录，历史接受不迁移。
+
+## 2026-10-24：运行集成0.2.1-candidate.1｜上传照片丢弃旧预览回包
+
+浏览器回归中复现：独立切口页上传照片清空规划后，先前启动的异步预览仍可能返回，将旧候选重新写入尚未选病灶的照片。清空规划时递增请求代次，让原有过期回包检查丢弃该结果。兼容性修复递增PATCH，肿物0.93、UI0.1.16和照片开口投影0.1保持；不修改RSTL、模型或切口几何。综合源码指纹为9fee0d592e2f52bd80dc93f152414d5b773a47211ae0c59deb94ff015e617c91。新增集成修复的操作者评价待确认，旧线宽评价仅保留其原范围。
+
+## 2026-10-24：照片开口门禁0.1 / 运行集成0.2（候选）
+
+## 2026-10-24：UI 0.1.16-candidate.1｜手机线宽加倍
+
+根据操作者“基本合格但偏细”的反馈，手机肿物边界0.7→1.4px、切口0.4→0.8px，描边同步加倍；所有照片缩放档位保持固定屏幕线宽。中心大小、桌面、普通模式、算法与RSTL保持。源码 247ca774fefb46ece652d6b7c200f6e1d72b0de3e5665c0e001ea5f5bb071ab0。
+
+## 2026-10-24：UI 0.1.15-candidate.1｜手机细线与缩放中心点
+
+第6批只修改显示：手机黄色边界取消1.5px强制覆盖、肿物/切口线宽不随放大增粗，中心点随照片缩放且限制最大尺寸；普通电脑和手机隐藏画布上方解释性状态字幕，明确开发者模式保留原提示规则。普通模式为后续部署默认。肿物0.93、照片开口门禁0.1及运行集成0.2算法保持，未修改RSTL受保护功能。实际运行源码指纹：4f3e2acebe2217d606201189ba7fac251bf359da10cfde234162c1f9ee7ee3db。核心效果仍保留瘢痕等未通过项，本次仅交显示定点观察。
+
+侧脸照片旧鼻孔椭圆直接套整脸外框，误挡鼻旁皮肤。照片消费改用标准模型三角形重心权重，随468同编号关键点映射；不缩小或删除鼻孔掩膜，眼口拓扑环及闭嘴走廊保留，缺失/退化投影阻断。新消费组件首次登记0.1.0-candidate.1；集成行为变化递增至0.2.0-candidate.1。肿物核心算法/资产不变，保持0.93.0-candidate.1；综合源码指纹更新。真实页面及相邻安全反例以追加2证据为准，瘢痕失败及专业判据仍开放。
+
+## 2026-10-24：0.93强核心恢复轮廓按原像素复核（候选）
+
+仅强暗色核心的多窗口旧恢复分支补对象中心原像素轮廓复核，不覆盖独立局部分割。061六个完整扫描落点统一约913px²；第七个原10mm圈未完整覆盖，明确拒识，扩大覆盖后同轮廓。原小目标、笔圈及颜色/边缘门槛保持。060/062瘢痕、切口门禁和像素来源绑定仍未通过，非整组正式验收。 1.0前新增行为路径递增MINOR，不复用0.92身份。相关代码补中文注释；最终工程回归和真实页面以本轮机器证据为准，不以局部稳定代签医学效果。
+
+## 2026-10-24：0.92.0-candidate.1｜小目标保留像素轮廓并限制扩张
+
+第5批反馈显示小组件在已有像素边界上被统一包络放大，吸收相邻皮肤。本版本只在最长边不超过固定分析半径时保留组件轮廓，后续原图复核与其他质量门禁不变；较大目标仍走既有路径。输入/输出契约及RSTL不变。行为路径变化按1.0前规则递增MINOR，不复用0.91。核心识别代码增加中文流程、参数单位、失败边界及维护注释。隔离实验三处小目标改善；最终逐样本状态以本轮第8轮与既有矩阵为准，不能仅以面积下降宣称准确率改善。061上下文/去扩张方法只保留独立实验，未接产品；060/062瘢痕和切口门禁仍未解决。
+
+## 2026-10-24：0.91.0-candidate.1｜弱支撑边界复核与近中心点击恢复
+
+在原位未提交成果上修复两处分叉：多数边界靠重建的候选不再仅因尺寸超过局部复核上限而原样返回；多窗口实心候选不再要求中心必须远离点击点，其余核心暗度、候选形状和原扫描覆盖检查保持。062鼻梁四个反馈落点在本次冻结像素上均得到约1568.5px²的同一轮廓；061原反馈失败落点恢复输出1289px²候选。新增回归分别在修前失败、修后通过。原始照片SHA一致，但反馈日志中的实际检测像素SHA与本次Chrome155解码不同，以上为同照片、同坐标工程回放，不是历史像素精确复现或医学边界验收。
+
+本次包含此前未登记的弱支撑边界保护收紧，按行为变化递增MINOR至0.91.0，不复用0.90.0候选身份。浅色瘢痕仍未解决，匿名鼻旁样本鼻旁的专业距离判据未改变；不交付整组正式人工核验，不修改RSTL。实测与未完成项见项目根目录`local_outputs/volunteer-validation-20261016/evidence/45号反馈-侧脸门禁与拒识显示-20261021/20261024-主线返工-实测.json`及同目录既有需求—证据—验收矩阵。
+
+## 2026-10-23：0.90.0-candidate.3｜发丝遮挡下的多窗口实心候选直恢复
+
+在0.90.0-candidate.2基础上，针对061匿名受试样本发丝干扰下“扫描候选已有强支持、后续局部颜色环复核却覆盖并丢弃”的已证链路，增加窄范围的多窗口实心候选直恢复。仅当多个固定分析窗口一致提出候选、核心暗度达到0.92、通过完整候选门禁且候选中心明显偏离原始点击点时启用；仍保留几何、尺寸、紧致度、颜色支持和原扫描圈覆盖约束。冻结输入270条件定点矩阵中，061为27/27稳定输出、060控制样本27/27、062鼻梁控制样本27/27、匿名鼻旁样本（8）稳定样本54/54，鼻旁/门禁阴性样本27/27保持拒识；062复杂落点与眼镜旁浅色瘢痕仍开放。状态为candidate，适合人工定点测试，不代表医学边界、整组验收或临床效果。
+
+## 2026-10-23：0.90.0-candidate.2｜强支持恢复边界优先级修复
+
+修复扫描局部候选覆盖强支持恢复边界的问题，并收紧软目标保护条件；R2/R3需用新版本重新验证。
+
+在0.89.0候选基础上，保留同时具备实心外边界恢复、包络支持、扫描锚点、核心暗度与对比度证据的原始恢复边界；候选层不再用较小的相对色差填充结果替换这类强支持边界。弱色、渐变、发丝和存在竞争扫描证据的候选继续经过原有质量门禁，不降低拒识要求，不修改RSTL。R1冻结路线对照覆盖10个目标、270条件、810次重复；R2/R3尚待完成，版本保持candidate。sourceDigest=581d762e9c036933bcffbe7983cdc4e028fc9718a860d16712703294469ac30d；algorithmDigest=537379e45a90df98cb7d77b1e064ea06a3ea621c2f7463ba1a08910865c0c917；恢复包为local_outputs/recovery-packages/0.90.0-强支持实心恢复边界-20261023/manifest.json。
+
+## 2026-10-22：开发者提示分段与边缘拒识人话说明（UI候选）
+
+UI最终0.1.12-candidate.1；0.1.11为中间候选，独立审查补齐滚动命中与忙碌圆环隔离后再递增PATCH。只改变电脑开发者顶部诊断区域为纵向不压缩段落和有界滚动，补充边缘落点拒识的人话解释；普通模式、手机摘要、算法输出、切口安全/确认/保存与RSTL六项保持。肿物算法仍0.88.2-candidate.1，algorithmDigest保持20f1ce510013167094408fc7f504bc150cf7f569c3fe262b2c82c7348d25d5c9。此前450次矩阵仅复用于相同算法/资产，不当作UI回归。当前实际验证、原绑定未知及显示回归见45号证据目录里程碑收口报告；未声称整组识别或临床通过。
+
+## 2026-10-22：0.88.2局部恢复与边缘拒识一致性候选
+
+肿物识别0.88.2-candidate.1，名称“肿物边界识别：区分边缘歧义与正常局部恢复”。0.88.0拒识route一律阻止局部恢复，误伤060 run20；现只对显式边缘歧义阻止改选，普通失败保留原局部证据恢复，并统一显式拒识的ok、边界、面积与紫线证据。0.88.1为中间登记候选，0.88.2保留后续状态一致性修复，不复用编号。最终14次冻结像素异步核心回归中run2三次拒识、run20三次恢复，正常run1/3/18保持；这是工程回归，不是临床边界或整体精度提高。多直径矩阵及正式入口结果沿45号证据补核，未通过对象不交整组人工验收。
+
+本轮恢复范围补入3个自有交付探针/测试（probe_marker_browser、probe_marker_delivery、test_probe_marker_delivery），不修改工具实现或扩大团队算法范围。原始图像、模型及历史证据继续原位保全；包外临时探针不充作完整恢复依赖。依据与限制见45号“里程碑任务契约-20261022.json”。本轮未修改RSTL受保护功能，不进行远端发布。
+
+## 2026-10-20：0.86小目标局部选区与原图网格稳定（人工核验准备）
+
+肿物0.86.0-candidate.1，新增28px局部选区（既有36px分析半径的7/9），保留36/48px提案；搜索网格以原图偶数坐标对齐，扫描圈平移/扩大不再改变采样相位。颜色、形状、扫描覆盖及切口安全阈值保持；UI与运行集成实现不变。修复前匿名鼻旁样本内眼角在同图完整覆盖时偏移拒绝，原型三档对照恢复输出；完整回归和实际页面状态以本轮证据为准，不将原型或参考点通过写成医学边界通过。061反光侧漏选、发丝闭圈及六张目标参考不唯一继续保留。证据：local_outputs/volunteer-validation-20261016/evidence/真人人工核验准备-20261020。
+
+## 2026-10-20：0.85多落点局部选区候选（整批待验，历史）
+
+肿物0.85.0-candidate.1，新增圈内多尺度曲率锚点和固定局部GrabCut、原圈覆盖核验；亮度曲率用浮点避免8位差分量化伪峰。有限小型柔边目标增加色彩变化方向核验，不降低切口安全门禁。UI0.1.7/运行0.1.5实现保持，仅刷新绑定。062首轮三直径九落点81次通过，39程序图三直径117次通过；后续浮点/柔边变更尚须最终原故障及真实干扰回归。061侧脸完整性、整批12图和专业边界未通过，不能据此登记整批修复或正式验收。当前候选只用于有界内部复现；证据：local_outputs/volunteer-validation-20261016/evidence/正式页面漏选追查-20261019。
+
+## 2026-10-19：0.84相对色差选区与完整轮廓平滑
+
+肿物0.84.0-candidate.1，行为变化递增MINOR；运行集成0.1.5、UI0.1.7候选同步受控标记异步入口和源绑定，布局与原红色虚线保持。完整候选按相对颜色/噪声、边缘、点击和扫描证据选用，回退同核；描线保留原内缘。正式141次新范围及63次旧7图扫描回归通过，浏览器实际Worker/主线程和双端身份已核，真机/跨人/医学未验。证据：local_outputs/volunteer-validation-20261016/evidence/实心边界补全与低色差-20261019。当前磁盘未提交成果由同指纹244项恢复包保全，不只依赖旧HEAD。同步API仅基础兼容，产品使用异步完整候选入口。
+
+## 2026-10-17：红色诊断梭形越界点显示修复
+
+运行集成0.1.4-candidate.1，界面0.1.6-candidate.1（分别高于此前0.1.3、0.1.5，兼容显示修复递增PATCH）。仅workflowIncisionController的红色诊断层新增无界有限值仿射映射，避免完整轮廓任一点超出图片时整条路径被置空。普通蓝线、黄色边界、拾取、肿物识别与切口生成/微调、确认/保存/叠加门禁及RSTL逻辑保持。肿物仍0.83.0-candidate.1，算法与资产指纹保持。
+
+操作者直接确认仅修红线显示；近似03原图轮廓复现，不冒充原鼠绘坐标等价回放。16组双视口/镜像/缩放/聚焦映射和正式页面重复验证结果见工作区外同项目local_outputs/volunteer-validation-20261016/evidence/人工复核-43号-2。具体通过范围以最终结果为准，手机真机、医学与原识别失败未通过，原现场蓝线拒绝原因仍待补链。非算法优化，不新增算法版本；开发身份本地提交后规范启动，不发布远端。
+
+## 2026-10-17：浏览器版本诊断导出误报修复
+
+运行集成递增为 `0.1.3-candidate.1`，名称“运行集成：浏览器版本诊断导出误报修复”。仅在诊断审计副本的 page_instances.browser_engine 识别严格浏览器名和有限版本语法，保留原始导出值及其他字段的通用隐私扫描。非法类型、超长/伪造版本及真实电话/邮箱仍被拒绝。肿物算法仍为 `0.83.0-candidate.1`，algorithmDigest保持不变；不改切口、UI或RSTL。
+
+红例实测捕获Chrome/149.0.7827.55误报，修复后现有诊断脚本与新增安全反例通过；正式按钮下载及同图量化取证以本轮证据为准，未通过前不代签。原恢复包和操作者认可仅绑定历史源码，不迁移为新接受。规范dev以本地已提交HEAD/backup回退点启动，正式发布/PR仍按原门禁，不外发。证据位于工作区根 local_outputs/volunteer-validation-20261016/evidence/mainline-batch3/，本次不是算法优化。
+
+# 算法版本命名、部署与 PR 门禁
+## 2026-10-14：开发测试与发布归档门禁分离
+
+运行集成版本递增为 `0.1.2-candidate.1`，名称“运行集成：开发测试与发布归档门禁分离”。只调整启动检查，肿物算法 `0.83.0-candidate.1`、算法指纹和页面功能保持。`dev` 模式严格核版本、整站源码与算法指纹，并要求已提交的明确分支及 `backup/` 当前提交或祖先回退引用；未跟踪证据原位保留。未满足Git例外条件的候选仍须通过当前源码对应的完整恢复包与边界核验，保留原合法启动路径，开发测试不能借CI标志跳过实际包检查。规范启动继续检查依赖、模型/资源和实际服务身份。
+
+正式 `deploy` 与 `pr` 模式保留恢复包、责任边界及对应人工/保存确认要求。旧PR239恢复包和人工记录仍绑定其原源码，不改写为本轮新证据。本轮不新建恢复包或提高算法版本；验证及运行采用结果以 `local_outputs/sync4j-20261014/dev-gate/` 当前记录为准，候选不代表真机或专业通过。
+
+
+## 2026-10-10｜发布工具维护，未完成远端发布
+
+修复干净 CI 获取仓库后、本地私有恢复目录不存在时过早调用 realpath 的错误。CI 仍须核对登记的源码身份；本地缺恢复包、源码过期、缺人工评价或编辑器保存确认仍应失败。新增 `node tools/test_algorithm_release_gate.mjs` 验证上述边界。恢复包使用既有生成器重建，旧包保留；算法源码与版本没有因本次工具维护改变。
+
+源码指纹统一以 UTF-8 正文、CRLF 转 LF 后计算，避免 Windows 与 Linux 获取相同代码时被误判为不同版本；字符、空格、末尾换行等其他变化仍保留。身份测试包含换行等价、真实内容差异和过期身份拒绝。该变化只涉及发布取证，不修改算法输出；算法指纹不变，综合源码指纹及恢复包登记按新计算方法更新，旧人工评价不得自动迁移为 accepted。
+
+本地最新成果尚未与 PR #237 的远端有效改动汇合，共享微调范围另核授权和组合验证。发布登记中的人工评价 pending、保存确认 unknown 保留；工具修复或本地 Commit 不代表已通过 PR 门禁、已上传或已合并。
+
+2026-10-05限定显示周期收口：算法仍为`0.69.0-candidate.1`，独立界面身份首次登记`0.1.0-candidate.1 / 识别显示：边界置顶与拒识提示可见`。仅改变黄线绘制顺序、手机黄线可读性及状态提示可见性，algorithmDigest和资产指纹保持不变；完整运行sourceDigest为`ed1cc5a0e85a038882f351c9016b44b6d2314eda6d0d6ac54129371fdcd34fe7`。首次UI登记不表示此前没有界面成果，不虚增算法版本。正式双端12次覆盖中6次正例完整黄环可见，6次陰性提示可见且持续；4次本轮基线、10次旧069对应条件与6次计时补测输出逐字段不变。有效慢例、手机真机与专业验收缺口保留；操作者评价仍pending，不能当作正式接受或PR授权。联合UI恢复包与064v2继承包必须保留，最终登记/版本说明另存旁证，尚未运行隔离完整恢复。证据为`local_outputs/diagnosis-30-1/display-cycle-069-20261005/verified-evidence.json`及`closeout.md`。下方069的遮挡/隐藏描述是本显示周期前的历史状态。
+
+当前 `0.69.0-candidate.1` 命名为“小肿物边界识别：细长碎片不截断空心候选搜索”。在068初始颜色证据私有过滤中，进一步排除短长轴比小于0.52的非闭合候选，复用最终门禁原数值，不降低接受要求；完整闭合环不在此处按外框比例排除，灰度入口仍不启用。正式124次与内存原型逐次相同，120正例接受/4阴性拒识、自交及扫描越界0，不一致2→0；仅老人空心03(-12y)两次面积303→341。该落点AI参考mean 0.534956→0.663898px、P95 1.300120→1.344034px略退化，IoU 0.523529→0.600583、coverage 0.855769→0.990385、precision 0.574194→0.604106提高，属于稳定性与覆盖的混合收益，非全面贴合改善。正式桌面/手机触控视口各6次，六个空心03完整几何签名唯一，阴性全部拒识；轮廓遮挡和拒识提示隐藏未解决。行为变化递增MINOR，068恢复包复用并保留；069恢复包已绑定同源码指纹，真机/独立参考/医学及Goal最终目标未完成。本周期10批上限已达到，不开启新批次。以下版本为历史。
+
+当前 `0.68.0-candidate.1` 命名为“小肿物边界识别：退化碎片不截断空心候选搜索”。只在初始颜色证据调用中提前排除宽或高小于3px的候选，沿用外层已有退化门禁数值；后续修补、完整环搜索和最终接受门禁继续使用原实现。原始灰度入口不启用此过滤。正式124次正例120接受、阴性4拒识，自交和扫描越界0，与内存原型逐次一致；不一致对照4→2，只改变老人空心01(+12y)的两种扫描直径，AI参考平均距离0.855767→0.427440px、P95 2.597595→1.065626px，precision轻微下降。正式电脑/手机触控视口各6次，空心01三落点两端完整几何签名唯一；阴性正确拒识，轮廓遮挡和隐藏提示仍未解决。老人空心03残差仍保留。行为变化递增MINOR，0.67及0.66.1恢复包保留；真机、独立参考、医学与Goal最终验收未完成。下方版本段落保留历史语境。
+
+当前 `0.67.0-candidate.1` 命名为“小肿物边界识别：实心中心二周期对称采样”。仅对两次中心校正确认的相容实心二周期，增加一次对称中点采样；检测仍走原门禁，失败或与任一周期成员不相容时保留原几何与中心。124次正式离线对照正例120/120接受、阴性4/4拒识、自交0，不一致对照8→4；几何与完整内存原型一致，仅老人实心01六次边界改变。其三个落点的AI参考平均距离0.831959→0.896865px、P95 2.839631→2.880318px、IoU 0.532597→0.523282，说明稳定性收益伴随轻微贴合退化，不能写成全面准确率改善。行为改变按规则递增MINOR，0.66.1保留为回退历史；本版本正式页面与真机/医学验收尚待核验。下方旧“当前”保留历史语境。
+
+当前 `0.66.1-candidate.1` 命名为“小肿物边界识别：像素边界追踪数字索引提速”。只替换肿物核心的像素边界键与已访问出边索引，保留遍历顺序、上限、最大外环选择和采样；非整数或不安全坐标回退字符串实现。124次候选结果与0.65除耗时外逐字段一致，正例120/120、阴性4/4拒识、自交0，最大离线检测约2.44秒。0.66.0无收益缓存实验已撤回且编号保留，因此本次兼容提速修复递增PATCH到0.66.1，不复用编号。正式显示仍待验，已有8项几何残差、拒识文字隐藏和小边界显示不足未解决，不能称Goal完成、双端/真机或医学验收通过。旧0.65和0.64恢复包保留，本文下方“当前”旧称谓仅保留历史语境。
+
+历史 `0.65.0-candidate.1` 为“空心轮廓内收与点击位置解耦”，已保留带反例的恢复包；其正式桌面/触控视口验证见本地任务和论文迭代记录。数字索引不改变空心形状或拒识逻辑，不能把速度收益写成形状改善。
+
+## 1. 为什么历史上出现 0.23 和 0.35
+
+受控标记算法从 `0.1` 开始，源码历史还出现过 `0.2`、`0.12`、`0.18`、`0.23`、`0.26`、`0.32`、`0.33`、`0.34` 和 `0.35`。这些数字是连续实验中的实现号，不是“第一代”和“第二代”的代际编号。并行分支曾重复或倒退使用 `0.32`、`0.34`，而 `0.35.1` 只出现在回档标签中，源码实现常量仍是 `0.35`。因此历史命名无法单靠数字稳定表达先后、改动内容或验收状态。
+
+可追溯证据：`git log --all -- web/src/services/controlledMarkerDetection*.ts`；关键提交为 `fe703e2b`（0.23 冻结基线）、`9432ca9f`（颜色差分 0.35 实验）和 `66c838be`（0.35.1 回档标签）。没有找到当时逐号递增规则的书面定义，不能补写为已确认事实。
+
+## 2. 新命名规则
+
+1. 使用 `MAJOR.MINOR.PATCH[-PRERELEASE.N]`。版本在同一算法族或组件内一经登记不得删除、复用或倒退；不同算法族分别维护版本线。当前仍处于 1.0 前，正式行为变化递增 MINOR，兼容修复递增 PATCH，未完成人工评价使用 `candidate.N`，待发布候选可使用 `rc.N`。
+2. 每个版本必须有独立的人话名称，格式为“算法对象：本次主要改动”，不能只写“最新版”“优化版”或任务号。
+   名称还必须包含一个能让人和旧版本区分的短语，直接说明本轮固定的特征或重点变化；允许使用中文或中英文组合。版本号负责排序，名称负责让人快速识别算法特点，英文 `changeSlug` 负责机器检索，三者不能互相替代。
+3. profile 表示稳定算法族，不随每次调参改名；实现版本、人话名称和源码 SHA-256 共同标识一次迭代。
+4. 源码或关键算法配置变化后，若仍沿用旧版本号，发布门禁必须失败。兼容别名只负责读取旧配置，不能作为新版本名称。
+   算法指纹只覆盖受控标记检测核心、profile 和版本声明，并规范化文本换行；整站运行指纹仍覆盖全部页面源码和启动工具的原始字节。仅共享 UI 或队友功能变化时，不复用算法变更名义升级版本，但必须重新绑定整站运行指纹及可恢复包。
+5. Git tag、PR 名、回档名称、数据 schema 和依赖版本不等于算法实现版本，必须分别记录。
+6. 版本号和人话名称由 AI 根据真实 Diff、历史版本、兼容性和验收状态自动确定。操作者不需要参与编号或起名；AI 必须查重、保证递增并说明依据，未验收版本只能使用候选状态。
+
+本规则采用 [Semantic Versioning 2.0.0](https://semver.org/) 的版本结构。项目算法按行为兼容性管理，暂不使用 [Calendar Versioning](https://calver.org/) 作为主版本，因为日期不能表达算法兼容性；日期保留在存档和证据名称中。
+
+历史 `0.38.0-candidate.1` 命名为“小肿物边界识别：实心候选阈值稳定与拒绝预览隔离”：实心候选不再因暗像素数量获得隐性评分奖励，并对高填充、低对比度的皮肤连通块增加对称惩罚；识别门禁拒绝的边界保留在诊断记录中，不再覆盖照片显示。相对 `0.37.0-candidate.1` 属于行为变化，递增 MINOR；自动化和正式入口回归仍在进行，保留 candidate 身份。
+
+历史 `0.39.0-candidate.1` 命名为“小肿物边界识别：固定分析窗口与扫描覆盖解耦”：曾尝试把扫描圆周作为覆盖门禁，并在当前测试范围内稳定候选分析窗口；回归证据发现控制器仍把分析窗随扫描半径上限牵引，因此该候选不再作为当前部署身份。
+
+历史 `0.40.0-candidate.1` 命名为“小肿物边界识别：固定 36px 分析窗独立于扫描覆盖”：修正了正式工作流的分析窗与扫描覆盖耦合，但同时改变了未显式传分析窗的底层默认诊断契约，因此在自动化兼容性回归中被阻断，不作为当前部署身份。
+
+历史 `0.41.0-candidate.1` 命名为“小肿物边界识别：固定 36px 分析窗与默认检测兼容”：正式工作流显式使用固定 36px 分析窗，旧 API 未传分析窗时保留原扫描半径默认行为；2C 发现空心环在点击偏移下仍可能被实心恢复路径误选。
+
+历史 `0.42.0-candidate.1` 命名为“小肿物边界识别：空心环核心暗度门禁与固定分析窗兼容”：实心恢复增加核心暗像素比例 0.70 门禁，保留固定 36px 分析窗和默认调用兼容；全图集准确率与人工参考边界仍待复核，保留 candidate 身份。
+
+当前 `0.53.0-candidate.1` 命名为“小肿物边界识别：实心边界按亮度证据自适应外包与偏移收敛”：实心候选在 1.30 至 1.20 倍受限外包中按原图亮度支持、面积、扫描圈和既有候选门禁选择最大安全尺度；第四版图集的黄色线仍是 AI 示范参考，不是独立金标准，手机真机和专业验收仍待复核，保留 candidate 身份。本轮在复用 `0.51.0-candidate.1` 恢复基线后，生成 `0.53.0-candidate.1` 同源码指纹恢复包。
+
+## 3. 最新算法的单一来源
+
+`docs/quality/controlled-marker-release.json` 是受控标记算法发布登记。部署和 PR 不按文件时间、分支名或聊天摘要猜测“最新”，而是核对：
+
+1. 默认 profile、实现版本、人话名称和当前源码指纹；
+2. 同一源码指纹的可恢复存档；
+3. PR 前的操作者实际评价与编辑器全部保存确认；
+4. 运行或构建身份与发布登记完全一致。
+
+部署执行 `npm run verify:algorithm-release:deploy`；PR 前执行 `npm run verify:algorithm-release:pr`。前者保证部署的是已存档的最新磁盘版本，后者还要求人工评价和保存确认。任何来源冲突、旧服务、旧构建、显式回退 profile、存档不匹配或身份端点异常都必须停止。
+
+## 4. 傻瓜式存档入口
+
+2026-10-05追加UI兼容修复：`0.1.1-candidate.1 / 识别显示：收窄反馈并修复工具栏横向溢出`，递增PATCH以修复上一显示候选的非目标布局回归，未完成人工评价仍为candidate。仅改WorkflowStageStatus及定点styles.css：普通状态恢复隐藏，忙碌/警告保留可见，电脑反馈与工具栏分行；黄线置顶及手机线宽修复保留。算法保持`0.69.0-candidate.1`，未改RSTL受保护功能。180项布局对照无新增溢出/可用控件遮挡；9项旧布局溢出单列保留，手机真机未验。发布登记的uiHistory保留0.1.0及其恢复包，不能用新通过覆盖旧事故。详见`local_outputs/diagnosis-30-1/display-cycle-069-20261005/toolbar-scroll-incident.md`及`toolbar-repair-after-reviewed.json`。
+
+操作者只需说“保存当前算法”“为当前算法存档”“存一下当前版本”或同义表达。AI 自动完成版本定位、文件范围判断、恢复包生成、逐文件 SHA-256、运行身份和证据指针登记及回读验证，不要求操作者提供版本号或文件清单。
+
+“当前算法”能从当前任务、发布登记和实际 Diff 唯一确定时直接执行；若同时有多个算法对象发生变化或来源冲突，AI 只询问需要存哪一个，仍不要求操作者决定版本号或名称。磁盘内容没有变化时复用并回读已有存档，不为同一内容虚增版本。
+
+本项目的默认责任范围是肿物识别、切口生成、切口微调和 UI 界面设计。前三类分别维护算法版本；UI 另记界面版本和源码指纹，不把界面改动写成算法升级。多组件变化可放入同一联合恢复包，但必须逐项登记。RSTL、皱纹检测及其手动/自动微调、线密度/透明度和追踪质量属于其他团队成员负责范围，不因共用页面、运行时或构建产物进入默认存档。修改或恢复路径触及责任边界、共享 UI 影响其他团队功能、共享依赖影响不明或操作者另指其他算法时，AI 必须先询问范围。
+
+编辑器未保存缓冲无法从 Git 或文件系统可靠读取；AI 必须把它单列为待确认，不能把磁盘存档说成已经包含未保存内容。恢复包只复制可审计的源码、配置、测试和文档；媒体、模型、数据库、密钥类文件及超大文件只登记原位指纹和恢复限制。AI 不根据文件名推断素材不含真实患者数据，也不把本地指纹登记理解为允许公开或上传。
+
+当前 `0.54.0-candidate.1` 命名为“小肿物边界识别：偏移歧义时按扫描覆盖恢复实心候选”：在原始候选为 `ambiguous_candidates` 时，仅对扫描覆盖半径内的有限附近种子复核既有检测结果，并要求实心亮度、几何、面积和覆盖门禁全部通过；黄色示范线仍不是独立金标准，手机真机和专业验收仍待复核，保留 candidate 身份。本轮复用 `0.53.0-candidate.1` 恢复基线并生成同源码指纹恢复包。
+
+当前 `0.55.0-candidate.1` 命名为“小肿物边界识别：亮度失败时受限归一化恢复”：原始检测失败时才对输入副本做一次亮度归一化重试，正常成功路径保持不变，并继续执行既有候选、空心/实心和扫描覆盖门禁；黄色示范线仍不是独立金标准，保留 candidate 身份。本轮复用 `0.54.0-candidate.1` 恢复基线并生成同源码指纹恢复包。
+
+当前 `0.56.0-candidate.1` 命名为“小肿物边界识别：偏移点击实心轮廓中心校正”：在近中心实心候选满足既有门禁时扩大中心校正面积比上限，减少点击偏移造成的同一实心组件分叉；黄色示范线仍不是独立金标准，保留 candidate 身份。本轮复用 `0.55.0-candidate.1` 恢复基线并生成同源码指纹恢复包。
+
+当前 `0.57.0-candidate.1` 命名为“小肿物边界识别：实心包络保守收缩”：将实心候选外包的尝试尺度从 `1.30…1.20` 收缩为 `1.16…1.10`，减少把周围皮肤纹理吸收进边界的面积扩张；黄色示范线仍是 AI 参考代理，不是独立金标准，保留 candidate 身份。本轮复用 `0.56.0-candidate.1` 恢复基线并生成同源码指纹恢复包。
+
+当前 `0.58.0-candidate.1` 命名为“小肿物边界识别：低亮度空心边界内收”：对低亮度且没有颜色候选优先证据的空心包络执行固定 `0.82` 倍受限内收，保留扫描覆盖与拒识门禁；黄色示范线仍是 AI 参考代理，不是独立金标准，保留 candidate 身份。本轮复用 `0.57.0-candidate.1` 恢复基线并生成同源码指纹恢复包。代理回放显示黑肤三张空心样本重叠提高，老年三张不套用该收缩；独立边界、手机真机和专业验收仍待补齐。
+
+当前 `0.59.0-candidate.1` 命名为“小肿物边界识别：低亮度彩色空心边界轻度内收”：在 `0.58.0-candidate.1` 的低亮度空心分支上，保留既有 `0.82` 倍受限内收，并允许颜色优先的空心候选使用 `0.94` 倍轻度内收；黄色线只作为工程代理。12 张离线回放继续保持可输出，但整体代理改善有限，保留 candidate 身份。
+
+当前 `0.60.0-candidate.1` 命名为“小肿物边界识别：稳定空心候选轻度内收”：颜色优先或已有周期平滑证据的空心候选使用 `0.94` 倍轻度内收，低亮度旧分支继续使用 `0.82` 倍受限内收，同时保留扫描覆盖和拒识门禁。离线黄色代理边界距离用于版本比较，不能替代独立人工边界或医学验收；本版本仍为 candidate，恢复包和发布登记必须绑定同一源码指纹。
+
+当前 `0.61.0-candidate.1` 命名为“小肿物边界识别：低亮度空心边界保留”：颜色优先或已有周期平滑证据的空心候选继续使用 `0.94` 倍轻度内收；低亮度空心候选保留原始边界，不再强制使用 `0.82` 倍内收，并记录 `low_luma_enclosed_margin_preserved` 诊断。离线黄色代理边界距离明显下降，但 IoU 会因面积包络变化而下降；本版本仍为 candidate，不能替代独立人工边界或医学验收。
+
+当前 `0.62.0-candidate.1` 命名为“小肿物边界识别：实心候选外包尺度扩展”：在既有实心亮度、几何、面积和扫描覆盖门禁下，将外包尝试尺度从 `1.16…1.10` 扩展为 `1.20…1.10`，空心分支和拒识门禁保持不变。12 张模拟图离线黄色代理边界距离进一步下降；黄色线仍是工程参考代理，不是独立金标准或医学验收。本版本仍为 candidate，恢复包与发布登记绑定同一源码指纹。
+
+当前 `0.63.0-candidate.1` 命名为“小肿物边界识别：实心候选外包尺度上限扩展”：在 `0.62.0-candidate.1` 的实心候选外包逻辑上，将统一尝试尺度从 `1.20…1.10` 扩展为 `1.30…1.10`，继续使用既有亮度、几何、面积、扫描覆盖、拒识和非自交门禁；空心候选与 RSTL 受保护功能保持不变。第四版 12 张模拟图的黄色工程代理边界距离进一步下降，324 组点击偏移/扫描直径复放全部成功，precision 有下降，仍保留 candidate 身份；黄色线不是独立金标准或医学验收。恢复包与发布登记绑定同一源码指纹。
+
+当前 `0.64.0-candidate.1` 命名为“小肿物边界识别：实心候选包络形状平滑”：在 `0.63.0-candidate.1` 的实心候选外包尺度范围内，对闭合边界执行半径 2、blend 0.75 的环形平滑，减少高频毛刺和边界距离尾部；空心候选、既有拒识门禁与 RSTL 受保护功能保持不变。第四版 12 张模拟图的黄色工程代理平均边界距离和 P95 改善，precision 略升，IoU/coverage 小幅下降；324 组离线复放全部成功，仍保留 candidate 身份。黄色线不是独立金标准或医学验收。恢复包与发布登记绑定同一源码指纹。
+
+## 2026-10-06｜黑人空心反馈定点修复候选
+
+新增 `0.70.0-candidate.1 / 小肿物边界识别：扩大扫描圈下实心候选中心约束`。针对较大扫描圈放行远离 seed 的实心/皮肤候选，固定分析区域与扫描覆盖区域分开：扩大覆盖圈不能单独扩大实心候选中心恢复范围；超出分析区域时优先检查颜色闭合候选，否则拒识。20mm 原有实心路径保持。三张黑人空心反馈图45条既有日志串行回放：01的一处25mm远候选、02的一处25mm远候选转为拒识；02另一处闭合小候选与03原有不稳定拒识保留，待操作者页面核验。sourceDigest=`1ddbdf364676179301577d48bae4e3d5a0fc004e511e00861cf7ad26945dc96f`，algorithmDigest=`fe55b62aec8d5cde49ee0ccc083c483148c86640640ca28d8ac5219fab25c7bf`，恢复包为 `local_outputs/recovery-packages/V0.70.0-candidate.1-扩大扫描圈实心候选中心约束-2026-10-06-v4/manifest.json`。候选不表示医学、临床或最终人工验收通过。
+
+## 2026-10-06｜0.71.0-candidate.1 扫描圈闭合环定位与局部亮度解耦
+本轮在0.70 v5磁盘恢复基线上局部返工。扫描圈中先枚举真实闭合区域作为锚点；全局亮度和局部对比度两类提案均由原固定36px检测器复核，原几何、颜色支持及原扫描覆盖门禁保持，无参考线/输入哈希特判。实现改变候选搜索行为，MINOR由70递增至71，未完成人工视觉评价保留candidate。冻结31条人工落点、三图中心15/20/25mm九次及四次正常/阴性对照，共44次每轮；三轮上限已用完，不再调参。最终42正例有重叠闭合边界、2阴性拒识；6漏检、3零重叠误选降至0；黄色工程参考平均IoU约0.861，不作医学结论。RGB参考提取装置错误已修正并重算保存输出，未改参考文件或重置轮次。详见local_outputs/diagnosis-30-1/feedback2-frozen-plan.json、feedback2-round-1/2/3.json。正常样本/阴性只作回归，不存在真正独立留出集；手机真机和其他图集未验。部署前必须绑定新恢复包与当前源码指纹，PR人工/编辑器门禁保持关闭。
+
+
+## 2026-10-08｜桌面识别反馈工具栏偏移修复
+
+UI独立版本由0.1.1-candidate.1递增PATCH至0.1.2-candidate.1，名称“识别工具栏：反馈出现时保持桌面左侧对齐”。仅styles.css桌面反馈状态的justify-content由flex-end改为flex-start；普通/退出状态、忙碌/警告提示可见性、按钮语义、手机布局均保持，肿物算法仍为0.71.0-candidate.1且算法/资产指纹不变。本轮真实组件、受控状态和单浏览器无头布局对照60组，旧规则18组横向跳变、新规则0组；24组手机指标逐字段不变，无新增内部溢出或可用控件遮挡。2组既有390px手机忙碌状态工具栏溢出保留，不称全部布局无缺陷。没有运行图片/模型识别、摄像头、手机真机或专业验收；待操作者复核，保持candidate。证据：local_outputs/diagnosis-30-1/toolbar-offset-reviewed-38.json。新恢复包沿用受控生成器，最终登记另存旁证，未做隔离完整环境恢复。
+
+
+## 2026-10-08｜0.72.0-candidate.1｜六图返工第2轮
+
+名称“小肿物边界识别：扫描圈实心核心定位与双类型候选竞争”。实际行为变化递增MINOR，未完成人工评价保留candidate。六图261次运行，实心01达到工程参考条件102/111；空心108次全部达到且结果保持，实心02/03各21次均未达到。新增偏心实心合成反例仍失败。 AI参考是工程代理，不是医学金标准，双端共用检测源码但手机真机未验。sourceDigest=85c81a2ce3c42ef2a704d7654dd6a0d59b84f7f5cdeb20cb679ee9b603b09418。逐条件证据：local_outputs/diagnosis-30-1/feedback38-round-2.json。
+
+## 2026-10-08｜0.73.0-candidate.1｜六图返工第3轮
+
+名称“小肿物边界识别：实心搜索范围与判别尺度解耦”。实际行为变化递增MINOR，未完成人工评价保留candidate。六图261次运行，实心01达到工程参考条件99/111；空心108次全部达到且结果保持，实心02/03各21次均未达到。新增合成反例通过，但人工落点manual-100发生新退化，故不交付此轮为改善。 AI参考是工程代理，不是医学金标准，双端共用检测源码但手机真机未验。sourceDigest=b085544e302cfced32c9c29b83ae8e56e0f22fac3b3ee04a7bbba7c88f33f5f8。逐条件证据：local_outputs/diagnosis-30-1/feedback38-round-3.json。
+
+## 2026-10-08｜0.74.0-candidate.1｜六图返工第4轮
+
+名称“小肿物边界识别：固定尺度完整实心候选搜索”。实际行为变化递增MINOR，未完成人工评价保留candidate。六图261次运行，实心01达到工程参考条件105/111；空心108次全部达到且结果保持，实心02/03各21次均未达到。相关合成与色差测试通过；仍有manual-50漏检和manual-100半块，以及实心02/03参考覆盖不足。 AI参考是工程代理，不是医学金标准，双端共用检测源码但手机真机未验。sourceDigest=f5bf16c2e88c349ce7b2e86fd2d33af0574bc9d4c35cb788768c3265f9b51bce。逐条件证据：local_outputs/diagnosis-30-1/feedback38-round-4.json。
+
+## 2026-10-08｜0.75.0-candidate.1｜六图返工第5轮
+
+名称“小肿物边界识别：实心重新居中与局部外缘描边”。实际行为变化递增MINOR，未完成人工评价保留candidate。六图261次运行，实心01达到工程参考条件0/111；空心108次全部达到且结果保持，实心02/03各21次均未达到。局部外缘描边使三张实心图指标退化；这次试验失败，已撤回，保留原始失败产物。 AI参考是工程代理，不是医学金标准，双端共用检测源码但手机真机未验。sourceDigest=bb0c7ee2da189ace948f4facdeb5bb8b082db46ea3b067fe4dca8a8df3f3a82e。逐条件证据：local_outputs/diagnosis-30-1/feedback38-round-5.json。
+
+## 2026-10-08｜0.76.0-candidate.1｜安全回退登记
+
+名称“小肿物边界识别：撤回外缘试验并保留完整实心候选搜索”。0.75已失败，不复用历史版本号，登记递增MINOR的恢复身份。检测器字节精确恢复0.74，属于回退而非第6次优化；R4完整矩阵绑定检测器字节复用，最终发布身份、原阴性与真实入口另核。整体部分改善，不能称六图质量通过；小凹陷、manual-50/100与实心02/03覆盖继续开放。本轮未修改UI、切口、RSTL或资产。恢复证据：local_outputs/diagnosis-30-1/feedback38-safe-rollback.json；最终色差测试feedback38-final-unit.stdout通过，曾因从仓根执行而触发路径装置错误，改回规范web工作目录后通过，不把它写成产品故障。
+
+
+## 2026-10-08｜0.76.1-candidate.1｜诊断字段类型兼容修正
+
+只为新增私有诊断对象补充TypeScript类型断言，编译时擦除，未改变0.74检测器运行逻辑；PATCH递增避免复用源码身份。最终类型检查另绑feedback38-final-typecheck-fixed.stdout。R4效果矩阵按同一检测逻辑复用，剩余失败保持开放，真实入口及手机视口须绑定本版重新核验。
+
+
+## 2026-10-08｜0.77.0-candidate.1｜小扫描圈完整候选搜索
+
+名称“小肿物边界识别：小扫描圈保持完整候选搜索”。行为变化递增MINOR，历史版本查重，保持candidate。15mm在老人02换算34px，小于固定36px分析尺度时跳过完整扫描提案，选择了带左上折角的局部连通分量。撤去scanRadius≥analysisRoiRadius入口条件，提案判别尺度与最终覆盖分开，原扫描门禁保持。第2轮548条件中原记录158三次及老人02的15mm中心三次转为正常轮廓；相邻记录155折角仍在，整体工程达标数量仍317/544。未称根因全部解决。 本轮不改UI、切口、RSTL、资产或远端。证据：local_outputs/diagnosis-30-1/feedback38-2-round-2.json、feedback38-2-effect-summary.json及技术底稿59。真实入口和同源码包需另行核验，不能由构建或非空输出代替。
+
+
+## 2026-10-08｜0.78.0-candidate.1｜完整候选与受限低频轮廓平滑
+
+名称“小肿物边界识别：完整候选与受限低频轮廓平滑”。行为变化递增MINOR，历史版本查重，保持candidate。在0.77上，仅对已接受紧凑轮廓进行64点等弧长重采样，保留坐标一/二阶周期傅里叶分量；按sqrt(原面积/平滑面积)补偿面积，再回原质心。面积比.97—1.03、双向边界位移≤等面积半径.22、长短轴比≥.62、compactness≥.60、面积≥30px、非自交，最终原颜色支持/尺寸/扫描门禁均保持。较深凹陷和明显不规则轮廓原样返回，不把所有病灶强制画圆。参数是本轮工程先验，22%沿用既有保守位移上限，二阶与形状阈值未证明医学最优。合成局部尖角移除/深凹陷保留反例与原色差测试通过。第3轮548次544有效，349达到/192边界失败/3漏检，4原扫描不覆盖参考单列；32次原失败达标、0原达标变失败，32改善均来自老人实心03，不能说六黑人均通过。老人01及02原触发转角明显减小，但老人02部分AI参考重叠分数轻微下降；黑人实心02深凹陷/03范围不足、旧manual50/100保留。所有素材已用于开发，无独立留出集；AI黄色线不是医学金标准。 本轮不改UI、切口、RSTL、资产或远端。证据：local_outputs/diagnosis-30-1/feedback38-2-round-3.json、feedback38-2-effect-summary.json及技术底稿59。真实入口和同源码包需另行核验，不能由构建或非空输出代替。
+
+
+0.78阶段最终核验补录：电脑96、手机视口45真实入口同身份终态回读完成；87工程达到、51边界失败、3漏检。部署门禁、同源码恢复包逐文件回读、类型/色差/形状反例、诊断契约、18阴性拒识和单worker模拟实时链通过所覆盖检查，整体仍部分通过。最新恢复包指针与最终证据见发布JSON及技术底稿59.1；后续文档回读同步不改变算法源码身份或新增算法轮。0.77登记人话名称以release身份原文为准，本文已补回“保持”二字。
+
+
+## 2026-10-08｜识别提示与标记切换不移动图片
+
+UI由0.1.2-candidate.1递增PATCH至0.1.3-candidate.1，中文名称“识别反馈：提示显隐与标记切换保持图片位置”。仅styles.css：移除反馈出现时新增桌面grid行的条件规则；将忙碌/警告提示放在工具栏下方的浮层，保留spinner、原显隐与aria-live，pointer-events:none不截获画布操作；手机工具栏普通/标记状态均保留76px高度，消除42→76px切换带来的位移，第二行控件仍按原状态显隐。72组真实组件受控状态在320/390/560触控视口及1024/1280/1920桌面、短/长文件名、普通/忙碌/成功/警告/成功警告/退出状态核验，原42组位移、修复后0组。原手机忙碌工具栏内部溢出单列保留，不扩大本轮修复。肿物算法0.78.0-candidate.1、算法与资产不变；实际照片入口复核及恢复包绑定详见local_outputs/diagnosis-30-1/status-position-final.json，手机真机与摄像头未验，非算法精度或临床验收。
+
+
+## 2026-10-08｜手机真实入口视野高度补偿修复
+
+0.1.3组件72组通过并不代表全页面通过：真实手机照片入口发现react-workflow-host的标记状态额外增加34px展示区高度，图片353→387px且中心移动，真实入口验收失败，旧证据保留。0.1.4-candidate.1 / 识别反馈：固定提示布局与手机标记视野，递增PATCH；移除这一条件补偿，将普通/标记状态统一采用原标记态的展示区高度，配合固定76px工具栏保持原普通态常用图片空间。最终以真实页面连续帧、每端三次识别及进入/退出验证为准；0.1.3旧恢复包是中间失败候选，不是当前交付。仅CSS修复，算法0.78、资产与RSTL/切口代码保持。
+
+## 2026-10-09 第3批返工：0.79 / 0.80 候选
+
+0.79.0-candidate.1 固定候选网格并将颜色核验绑定候选对象中心，空间扫描约束仍使用原点击点。0.80.0-candidate.1 增加有界部分平滑：完整目标位移比在0.22至0.25之间时逐次尝试0.9、0.8、0.7混合权重，最终位移仍不超过0.22，面积比0.97至1.03且不自交。深凹陷超0.25保持原轮廓。
+
+冻结12张已暴露原图及AI参考，507落点条件、869运行；865有效、4原扫描覆盖无效。基线565达标；0.79与0.80均574达标，原达标无退化。黑人实心02平均IoU从0.7903至0.8112，但覆盖不足仍不合格，黑人实心03也未通过。六张黑人中心五扫描范围仍20/30达标。不能宣称整体通过或临床效果。原第3批91条日志输入及几何精确复现，9条原文件元数据缺失由唯一RGBA补关联，原UNKNOWN保留。
+
+证据：local_outputs/diagnosis-30-1/feedback38-3-round-{1,2,3}.json；feedback38-3-stage-probe.json；feedback38-3-contract-and-matrix.md。候选版本待当前源码人工评价；手机真机未验，无独立保留集。本轮未修改UI、RSTL受保护功能或切口算法。
+
+## 2026-10-09｜0.81.0-candidate.1｜2C未验候选安全收口
+
+小肿物边界识别：多窗口实心提案共识与受限外缘恢复。行为变化MINOR递增，保留candidate。截断提案可进入候选池，中心邻域至少2项支持；总提案≥3且coreDarkRatio≥.88试1.42/1.36，面积比上限2.10，其他保持1.30/1.70。计票未绑定独立窗口且外包不读取共识簇，需复核，不宣称共识已验证。不改平滑/UI/切口/RSTL。类型检查通过；隔离反事实观察不是最终产品回归，双类型五范围/阴性/真实双端/实时必验未完成。45分钟已超时安全停止、完整轮次未知，不部署人工核验。源码/包登记已回算校正；晚写文档与JSON更正为包外旁证，原包不覆盖。证据local_outputs/diagnosis-30-1/feedback39-closeout.json；论文底稿61。
+
+
+## 2026-10-20｜0.87.0-candidate.1｜局部证据与原扫描覆盖分离
+
+行为变化递增MINOR，名称“肿物边界识别：局部证据窗口与原扫描覆盖分离”。仍执行原覆盖/色差/几何门禁，非降低门禁。另首次登记切口方向消费组件0.1.0-candidate.1（非RSTL版本），照片显示组件0.2.0-candidate.1，运行集成0.1.6-candidate.1保留已接受二维黄线。修改前包复用0.86并回读245项；当前包待建。81条件/243新运行/65工程达标/16耳旁失败/30未运行/0原达标退化；原鼻梁7落点各3稳定。正式页面标记按钮禁用，实时叠加未运行；未交人工验收，不称泛用或医学通过。证据：local_outputs/volunteer-validation-20261016/evidence/44号反馈-黑痣门禁与方向-20261020/本轮收口.json。
+
+
+## 2026-10-21｜UI 0.1.8-candidate.1｜上传等待工作流挂载
+
+兼容修复递增PATCH，名称“上传交互：等待工作流挂载后开放选择文件”。仅LiveSourceControlsPanel.tsx与MobileWorkflowControls.tsx在snapshot为空时禁用上传按钮/input，挂载后保持原上传行为；布局、算法0.87、模型生命周期与RSTL六项不变。真实延迟模块修前失败、修后双端通过，重渲染/退出重入/重载后上传通过。原“已有landmarks仍禁用”包含异步谓词等待装置错误，已纠正。
+
+本条更新前一0.87条目的阶段状态，不覆盖其历史：当前矩阵已补齐111条件333次，91条件达稀疏参考（其中4扫描覆盖不足），061的20条件失败。默认11组和构建通过；浏览器29通过/2跳过/1低透明环失败。正式双端060、鼻梁及眼皮下各6次识别；眼皮下高风险仍普通线属于显示契约未完，非整组通过。当前同源码包见发布JSON；真机、专家完整边界和医学未验，无远端发布。证据：local_outputs/volunteer-validation-20261016/evidence/44号反馈-黑痣门禁与方向-20261020/续接收口.json；切口终态复核.json。
+
+
+## 2026-10-21｜UI 0.1.9-candidate.1｜切口风险线色与硬阻断审阅分离
+
+兼容显示修复递增PATCH；名称“切口风险显示：高风险照片候选改用红色虚线”，运行集成0.1.7-candidate.1。新增workflowPhotoCandidatePresentation纯函数，只被照片SVG绘图调用：原普通可绘且guardrails.passed=false的完整几何改红；普通候选与原硬阻断路径分别保持。不得把颜色变化扩展到原currentDiagnosticCandidateVisible、候选快照、保存/导出/医生确认策略；合并工作流原requireHighRiskNotes:false保持，不新增备注必填。黄线、布局、RSTL六项及肿物算法0.87均未修改。
+
+独立审查发现并修复初稿会扩大硬阻断linear红线范围的问题；新增分支必须以旧displayAllowed为前提。无opening反例不画、合格opening正例仍画。正式双端/真实照片/实时链与最终状态见local_outputs/volunteer-validation-20261016/evidence/44号反馈-黑痣门禁与方向-20261020/夜间第1批-20261021/收口.json，不以单元通过代替效果验证。061和低透明环仍开放；未远端发布，人工/真机/专业接受待确认。
+
+
+### 夜间本批第二次定点修正：UI0.1.10-candidate.1／运行集成0.1.8-candidate.1
+
+整站回归的两项旧蓝线断言已回源：fixture实际guardrailsPassed=false且红路径存在，按本轮操作者要求严格改为风险红虚线断言；原确认、实时叠加、黄线与只读重投影仍必验，不删除低透明环失败。进一步审查发现risk-only不应复用完整diagnostic polyline代替原cubic/可见段，现改为仅改线色，复用原renderedCandidatePathData；硬诊断仍用原完整diagnostic路径。最终双端逐字比较risk红路径与修前蓝路径，结果与限制见同批收口.json。首候选0.1.9保留历史，不复用编号；肿物0.87和算法/资产指纹保持，非新的识别效果提升。
+
+## 2026-10-21：0.88边缘点击安全拒识候选
+
+肿物算法 `0.88.0-candidate.1`，名称“肿物边界识别：边缘点击无法证明时安全拒识”。当受控点击只落在候选边缘、且只能依赖 legacy filled fallback 通过时，保留候选诊断证据并拒绝生成黄色边界，避免把未证实的小暗组件当成肿物；已有中心点击、chromatic recovery、紫线诊断和切口门禁保持。该版本基于45号高资源矩阵，黑痣正例原始 fixture 被 `.gitignore` 排除，历史回归结果保留但未重新读取像素，因此仍是候选，不代表正式验收。运行集成 `0.1.10-candidate.1` 同步绑定，未修改RSTL功能。证据：`local_outputs/volunteer-validation-20261016/evidence/45号反馈-侧脸门禁与拒识显示-20261021/`。
+
+
+## 2026-10-27｜0.94.0-candidate.1｜局部色素与完整主体联合复核
+
+新增识别行为递增MINOR，未完成人工评价保留candidate。只在肿物候选异步链路增加有界局部色素/材质颜色完整体复核，弱形状补全须有内部、外侧及扇区证据；扫描截断采用多边形面积相交及面积质心，不以边界顶点的内含比例代替面积覆盖。不读取手绘参考、不按单张照片特判；笔圈、较大既有结果、同步/显式旧算法、切口、UI和RSTL保持。私有六图为开发/回归，非独立留出或医学金标准；全矩阵、原通过保持、反例及真实入口验收以本地绑定源码的最终证据为准，未通过对象和跨落点不一致不因总通过数上升而关闭。新操作者评价和编辑器保存确认待定，未授权远端发布。
+
+## 2026-10-27｜0.95.0-candidate.1｜共识主体抑制局部碎片
+
+在0.94候选的完整主体复核之后，新增局部碎片抑制：当最高分完整候选明显小于多个相互重叠、锚点分离的稳定主体候选时，按凸多边形重叠共识改选主体，避免把嘴角肿物的深色核心单独当成整块结果；普通近尺寸候选仍沿用原评分排序，不放宽扫描覆盖、颜色、形状或拒识门禁。正式入口444条件复测中，原有粗筛通过无回退，002嘴角跨落点最低IoU由0.620120提升至0.842748，003发际旁目标及004/005瘢痕对照保持；002额头、004-0、005-0、006-0/1仍有失败，45条扫描不足条件单独排除。六张照片无独立留出人群，黄色手绘线不是医学金标准，仍为candidate，不代表整组或医学验收，也未授权远端发布。
+
+## 2026-10-27｜0.96.0-candidate.1｜外观包络受基线约束收缩
+
+在0.95候选的共识主体选择之后，针对本轮匿名样本004/006人工反馈增加有界外观包络收缩：当同步基线已有足够面积证据且异步候选走 `material_body_envelope` 或 `localized_pigment_envelope` 时，先将闭合边界向自身中心线性内收约8%；若相对同步基线仍扩张过大，再把面积限制为不超过1.6倍。该步骤不读取手绘参考，不改变扫描覆盖、颜色/边缘、形状、拒识或 `scan_local_filled_candidate` 路径；仅约束外观包络结果。固定黄色边界线同时改为屏幕空间宽度，桌面约1.33 CSS px、手机约0.95 CSS px及固定halo，图片缩放不再使其变粗。004/006自动回放显示局部面积下降，仍需操作者人工、真机和专业复核，版本保持candidate。
+
+## 2026-10-27｜0.98.0-candidate.2｜小基线包络防扩张与双端缩放回归
+
+在0.98.0-candidate.1的双端照片缩放上限、5mm扫描档位和1.4倍包络上限基础上，修复异步局部候选先缩成小片段、随后被 `material_body_envelope` 放大到约960px²而绕过上限的路径。小同步基线继续受1.4倍面积约束；只有在主体内部支持度至少0.95、外圈延续不超过0.05且材质证据足够强时，保留完整主体结果，避免把合成完整主体误压成暗核。47号反馈保全帧回放中5个过扩落点均收缩，2个小目标对照保持，4个扫描覆盖不足场景继续拒识；外观单元、肿物适配、类型检查和既有缩放回归通过。候选仍需操作者人工、真机和专业复核，不代表整组或医学验收。恢复包：`local_outputs/recovery-packages/0.98.0-candidate.2-小基线包络防扩张与双端缩放回归-20261027/manifest.json`。
+
+## 2026-10-28｜0.98.0-candidate.3｜异步大候选保护同步小边界与多落点回归
+
+在0.98.0-candidate.2的异步包络面积约束基础上，修复强同步小暗斑被更大的不完整外观候选覆盖，或被异步链路改判为扫描范围不足的路径。具备实心外边界、扫描锚点、核心暗度和多提案共识的紧凑基线保留原边界；仅对紧凑像素恢复且扫描提案数量有限的反馈6落点保留候选，既有47号扫描覆盖不足对照继续拒识。第6组精确落点包含15个关键回放，另对11个落点执行13种鼠标偏移和5/10/15/20mm扫描档位，共572个扰动条件；结果仍需按当前帧与正式入口解释，不代表整组真人样本、医学或专业验收。恢复包为`local_outputs/recovery-packages/0.98.0-candidate.3-异步大候选保护同步小边界与多落点回归-20261028-r3/manifest.json`，manifest SHA-256=`d77740cef8e2235486596a20c084baf735918158b24480cbb2bc75012a9e38c5`。`docs/quality/CONTROLLED_MARKER_TESTING.md`同步明确原落点/扫描直径至少重复2次及多落点、多扫描直径扰动规则。
+
+## 2026-10-28｜0.98.0-candidate.4｜小边界保护与中文注释归档
+
+只补候选边界保护、方向内收和小暗核轮廓保留的中文注释，修正把“跳过平滑”误写成“执行平滑”的说明；检测谓词与阈值保持candidate.3，不声称新增精度改善。候选编号递增以区分源码字节；既有低色差凸起下巴目标仍失败，正式上传帧与离线重放像素不等价仍待定位。界面独立登记为0.1.18-candidate.1，包含电脑10倍/触控窄屏12倍缩放、5–60mm扫描、固定屏幕黄色线宽与线性切口提亮；不修改切口生成/微调或RSTL六项。中文注释存档不代表人工、真机或医学验收通过。
+
+
+## 2026-11-10 Vh1 九项人工反馈：0.101.0-candidate.1（验证中）
+
+名称：肿物边界识别：孤立小目标漏检补救。增加受保护的补救分支，按1.0前行为扩展递增MINOR；未复用0.100.3，UI仍0.1.34-candidate.1。仅原最终unstable_enclosure可尝试；原接受结果、扫描覆盖明确拒绝及运行不可用保持。候选来自原像素小尺度颜色证据，不读取样本名、肤色标签或AI参考。完整背景、跨锚点或64/96背景尺度的逐候选配对及多对象歧义门禁均需真实回归验证。
+
+本轮操作者反馈为严重不合格；九项均未医学验收。生成器第一轮漏动态import、guarded轮未接入新函数，相关输出作废或仅作旧基线，保留首错。本轮转为A实际源码/正式异步入口核验，不把测试命令成功当改动生效。允许范围为本人肿物识别及必要测试/身份，不改UI、切口、RSTL或资产；既有P9886e55 PR候选冻结。唯一责任记录为根local_outputs/volunteer-validation-20261016/evidence/54号反馈-Vh1-20261110/诊断与修复报告.md。首轮实际原23次中原13成功几何保持，6旧拒识变候选，36真实控制保持；四套原安全测试/类型通过。16工程反例未新增变化，但均未触发新补救，不能代签分支安全。历史138、243扰动、正式Worker和同指纹人工确认仍待；首候选只作本地研究存档，不可远端执行。
+
+
+## 2026-11-10｜0.101.1-candidate.1｜小目标补救排除未配对邻物
+
+对0.101.0新增分支的安全修复递增PATCH。五个本地派生反例中，两个相近小目标旧版拒识，新分支却选择其中一个；只比较已有配对候选导致未配对邻物漏出歧义检查。现将全部通过原严格像素门槛的候选纳入冲突否决，不改变原候选生成、评分、重叠阈值或既有接受流程。提取纯选择函数供实际不配对邻物回归，保留原失败输出；原0.101.0中文存点不覆盖，标为有已证安全反例。当前为研究候选，原九项未销项，真机、医学与独立留出未通过。最终验证和证据见根唯一责任记录。
+
+同指纹243固定条件（8照片/9反馈目标，非病例）完成：旧139个接受结果几何保持，新增34候选为F05 13/27、F06 21/27；F07全部仍拒绝。相对0.101.0减少33项补救接受是冲突保护的可见代价，不取消安全否决恢复数量。原五派生、appearance、类型、开发身份及隐私已通过；原23各3次及当前Worker结果以根唯一责任记录同指纹原件为准，不以旧版138/69/Worker代签。恢复包为local_outputs/recovery-packages/肿物邻物歧义保护-0.101.1-研究候选-20261110/manifest.json，SHA-256=b3d583240efbfce4c034901ea6b7c375176541deadb90984952f156ab3597cbe，5新副本/258继承/1仅指纹逐文件回读，依赖原0.101.0基础包。E后来证据为包外旁证；存档不代表效果通过。UI/切口/RSTL源码及资产未变，但新识别轮廓仍可能改变下游切口输入，尚未完整验收。
+
+
+## 2026-11-10：肿物0.101.2-candidate.1｜亮度补救小片的主体冲突拒识
+
+F03两个已知错误条件中，亮度备用输入返回下方小片，原图局部复核仍接受，完整颜色主体在旧大尺度复核中缺失。不能将不同轮廓的先后出现解释成外层换错对象，也不能靠再做一次相同色差检查解决。
+
+本版仅对原外观复核完全保持的亮度补救小片（64—400像素平方）增加原图反证。固定8像素网格九位置、24/32两背景尺度；小主体仅用于否决，直径24—48，其余原颜色强度、像素数、内部支持及外环延续门槛保持。新区域至少40像素且占core一半，其独立支持率须达0.7；主体对旧多边形面积覆盖至少0.9、面积至少两倍、中心距离有界，并须两个锚点间距至少12、轮廓IoU至少0.9。保留不完整候选，冲突只返回无法可靠闭合，不标成物理越圈，也不输出猜测的新轮廓。旧运行不可用结果保持。
+
+作为错误接受的兼容修复，PATCH从0.101.1递增至0.101.2-candidate.1；名称“肿物边界识别：亮度补救小片的主体冲突拒识”。源码37e074093915ed30c9cbc57b82c70875ed0e64bd9ba532f1a439eb6a98b3f5d2，算法d9fac1dd44e7a57ab849f834d7a33e924586c1680b65ab210cd16a32c20c5dc4。UI、切口、RSTL受保护功能及模型资产未改。原23条件各三次完整结果稳定，F03两个错误条件共6次由接受转拒识，其余63次完整输出保持；F01/F02/F03的81扰动中70次完整输出保持、11次仅安全拒识，没有新增接受。余162扰动本轮未重跑，旧243不能代签本指纹全验。类型、外观反例及去除新检查异常兜底的同源观察测试已通过；其他工程验证以本机唯一责任记录的实际回执为准。尚未人工、真机、医学或完整下游验收，只作隔离研究候选，未部署、未远端发布，九项精度仍全部开放。
+
+
+## 2026-11-11：肿物0.102.0-candidate.1｜小片的跨尺度主体补救
+
+新增完整主体接受路径，按1.0前行为变化递增MINOR，名称“肿物边界识别：小片的跨尺度主体补救”。仅限此前亮度补救生成、原复核逐点保持的小片；原主体反证生成与原图颜色门槛保持。接受须全bank扫描和背景完整、覆盖旧片、跨context及不同锚点重复、全部成组主体一致；相互冲突轮廓与未配对较大外缘均否决，不能删除反证后挑赢家。原小扫描仍拒识。
+
+独立审查另发现等面积外移的未配对轮廓会绕过仅比面积的末门禁。已先加反例实跑失败，再补实际外延检查；保留原较大未配对提案拒识，并拒绝外延超过较小面积5%的未配对提案。1px漂移阳性、2px漂移反例及两组跨锚点竞争均纳入回归。5%是工程面积容差，不是边缘距离或医学精度。最终综合源码0519f2987c5fe7e1850a653a34fe1ada2dc0e20902e57ea659608f0cde59342e，算法ac5b55f5648616b40e155455c225119a02fef251635ce4e353d2f45004b56453，资产保持。
+
+修改前复用0.101.2中文存点，旧包不覆盖。I1中心关联导致漏救、I2重叠反例和未配对外缘反例的原始exit1均保留于本机责任记录，不进入产品。实验三个较大扫描范围返回同一791像素平方轮廓，只证明工程候选可达与一致；无医学正确性结论。该截点后已完成0.102.0的离线回归、Worker及下游坐标/SVG契约验证并独立存档；具体原件由本机执行卡记录。九项反馈仍未销项，工程通过禁止作为整组已修复或可发布依据。
+
+## 2026-11-11：肿物0.102.1-candidate.1｜另一片段补救路径的冲突拒识
+
+仅将已有 `color_difference_fragment_neighborhood_consensus_recovered` 来源纳入原小片主体冲突复核，64—400面积、原复核逐点保持、无unavailable等条件不变。该来源仅可保持或拒识，禁止输出新主体；含亮度补救标志或两种标志并存时，保持0.102.0的主体补救语义。新增拒识用独立 `recovered_fragment_body_conflict` 诊断码，原有拒识码保持。作为错误接受的兼容安全修复递增PATCH；不把更多拒识称为精度提高。
+
+实施前证据副本的5个已知141.5像素平方错误小片转拒识，原23条件、3个原主体补救阳性和36个同实际像素配对对照保持。真实阳性经公开外观入口分别测试亮度、另一来源及两者并存；后两种并非一概等价，只有另一来源禁止补救。阴影、分离同色环与邻物控制保留入口命中/未命中，去guard异常兜底的观察副本未抛异常；不能把给定接受片的guard保持测试写成完整产品拒识。最终源码指纹及正式矩阵、Worker与下游结果以同指纹责任记录为准，未完成部分不得继承旧版通过。
+
+只改本人肿物外观算法及必要测试/身份，UI、切口、RSTL受保护功能与模型资产不变。修改前0.102.0中文研究存档及原失败保留；九项人工精度仍全部开放，参考为操作者手绘后AI调整，非医学金标准，当前不允许整组交付或远端发布。
+
+本版正式离线回读：原69次完整保持；243固定条件含F03三次重复共297次，其中5条件15次由错片转拒识，其余282次完整保持。138历史条件与36私有控制均对0.102.0同像素同参数实际配对，完整结果保持；N02旧误接受保留。filled、scan-owned、扫描3直径×9落点×3重复81例、隐私、切口尺度原契约与构建均退出0。本版Worker、实际UI及原输入SHA差异仍单列待核，不继承旧版通过；本段只记录工程验证。
+
+同源码9509198实际浏览器验证完成：34条正式Worker与同实际像素Node几何一致，6条指定主体阳性/10条指定拒识均满足原断言；27条同冻结SHA，7条不同保留。两视口接受UI各13项及拒识UI各10项通过，96点模型映射误差0、源回投最大1.61e-13像素；拒识无规划请求。4条UI的冻结SHA均不同，按实际字节重算通过，不冒充历史/真机复现。先成功后拒识残留未覆盖；九项精度继续开放。元数据后续提交不改变源码/算法/资产指纹，测试绑定9509198，不将其HEAD自动改写成后续登记HEAD。
+
+## 2026-11-12：肿物0.102.2-candidate.1｜小扫描特征搜索与覆盖解耦
+
+采用既有补救方法的四行兼容修复：Patch增加默认等于原半径的可选特征搜索半径；只有compactPigmentRecovery使用36px分析尺度下限。原像素裁剪/模糊、输出扫描覆盖、颜色/形状/配对支持和邻物冲突门槛保持，其他Patch调用不变。沿同一算法族递增PATCH，历史查重后使用candidate；不新增用户参数或替换算法。
+
+固定MO004小圈从拒识转为原大圈同一291.637px²轮廓，最远12.428px小于原19.95px安全内圈；大圈完整保持。N01同小圈原/候选均拒且完整相同。4次实图对照和4套未修改原模块回归通过（后者124次完整异步，另1次同步基线），实际接入外观源码与隔离候选完整等价；类型/构建和正式A回读以本批记录为准，不能继承未运行检查。
+
+源码9e8a94384c014482120bbbb202956961eff1851efac79f38989ac20f7eaaf020；算法931d3e08ff5caca3b3c3f9a4ef63d0b85b657d4e4f982651346fcc8ed74dd6b4；资产保持9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249。F01—F10未整项销账、N02旧误接受与M1R019未修复；人工/真机/医学待验，原浏览器现场像素与冻结输入差异保留。唯一责任证据：项目local_outputs/volunteer-validation-20261016/evidence/54号反馈-Vh1-20261110/执行卡.json的mo004MinimalProductRepair20261112及原报告/矩阵。未修改RSTL受保护功能、UI、切口、资产或远端；当前页面是否采用须另核运行身份。
+
+本批实际产品读回：A物理源码的原正式异步入口（无模块替换）在MO004固定5/10mm与N01同小圈三个条件完整等于隔离候选；类型检查与local版本/算法门禁通过。三次绑定源码9e8a94384c014482120bbbb202956961eff1851efac79f38989ac20f7eaaf020、算法931d3e08ff5caca3b3c3f9a4ef63d0b85b657d4e4f982651346fcc8ed74dd6b4，执行时尚未提交，HEAD7692975并不代表该旧提交已含新代码。后续本地提交只在实测源等价后登记；构建、开发门禁及页面状态仍以原执行卡独立结论为准。
+
+
+## 2026-11-13：肿物0.102.3-candidate.1｜越圈小扫描的完整候选恢复
+
+仅在普通小扫描的原始有效实心witness已越过操作者扫描圈时，给初始提案启用既有截断组件检查，并补齐固定分析范围中的原观察窗口。witness越圈不是截断证明，实际截断由原helper检查；保留全部完整大主体、配对共识、最终覆盖及颜色/形状/冲突门槛。原圈内、原拒识、大圈、笔圈与像素复核路径保持。不换算法、不引入依赖或诊断工具；兼容修复PATCH递增，人工评价未完成故使用candidate。
+
+同冻结输入33条件配对中32份完整JSON保持，仅M1R019/run29从拒识转468px²，边界逐点等于指定原10mm；目标5/10mm及MO0045mm各三次一致。27小圈安全条件完整保持；N01三次完整保持拒识，四套原模块回归通过。额外给定越圈witness覆盖窄入口、完整大主体/深内核及21.85px两侧门槛；节点计数随观察窗口增多而改变，不能称所有中间日志不变。原半径24圆在23扫描圈误接受及边缘非单调属于保留的旧缺陷，不冒充已修复。
+
+源码f1690c73b16d3e2a8cbff3e96f1d161ba01717b3dda3ee9bbfca0e4ccb476a49；算法3f6d43ab32ab8b2d49714f0a7d9219ab9a6b3b617d2ceb987db88b0e50746fc8；资产9e2c98554911eee6860dd1166fef2f3ba1a4e105dc13435820fe794bb4049249保持。接入后的原异步入口、类型/构建/开发门禁及最终收口以原54号反馈-Vh1-20261110执行卡conservativeRepair20261113和报告/矩阵为准，不继承旧版运行通过；当前页面/Worker、真机、医学及整组未签。未修改RSTL受保护功能、UI、切口、资产、服务/代理或远端。
+
+本版物理产品原异步入口4条件（MO0045mm、M1R0195/10mm、N01）完整保存JSON分别等于隔离候选；内存undefined按标准JSON省略，未放宽任何数值差异。更新后的既有scan-owned套件单独运行并保存回执，类型/local门禁及默认本地构建通过。修改后的Color与已测隔离候选原字节完全相同，前三套未修改测试不重复运行；真实Worker及页面效果仍未验证。构建发生在基线HEAD的未提交源码，后续Git提交与构建身份另由原执行卡回读。
+
+## 2026-11-13：肿物算法 0.102.4-candidate.1｜最终实心轮廓有界整理
+
+仅原完整链最终保留的自复核实心边界，在默认整理因长宽比跳过时复用既有有界低频方法，并以原像素门槛只作接纳/拒绝；直接扫描像素提案、外观替换、拒识/空心及异常完整保持。最终原点三重复、来源反例、三安全套件和失败退回已测；多落点/旧33条件按责任证据分实跑与受限等价复用。评分/阶段诊断保持，非医学或整组通过。
+
+本次为当前轮廓缺陷的兼容局部修复，递增PATCH，未获本版人工评价，保留candidate；不新增算法族、阈值或样本特判。先完成原链再整理，避免旧r2阶段证据/评分传递；依据既有直接扫描提案来源排除M1R019，原失败与修正前输出保留。自动证据及条件复用范围见根唯一责任记录中的feedback56-round3-20261113-post-final-qualification.json。正式产品/运行、人工/医学状态以该责任记录后续回读为准；不代签其余MK002/MK003或整组通过。
+
+## 2026-11-13：肿物算法 0.103.0-candidate.1｜保留完整主体内已关联的局部轮廓
+
+原流程已关联的局部色素轮廓，可能先被面积上限缩小，再被较大材料轮廓替换。仅对有效的 validated_legacy_filled_candidate 来源，在原关联、完整扫描和后续Lab复核均保持后，若局部轮廓完整包含基线及点击点、被原完整材料轮廓包围、全部八扇区及整体均无外延，保留这个已有局部候选。不新增候选生成，不放宽关联比值、扫描覆盖或颜色/形状门槛。
+
+MK003侧脸7个落点均返回约1666.4977px²，介于原653.1px²限幅结果和2682.706px²材料候选之间。16个相邻条件与有效保存参考完整JSON一致；其中M1R019的首次比较误用了旧中间结果，保留原失败并改用既有最终参考call371回读，未放宽比较。原外观反例套件与类型检查通过；没有真实边界金标准，鼻翼、MK002和原人工反馈仍开放，未完成本版正式Worker/页面、真机或医学验收。具体条件、来源、调用超限和限制见原执行卡 approvedEveningCloseout；不表示整组收尾完成。
+
+本次改变候选选择行为，1.0前递增MINOR至0.103.0；版本已查重，人工未评价，保留candidate。版本登记后没有新增识别调用；行为证据绑定同一外观源码，版本常量变化仅作为身份登记。本轮未修改RSTL受保护功能、UI、切口、资产、代理或远端。
+
+续测更正（2026-11-13，当前0.103候选未达到正式入口预期）：既有冻结输入的7点结果保留；同原图在当前正式页面实际处理输入下，两次UI/同Chromium Worker配对均输出275.8px²、路线material_body_envelope，完整结果和SVG相同，但未选中预期局部候选。旧冻结与当前像素在目标100×100区域83%像素不同、最大通道差6，不能据此推定JPEG、缩放或唯一原因；当前失败RGBA及精确点击点已保全。3个5mm条件拒识、6相邻完整保持；15mm原点仅218.4，另两点1666.5，跨扫描稳定性未达到。正式三点仅原点覆盖，其余两点未验；不得交整组人工复核。原自动套件与源码身份检查通过不代替此失败。源码/算法/版本未变，新增仅结果登记；本次16/24识别调用，原截止不重置。详细首错、输入与恢复指针见原执行卡approvedTargetedValidation20261113及targeted-*证据。
