@@ -4,7 +4,11 @@
 
 The release gate requires an archive matching the current runtime. The archive at `local_outputs/recovery-packages/pr248-cbe8f55/manifest.json` records source commit `cbe8f55b9e3752c9d341168226efee55c3a088f8` and source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b`. All 272 source copies are checked against the manifest's byte lengths and SHA-256 values. The existing video fixture is fingerprinted only; its contents and model weights are not copied. Files outside the archive scope are recovered from the recorded Git commit.
 
-The manifest's dirty-worktree boundary list is empty because the archive was created from a clean checkout. The full PR diff against `5329c2aaa3cfb7e86ec1985e273b09d564d495bb` still includes shared photo/camera, rendering, model loading and browser test code outside the default archive scope. The scope review, operator evaluation and editor save confirmation remain pending. The archive verification does not supply those confirmations.
+The manifest's dirty-worktree boundary list is empty because the archive was created from a clean checkout. The full PR diff against `5329c2aaa3cfb7e86ec1985e273b09d564d495bb` still includes shared photo/camera, rendering, model loading and browser test code outside the default archive scope. The archive verification does not supply operator confirmation.
+
+<a id="pr248-operator-confirmation-20261125"></a>
+
+On 2026-11-25, the operator replied “接受改动，符合预期，保存编辑” to the request for PR #248 scope review, practical evaluation, and editor save confirmation. The reply accepts the shared changes, records that the result met expectations, and confirms the edits were saved. This is the operator's overall assessment; no individual scenarios, device results, or clinical validation were reported. It is bound to source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b` and recovery manifest SHA-256 `37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad`.
 
 <a id="rstl-wrinkle-performance-recovery-eol-20261123"></a>
 

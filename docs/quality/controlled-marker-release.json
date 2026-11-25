@@ -315,16 +315,23 @@
     "note": "Verified source-scope archive for cbe8f55; Git is needed for files outside this scope. The earlier RSTL integration archive remains frozen."
   },
   "scopeBoundaryReview": {
-    "status": "pending",
-    "scope": "PR #248 changes shared photo/camera, rendering, model loading, and browser test code outside the default scope. Operator confirmation for this archive is pending."
+    "status": "confirmed",
+    "scope": "PR #248 changes shared photo/camera, rendering, model loading, and browser test code outside the default scope.",
+    "manifestSha256": "37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-operator-confirmation-20261125",
+    "confirmedAt": "2026-11-25T08:50:05Z"
   },
   "operatorEvaluation": {
-    "status": "pending",
-    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b"
+    "status": "accepted",
+    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-operator-confirmation-20261125",
+    "confirmedAt": "2026-11-25T08:50:05Z"
   },
   "editorSaveConfirmation": {
-    "status": "pending",
-    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b"
+    "status": "confirmed",
+    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-operator-confirmation-20261125",
+    "confirmedAt": "2026-11-25T08:50:05Z"
   },
   "history": [
     {
