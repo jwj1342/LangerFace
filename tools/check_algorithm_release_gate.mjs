@@ -178,9 +178,9 @@ if (requiresArchive && (archive.status !== "verified" || !archive.manifestPath |
 
 const scopeReview = release.scopeBoundaryReview || {};
 if (requiresArchive && scopeReview.status === "pending") {
-  fail(boundaryCodePathCount === null
-    ? "责任范围外共享代码改动尚未取得操作者边界确认"
-    : `存在 ${boundaryCodePathCount} 个责任范围外共享代码改动，尚未取得操作者边界确认`);
+  fail(boundaryCodePathCount
+    ? `恢复包记录了 ${boundaryCodePathCount} 个责任范围外共享代码改动，尚未取得操作者边界确认`
+    : "发布登记中的责任范围复核待确认；恢复包的工作区差异不代表整个 PR 的变更范围");
 } else if (requiresArchive && scopeReview.status === "confirmed") {
   if (scopeReview.manifestSha256 !== archive.manifestSha256
     || !scopeReview.evidence
