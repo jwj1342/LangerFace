@@ -1,5 +1,6 @@
 import { compareCandidateRecords } from "./incisionTools.ts";
 import type { TumorInput } from "./incisionCandidateTools.ts";
+import { paintPhotoVectors } from "./photoVectorOverlay.ts";
 
 type DynamicRecord = Record<string, any>;
 
@@ -147,32 +148,10 @@ export async function downloadCanvasWithSvgOverlayPng(
   overlay: SVGSVGElement,
   filename: string,
 ): Promise<void> {
-  const viewBox = svgOverlayExportViewBox(canvas.getBoundingClientRect(), overlay.getBoundingClientRect());
-  const hasVisibleOverlay = getComputedStyle(overlay).display !== "none"
-    && [...overlay.querySelectorAll<SVGGraphicsElement>("path, circle, text")]
-      .some((element) => getComputedStyle(element).display !== "none"
-        && (element.tagName !== "path" || Boolean(element.getAttribute("d"))));
-  if (!viewBox || !hasVisibleOverlay) {
-    downloadCanvasPng(canvas, filename);
-    return;
-  }
   try {
-    const exportCanvas = document.createElement("canvas");
-    exportCanvas.width = canvas.width;
-    exportCanvas.height = canvas.height;
-    const context = exportCanvas.getContext("2d");
-    if (!context) throw new Error("2d canvas context is required for workflow export");
-    if (canvas.classList.contains("mirror")) {
-      context.translate(exportCanvas.width, 0);
-      context.scale(-1, 1);
-    }
-    context.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    const overlayImage = await svgImage(overlay, viewBox);
-    context.drawImage(overlayImage, 0, 0, exportCanvas.width, exportCanvas.height);
-    downloadCanvasPng(exportCanvas, filename);
+    downloadCanvasPng(await captureCanvasWithSvgOverlay(canvas, overlay), filename);
   } catch {
-    downloadCanvasPng(canvas, filename);
+    downloadCanvasPng(await captureCanvasWithSvgOverlay(canvas, null), filename);
   }
 }
 
@@ -192,6 +171,7 @@ export async function captureCanvasWithSvgOverlay(
     context.scale(-1, 1);
   }
   context.drawImage(canvas, 0, 0);
+  paintPhotoVectors(canvas, context);
   context.setTransform(1, 0, 0, 1, 0, 0);
   if (!overlay || !overlay.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return output;
   const rect = canvas.getBoundingClientRect();

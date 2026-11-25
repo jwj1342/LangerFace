@@ -22,7 +22,7 @@ export function IncisionWorkbench() {
       <WorkbenchBrand
         eyebrow="独立切口研究工具"
         title="切口规划与候选审阅"
-        action={<StatusBadge asChild><Link to="/">返回工具入口</Link></StatusBadge>}
+action={<StatusBadge asChild><Link to="/app">返回工具入口</Link></StatusBadge>}
       />
 
       <IncisionStatePanel />

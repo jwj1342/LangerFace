@@ -1,10 +1,12 @@
 import { fitContainSize, nextImageGestureViewState, type FitContainResult } from "./fitMath";
 import { els } from "./liveDom";
+import { syncPhotoVectorView } from "./photoVectorOverlay.ts";
 import {
   imageMaxZoomForViewport,
   imageViewportIsMobile,
   renderState,
   sourceState,
+  usesPhotoCameraProjection,
 } from "./liveState";
 
 export { fitContainSize };
@@ -90,7 +92,7 @@ export function setRefineCanvasViewActive(active: boolean): void {
     fitCanvasDisplayToStage({ resetView: !renderState.imageView.baseWidth });
     return;
   }
-  if (!els.canvas.classList.contains("image-source")) clearCanvasDisplayFit();
+  if (!els.canvas.classList.contains("image-source") && !usesPhotoCameraProjection()) clearCanvasDisplayFit();
 }
 
 export function stepImageViewZoom(direction: -1 | 1): boolean {
@@ -168,6 +170,7 @@ export function applyImageViewStyle(): void {
   els.canvas.style.setProperty("--img-zoom", `${view.zoom}`);
   els.canvas.style.setProperty("--img-pan-x", `${Math.round(view.offsetX)}px`);
   els.canvas.style.setProperty("--img-pan-y", `${Math.round(view.offsetY)}px`);
+  syncPhotoVectorView(els.canvas);
   const wrap = els.mainWrap.getBoundingClientRect();
   sourceState.planning2d?.setView({
     viewportLeft: wrap.left,
@@ -179,7 +182,7 @@ export function applyImageViewStyle(): void {
     zoom: view.zoom,
     offsetX: view.offsetX,
     offsetY: view.offsetY,
-    mirror: renderState.mirror,
+    mirror: renderState.mirror && !usesPhotoCameraProjection(),
     devicePixelRatio: globalThis.devicePixelRatio || 1,
   });
 }

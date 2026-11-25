@@ -1,0 +1,277 @@
+import { MotionStabilizedOneEuro } from "./geometrySmoothing.ts";
+import type { LiveZoomCard } from "./render2d.ts";
+import type { CanvasRecordingController } from "./canvasRecording";
+import type { IncisionOverlayPayload } from "./dataSource";
+import type { Vec3 } from "./softBody";
+import type { PhotoPlanningController } from "./photoPlanningController";
+import type { RstlSourceContract } from "./rstlSourceContract";
+import type {
+  CurveRefinementTransport,
+  RefineLine,
+  RefinePoint,
+  RefineQualityReport,
+  RefineViewportCrop,
+} from "./liveRefineMath";
+
+export const DESKTOP_IMAGE_MAX_ZOOM = 10;
+export const MOBILE_IMAGE_MAX_ZOOM = 12;
+
+export function imageViewportIsMobile(): boolean {
+  // 窄屏触控设备兜底，避免浏览器未命中 pointer/hover 条件时仍使用桌面上限。
+  if (typeof window === "undefined" || window.innerWidth > 560) return false;
+  const mediaMatches = typeof window.matchMedia === "function"
+    && window.matchMedia("(max-width: 560px) and (pointer: coarse) and (hover: none)").matches;
+  if (mediaMatches) return true;
+  const touchPoints = typeof navigator === "undefined" ? 0 : Number(navigator.maxTouchPoints || 0);
+  return touchPoints > 0 || "ontouchstart" in window;
+}
+
+export function imageMaxZoomForViewport(mobile: boolean): number {
+  return mobile ? MOBILE_IMAGE_MAX_ZOOM : DESKTOP_IMAGE_MAX_ZOOM;
+}
+
+export interface LiveModelState {
+  landmarker: any;
+  imageLandmarker: any;
+  handLandmarker: any;
+  imageHandLandmarker: any;
+  topology: any;
+  triangles: any;
+  noseTris: any;
+  atlases: Record<string, any>;
+  officialAtlases: Record<string, any>;
+  atlasContracts: Record<string, RstlSourceContract>;
+  officialAtlasContracts: Record<string, RstlSourceContract>;
+  [key: string]: unknown;
+}
+
+export interface LiveImageViewState {
+  baseWidth: number;
+  baseHeight: number;
+  fitScale: number;
+  zoom: number;
+  minZoom: number;
+  maxZoom: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface LiveRenderState {
+  system: string;
+  clip: boolean;
+  handOcc: boolean;
+  mirror: boolean;
+  bands: boolean;
+  zoom: boolean;
+  meshPts: boolean;
+  refine2d: LiveRefine2dState;
+  zoomCards: LiveZoomCard[];
+  focusRegion: unknown;
+  focusCrop: RefineViewportCrop | null;
+  focusZoom: number;
+  imageView: LiveImageViewState;
+  densityFrac: number;
+  smoothLevel: number;
+  opacity: number;
+  smoother: MotionStabilizedOneEuro;
+  incisionOverlay: IncisionOverlayPayload | null;
+  workflowPhotoOverlay: boolean;
+  [key: string]: unknown;
+}
+
+export type RefineMode = "view" | "drag" | "point" | "erase";
+
+export interface EditableRefineLine extends RefineLine {
+  name: string;
+  region: string;
+  symmetryRole: string;
+  symmetryPairId: string;
+  hidden: boolean;
+  hiddenPointRuns: Array<[number, number]>;
+  tris: number[];
+  pts: Vec3[];
+}
+
+export interface RefinePick {
+  lineIndex: number;
+  pointIndex: number;
+  distancePx: number;
+}
+
+export interface RefineHistoryEntry {
+  label: string;
+  lines: EditableRefineLine[];
+}
+
+export interface RefineDrag {
+  pointerId: number;
+  pick: RefinePick;
+  startPointer: [number, number];
+  original: Vec3[];
+  partnerIndex: number | null;
+  originalPartner: Vec3[] | null;
+  moved: boolean;
+  symmetryLinkedIndex: number | null;
+  dirtyBefore: boolean;
+  historyLengthBefore: number;
+}
+
+export interface LiveRefine2dState {
+  active: boolean;
+  mode: RefineMode;
+  spread: number;
+  pointCount: number;
+  nudgeStep: number;
+  symmetry: boolean;
+  showAxis: boolean;
+  lines: EditableRefineLine[] | null;
+  latestAutoLines: EditableRefineLine[] | null;
+  liveBaselineLines: EditableRefineLine[] | null;
+  liveTransport: CurveRefinementTransport | null;
+  selected: RefinePick | null;
+  dirty: boolean;
+  quality: RefineQualityReport | null;
+  undoStack: RefineHistoryEntry[];
+  drag: RefineDrag | null;
+}
+
+export interface LiveSourceState {
+  planning2d: PhotoPlanningController | null;
+  workflowPhotoCamera: boolean;
+  cameraFacing: import("./cameraSource").CameraFacingMode;
+  cameraPending: boolean;
+  cameraError: string | null;
+  readonly source: unknown | null;
+  readonly sourceKind: "camera" | "video" | "image" | null;
+  imageFileName: string | null;
+  imageFile: File | null;
+  running: boolean;
+  paused: boolean;
+  presence: number;
+  lastLM: any;
+  imageCacheLM: any;
+  imageHulls: any;
+  imageDetectionComplete: boolean;
+  imageDetectionAttempts: number;
+  jawOpen: number;
+  eyeBlinkLeft: number;
+  eyeBlinkRight: number;
+  qualityGate: any;
+  localRegionQuality: any;
+  frozenFrame: HTMLCanvasElement | null;
+  lastHulls: any[];
+  [key: string]: unknown;
+}
+
+export interface LiveRecordingState {
+  recorder: CanvasRecordingController | null;
+}
+
+export const modelState: LiveModelState = {
+  landmarker: null,
+  imageLandmarker: null,
+  handLandmarker: null,
+  imageHandLandmarker: null,
+  topology: null,
+  triangles: null,
+  noseTris: null,
+  atlases: {},
+  officialAtlases: {},
+  atlasContracts: {},
+  officialAtlasContracts: {},
+};
+
+export const renderState: LiveRenderState = {
+  system: "rstl",
+  clip: true,
+  handOcc: true,
+  mirror: true,
+  bands: false,
+  zoom: true,
+  meshPts: false,
+  refine2d: {
+    active: false,
+    mode: "view",
+    spread: 0.28,
+    pointCount: 1,
+    nudgeStep: 0.5,
+    symmetry: false,
+    showAxis: true,
+    lines: null,
+    latestAutoLines: null,
+    liveBaselineLines: null,
+    liveTransport: null,
+    selected: null,
+    dirty: false,
+    quality: null,
+    undoStack: [],
+    drag: null,
+  },
+  zoomCards: [],
+  focusRegion: null,
+  focusCrop: null,
+  focusZoom: 1.8,
+  imageView: {
+    baseWidth: 0,
+    baseHeight: 0,
+    fitScale: 1,
+    zoom: 1,
+    minZoom: 1,
+    maxZoom: imageMaxZoomForViewport(imageViewportIsMobile()),
+    offsetX: 0,
+    offsetY: 0,
+  },
+  densityFrac: 1,
+  smoothLevel: 0.45,
+  opacity: 0.90,
+  smoother: new MotionStabilizedOneEuro({ minCutoff: 1.5, beta: 0.05 }),
+  incisionOverlay: null,
+  workflowPhotoOverlay: false,
+};
+
+export const sourceState: LiveSourceState = {
+  planning2d: null,
+  workflowPhotoCamera: false,
+  cameraFacing: "unknown",
+  cameraPending: false,
+  cameraError: null,
+  get source() {
+    return this.planning2d?.getFrameState().source ?? null;
+  },
+  get sourceKind() {
+    return this.planning2d?.getFrameState().kind ?? null;
+  },
+  imageFileName: null,
+  imageFile: null,
+  running: false,
+  paused: false,
+  presence: 0,
+  lastLM: null,
+  imageCacheLM: null,
+  imageHulls: null,
+  imageDetectionComplete: false,
+  imageDetectionAttempts: 0,
+  jawOpen: 0,
+  eyeBlinkLeft: 0,
+  eyeBlinkRight: 0,
+  qualityGate: null,
+  localRegionQuality: null,
+  frozenFrame: null,
+  lastHulls: [],
+};
+
+export function currentLiveSource(): unknown | null {
+  return sourceState.planning2d?.getFrameState().source ?? null;
+}
+
+export function currentLiveSourceKind(): "camera" | "video" | "image" | null {
+  return sourceState.planning2d?.getFrameState().kind ?? null;
+}
+
+export function usesPhotoCameraProjection(): boolean {
+  return sourceState.workflowPhotoCamera && currentLiveSourceKind() === "camera";
+}
+
+export const recordingState: LiveRecordingState = {
+  recorder: null,
+};

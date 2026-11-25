@@ -9,7 +9,11 @@ import { fileURLToPath } from 'node:url';
 // Restore onto the recorded pre-performance base, not the current checkout:
 // otherwise unarchived files in HEAD can silently satisfy missing dependencies.
 const root = fileURLToPath(new URL('../', import.meta.url));
-const release = JSON.parse(readFileSync(join(root, 'docs/quality/controlled-marker-release.json')));
+// This package freezes the performance change merged in #247. Later releases
+// have their own archives and may legitimately change the same runtime files.
+const integrationCommit = '5329c2aaa3cfb7e86ec1985e273b09d564d495bb';
+const gitBlob = (revision, name) => execFileSync('git', ['-C', root, 'cat-file', 'blob', `${revision}:${name}`]);
+const release = JSON.parse(gitBlob(integrationCommit, 'docs/quality/controlled-marker-release.json'));
 const manifestPath = resolve(root, release.archive.manifestPath);
 const manifestBytes = readFileSync(manifestPath);
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -43,9 +47,9 @@ try {
   for (const name of required) {
     // Compare with committed source bytes. A clean Windows checkout can use
     // CRLF even though both the Git blob and the frozen archive contain LF.
-    const committed = execFileSync('git', ['-C', root, 'cat-file', 'blob', `HEAD:${name}`]);
+    const committed = gitBlob(integrationCommit, name);
     assert.equal(sha256(readFileSync(join(restored, name))), sha256(committed),
-      `${name}: restored tests and implementation match current PR`);
+      `${name}: restored tests and implementation match the merged performance change`);
   }
   for (const name of ['tools/test_live_wrinkle_refinement.ts', 'tools/test_forehead_trajectory_attraction.ts']) {
     const output = execFileSync(process.execPath, [name], {

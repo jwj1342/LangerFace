@@ -19,11 +19,13 @@ import { StatusBadge } from "./ui/status-badge";
 interface LiveControlRailProps {
   showIncisionEntry?: boolean;
   showStatusOverview?: boolean;
+  requireCameraPhoto?: boolean;
 }
 
 export function LiveControlRail({
   showIncisionEntry = true,
   showStatusOverview = true,
+  requireCameraPhoto = false,
 }: LiveControlRailProps) {
   return (
     <>
@@ -32,6 +34,7 @@ export function LiveControlRail({
         title="面部评估与张力线映射"
         action={<StatusBadge className="loading" id="modelBadge">模型加载中...</StatusBadge>}
       />
+      <Link to="/app" className="text-sm underline">返回工具入口</Link>
 
       {showStatusOverview ? <LiveRouteControlsPanel /> : null}
 
@@ -47,7 +50,7 @@ export function LiveControlRail({
 
       {showStatusOverview ? <LiveStatePanel /> : null}
       <LiveIncisionOverlayPanel />
-      <LiveSourceControlsPanel />
+      <LiveSourceControlsPanel requireCameraPhoto={requireCameraPhoto} />
       <LiveWrinklePanel />
       <LiveRefinePanel />
       <LiveRenderControlsPanel />

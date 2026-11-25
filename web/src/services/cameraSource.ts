@@ -4,6 +4,7 @@ export const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
 };
 
 export type CameraFacingMode = "environment" | "user" | "unknown";
+export type CameraFacingSelection = Exclude<CameraFacingMode, "unknown">;
 export type CameraConstraintLevel = "environment_exact" | "environment_ideal" | "generic";
 
 export interface CameraConstraintCandidate {
@@ -110,19 +111,43 @@ export function stopCameraStream(stream: Pick<MediaStream, "getTracks"> | null |
   for (const track of stream?.getTracks() || []) track.stop();
 }
 
-export function describeCameraError(error: unknown): CameraErrorDescription {
+export async function openSelectedCameraStream(facing: CameraFacingSelection): Promise<MediaStream> {
+  if (globalThis.isSecureContext !== false
+      && typeof navigator !== "undefined"
+      && navigator.mediaDevices?.getSupportedConstraints?.().facingMode === false) {
+    throw cameraError("NotFoundError", "Browser cannot select a camera by facing mode.");
+  }
+  const stream = await openCameraStream({
+    video: { ...CAMERA_CONSTRAINTS.video as MediaTrackConstraints, facingMode: { exact: facing } },
+    audio: false,
+  });
+  const actualFacing = cameraFacingModeFromStream(stream);
+  if (actualFacing !== "unknown" && actualFacing !== facing) {
+    stopCameraStream(stream);
+    throw cameraError("NotFoundError", "The selected facing mode was not available.");
+  }
+  return stream;
+}
+
+export function describeCameraError(error: unknown, facing?: CameraFacingSelection): CameraErrorDescription {
   const err = error as { name?: string; message?: string } | null | undefined;
   const name = err?.name || "";
   if (name === "NotAllowedError" || name === "SecurityError") {
     return {
       reason: "permission_denied",
-      message: "本次摄像头权限未获允许。可再次点击“开启后置摄像头”重新申请；若手机不再弹出授权框，请到手机系统设置或浏览器的网站权限中允许本网站使用摄像头后重试。",
+      message: `本次摄像头权限未获允许。可再次点击“开启${facing === "user" ? "前置" : "后置"}摄像头”重新申请；若手机不再弹出授权框，请到手机系统设置或浏览器的网站权限中允许本网站使用摄像头后重试。`,
     };
   }
   if (name === "NotReadableError" || name === "TrackStartError") {
     return {
       reason: "camera_busy",
       message: "摄像头可能被其他程序占用，请关闭会议软件或系统相机后重试。",
+    };
+  }
+  if (facing && isCameraSelectionFallbackError(error)) {
+    return {
+      reason: "no_device",
+      message: `无法使用${facing === "user" ? "前置" : "后置"}摄像头。请选择另一侧镜头后重试。`,
     };
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {

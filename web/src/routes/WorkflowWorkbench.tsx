@@ -4,6 +4,7 @@ import { WorkflowLayout } from "../components/WorkflowLayout";
 import { MobileWorkflowControls } from "../components/MobileWorkflowControls";
 import { WorkflowCanvasOverlay, WorkflowCanvasTools } from "../components/WorkflowCanvasTools";
 import { WorkflowStageStatus } from "../components/WorkflowStageStatus";
+import { workflowPhotoCameraEnabled } from "../services/workflowPhotoCamera";
 
 export function WorkflowWorkbench() {
   return (
@@ -12,6 +13,7 @@ export function WorkflowWorkbench() {
         <LiveControlRail
           showIncisionEntry={false}
           showStatusOverview={false}
+          requireCameraPhoto={workflowPhotoCameraEnabled}
         />
       )}
       mobileOperations={<MobileWorkflowControls />}

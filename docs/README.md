@@ -25,6 +25,8 @@
 
 **这个目录回答「某条技术路线当初为什么这么选、现在到哪一步了」。** [FLAME_3D_TRACK.md](tracks/FLAME_3D_TRACK.md) 是 3D FLAME 配准/标注轨、与当前 MediaPipe 切口工作台的隔离契约及 license 边界的单一 owner；[RSTL_3DMM_PRIOR.md](tracks/RSTL_3DMM_PRIOR.md) 记录 Borges RSTL 来源与 3DMM 拓扑先验 manifest；[PERSONALIZED_RSTL.md](tracks/PERSONALIZED_RSTL.md) 是 `/personalized` 浏览器个性化流程及其向切口工作台交接的可审计说明；[INCISION_WORKFLOW.md](tracks/INCISION_WORKFLOW.md) 记录浏览器本地确定性切口 workflow、worker 回退、tool trace 与审阅边界。Python texture warp 与 checkpoint 许可边界已归入 clinical 的辅助线索文档。
 
+[WORKFLOW_PHOTO_CAMERA_PREVIEW.md](tracks/WORKFLOW_PHOTO_CAMERA_PREVIEW.md) 记录合并工作流的照片到相机投影实验及启用方式。
+
 ## `quality/` — 质量与运维
 
 **这个目录回答「凭什么相信它没坏、以及它是怎么上线和被观测的」。** [CROSS_LANG_PARITY.md](quality/CROSS_LANG_PARITY.md) 定义 Python 与 Web TypeScript 对共同金标的逐点等价；[CI_CD_VERCEL.md](quality/CI_CD_VERCEL.md) 是 Vercel、Preview、branch protection 与排障的唯一 owner；[OBSERVABILITY.md](quality/OBSERVABILITY.md) 定义浏览器诊断字段与指标；[VALIDATION.md](quality/VALIDATION.md) 定义临床验证数据集、Stage 1/2 指标、失败分类与人工评审表。3D 标注人工验收已归入 CONTRIBUTING。

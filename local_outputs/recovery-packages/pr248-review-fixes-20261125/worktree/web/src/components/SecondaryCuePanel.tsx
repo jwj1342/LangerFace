@@ -1,0 +1,51 @@
+import { useEffect, useState } from "react";
+
+import { useIncisionControllerCommands } from "../hooks/useControllerCommands";
+import { useIncisionStore } from "../stores/incisionStore";
+import { Button } from "./ui/button";
+import { ButtonRow } from "./ui/button-row";
+import { WorkbenchCard, CardHeader } from "./ui/card";
+import { CheckboxField } from "./ui/checkbox-field";
+import { WorkbenchNote } from "./ui/hint";
+import { Input } from "./ui/input";
+
+export function SecondaryCuePanel() {
+  const commands = useIncisionControllerCommands();
+  const snapshot = useIncisionStore((state) => state.snapshot);
+  const cue = snapshot?.secondaryCue;
+  const [manualConfirmed, setManualConfirmed] = useState(false);
+
+  useEffect(() => {
+    setManualConfirmed(Boolean(cue?.manualConfirmed));
+  }, [cue?.manualConfirmed]);
+
+  return (
+    <WorkbenchCard>
+      <CardHeader>
+        <span>高级研究辅助线索</span>
+        <span id="secondaryCueState">{cue?.stateLabel || "未导入"}</span>
+      </CardHeader>
+      <WorkbenchNote id="secondaryCueSummary">
+        {cue?.summary || "仅用于导入研究 JSON 并展示低置信度线索；不会自动改变肿物边界或候选切口，常规切口流程可跳过。"}
+      </WorkbenchNote>
+      <ButtonRow className="two-cols">
+        <Button variant="workbench" id="importSecondaryCueBtn" type="button" onClick={() => commands.secondaryCue("import_secondary_cue")}>导入线索</Button>
+        <Button variant="workbench" id="clearSecondaryCueBtn" type="button" disabled={!cue?.present} onClick={() => commands.secondaryCue("clear_secondary_cue")}>清空线索</Button>
+      </ButtonRow>
+      <Input id="secondaryCueImportFile" hidden type="file" accept="application/json,.json" />
+      <CheckboxField
+        checkboxProps={{
+          id: "secondaryCueConfirmed",
+          checked: manualConfirmed,
+          disabled: !cue?.present,
+          onChange: (event) => {
+            setManualConfirmed(event.currentTarget.checked);
+            commands.secondaryCue("secondary_cue_confirmed");
+          },
+        }}
+      >
+        已人工确认辅助线索
+      </CheckboxField>
+    </WorkbenchCard>
+  );
+}

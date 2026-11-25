@@ -1,6 +1,7 @@
 import pipelineWorkerUrl from "../../workers/liveWrinklePipeline.worker.ts?worker&url";
 import * as Comlink from "comlink";
 import { createWorkerRequestLifetime } from "./workerRequestLifetime.ts";
+import { pendingWrinkleModelPrefetch } from "./yoloWrinkleOnnx.ts";
 
 import type {
   LiveWrinkleDetectionResult,
@@ -82,10 +83,11 @@ export function createLiveWrinklePipelineWorkerClient(): LiveWrinklePipelineWork
         debugUnfilteredPreview,
       };
       const eventSink = onEvent ? Comlink.proxy(onEvent) : undefined;
-      return lifetime.run(() => api.detect(
-        Comlink.transfer(request, [request.pixels.buffer as ArrayBuffer]),
-        eventSink,
-      ));
+      return lifetime.run(async () => {
+        await pendingWrinkleModelPrefetch();
+        if (disposed) throw new Error("皱纹 Worker 已关闭");
+        return api.detect(Comlink.transfer(request, [request.pixels.buffer as ArrayBuffer]), eventSink);
+      });
     },
 
     seedYoloEvidence(input) {

@@ -35,6 +35,7 @@ import {
 import {
   CONTROLLED_MARKER_DETECTOR_VERSION,
   CONTROLLED_MARKER_DETECTOR_PROFILE,
+  detectControlledMarker as detectControlledMarkerBaseline,
   detectControlledMarkerAsync as detectControlledMarker,
   type ControlledMarkerDetection,
 } from "./controlledMarkerDetectionProfile";
@@ -119,6 +120,7 @@ import {
   withControlledMarkerProvenance,
 } from "./tumorInput";
 import { modelState, renderState, sourceState, type EditableRefineLine } from "./liveState";
+import { rememberWorkflowOverlayPhoto, workflowOverlayMatchesPhoto } from "./workflowPhotoCamera.ts";
 import { resetImageView } from "./liveCanvasFit";
 import type { LiveControllerSnapshot } from "./liveSnapshots";
 import type { VisibilityPredicate } from "./foreheadVisibility";
@@ -165,7 +167,12 @@ import {
   type WorkflowPointerIntent,
 } from "./workflowControllerUtils";
 import { planIncisionWithWorkflowFallback } from "./workflowPlanner";
-import { createWorkflowWorkerClient, type WorkflowWorkerClient } from "./workflowWorkerClient";
+import {
+  createWorkflowWorkerClient,
+  withWorkflowTimeout,
+  WORKFLOW_WORKER_TIMEOUT_MS,
+  type WorkflowWorkerClient,
+} from "./workflowWorkerClient";
 import {
   CONTROLLED_MARKER_MAX_SCAN_DIAMETER_MM,
   CONTROLLED_MARKER_MIN_SCAN_DIAMETER_MM,
@@ -1020,6 +1027,9 @@ const CONTROLLED_MARKER_REASON_LABELS: Record<string, string> = {
   gradual_shading_edge: "边界更像渐变阴影",
   not_enclosed_within_scan: "边界没有完整落在扫描范围内",
   seed_only_touches_candidate_edge: "点击位置靠近候选边缘",
+  boundary_unmapped: "面部区域置信度不足，边界无法映射到可用皮肤表面",
+  engineering_exclusion: "边界触及眼裂、口裂或鼻孔等非皮肤开口",
+  low_confidence_boundary: "低置信度，边界证据不足",
 };
 
 function rejectedReasonLabelForStatus(code: string): string {
@@ -1493,7 +1503,11 @@ function resetWorkflowForSourceChange(state: WorkflowIncisionState, _revision: n
 }
 
 function activatedCandidateShouldSurviveSourceChange(state: WorkflowIncisionState): boolean {
-  return Boolean(state.activeReviewRecordId && state.result?.candidate);
+  if (!state.activeReviewRecordId || !state.result?.candidate) return false;
+  if (!sourceState.workflowPhotoCamera) return true;
+  const frame = sourceState.planning2d?.getFrameState();
+  return frame?.kind === "camera"
+    || (frame?.kind === "image" && workflowOverlayMatchesPhoto(renderState.incisionOverlay, frame.source));
 }
 
 function cameraIncisionActionsDisabled(state: WorkflowIncisionState): boolean {
@@ -1849,6 +1863,11 @@ function activateRecord(state: WorkflowIncisionState, record: DynamicRecord) {
     return false;
   }
   renderState.incisionOverlay = overlay;
+  const frame = sourceState.planning2d?.getFrameState();
+  if (frame?.kind === "image" && frame.source && typeof frame.source === "object"
+    && record.workflow_source?.photo_revision === frame.revision) {
+    rememberWorkflowOverlayPhoto(overlay, frame.source);
+  }
   state.activeReviewRecordId = record.id;
   publishLiveOverlayState(state, true, "已自动激活", "workflow_incision_overlay_activated");
   setStatus(state, "候选已确认并显示在当前画布上；切换同一人的视频或摄像头后，系统会按面部位置重新显示。");
@@ -2053,6 +2072,38 @@ function controlledMarkerRepairable(detection: ControlledMarkerDetection) {
   ].includes(stage);
 }
 
+function controlledMarkerLowConfidenceRejection(detection: ControlledMarkerDetection): ControlledMarkerDetection {
+  const weakBoundary = detection.ok
+    && detection.boundary.length >= 3
+    && (detection.warnings.includes("low_contrast_near_circular_recovered")
+      || detection.diagnostics?.method === "low_contrast_near_circular");
+  if (!weakBoundary) return detection;
+  return {
+    ...detection,
+    ok: false,
+    failure_code: "low_contrast",
+    center: null,
+    boundary: [],
+    area_px: 0,
+    bbox: null,
+    geometry_mode: null,
+    seed_relation: null,
+    marker_area_px: 0,
+    marker_bbox: null,
+    confidence: 0,
+    rejected_boundary: detection.boundary.map((point) => ({ ...point })),
+    rejected_geometry_mode: detection.geometry_mode,
+    rejected_reasons: [...new Set([
+      ...(detection.rejected_reasons || []),
+      "low_confidence_boundary",
+    ])],
+    warnings: [...new Set([
+      ...detection.warnings,
+      "low_confidence_boundary",
+    ])],
+  };
+}
+
 function drawRepairsToContext(state: WorkflowIncisionState, context: CanvasRenderingContext2D) {
   for (const stroke of state.repairStrokes) {
     if (!stroke.points.length) continue;
@@ -2076,6 +2127,76 @@ function completeControlledMarkerAttempt(
   state.markerSeed = { ...mobileRetrySeed };
   state.markerPendingSeed = { ...mobileRetrySeed };
   state.markerPointerSource = { ...mobileRetrySeed };
+}
+
+function retainRejectedMarkerPreview(
+  state: WorkflowIncisionState,
+  frame: PhotoPlanningFrameState,
+  requestId: number,
+  parameters: WorkflowMarkerRequestSnapshot,
+  boundary: readonly { x: number; y: number }[],
+  reasons: readonly string[],
+) {
+  state.rejectedMarkerPreview = boundary.length >= 3 ? {
+    boundary: boundary.map((point) => ({ x: point.x, y: point.y })),
+    sourceRevision: frame.revision,
+    requestId,
+    parameters,
+    reasons: [...new Set(reasons)],
+  } : null;
+}
+
+/**
+ * Keep a visible, diagnostic-only cue when the detector rejects a low-contrast
+ * area before it can produce a closed polygon. This is intentionally a small
+ * photo-space ellipse: it is never converted to surface refs or a tumor input.
+ */
+export function diagnosticRejectedBoundaryFromDetection(
+  image: { width: number; height: number },
+  seed: { x: number; y: number },
+  options: { roiRadius?: number; analysisRoiRadius?: number },
+  detection: ControlledMarkerDetection,
+): SvgPoint[] {
+  if (!Number.isFinite(seed.x) || !Number.isFinite(seed.y)
+    || image.width <= 0 || image.height <= 0
+    || detection.failure_code === "invalid_image"
+    || detection.failure_code === "seed_outside_image") return [];
+  const scanRadius = Number.isFinite(Number(detection.scan?.radius_px))
+    ? Number(detection.scan?.radius_px)
+    : Number(options.roiRadius || options.analysisRoiRadius || 36);
+  if (!(scanRadius > 2)) return [];
+  const diagnostics = detection.diagnostics || {};
+  const candidateDiameter = [
+    diagnostics.detected_diameter_px,
+    diagnostics.expected_diameter_px,
+    detection.scan?.expected_diameter_px,
+  ].map(Number).find((value) => Number.isFinite(value) && value >= 8) || null;
+  // With no detector geometry, keep the cue clearly inside the blue scan
+  // circle while making it large enough to surround the low-contrast patch.
+  const radius = Math.min(
+    scanRadius * 0.72,
+    Math.max(8, candidateDiameter ? candidateDiameter / 2 : scanRadius * 0.42),
+  );
+  const center = detection.center && Number.isFinite(detection.center.x)
+    && Number.isFinite(detection.center.y)
+    ? detection.center
+    : detection.bbox && Number.isFinite(detection.bbox.x)
+      && Number.isFinite(detection.bbox.y)
+      && Number.isFinite(detection.bbox.width)
+      && Number.isFinite(detection.bbox.height)
+      ? {
+        x: detection.bbox.x + detection.bbox.width / 2,
+        y: detection.bbox.y + detection.bbox.height / 2,
+      }
+      : seed;
+  const rx = Math.min(radius, Math.max(3, image.width / 2 - 1));
+  const ry = Math.min(radius * 0.82, Math.max(3, image.height / 2 - 1));
+  const cx = Math.max(rx + 1, Math.min(image.width - rx - 1, center.x));
+  const cy = Math.max(ry + 1, Math.min(image.height - ry - 1, center.y));
+  return Array.from({ length: 48 }, (_, index) => {
+    const angle = (index * Math.PI * 2) / 48;
+    return { x: cx + Math.cos(angle) * rx, y: cy + Math.sin(angle) * ry };
+  });
 }
 
 function markerDiagnosticInput(state: WorkflowIncisionState, frame: PhotoPlanningFrameState, seed: { x: number; y: number }, pixelsPerMm: number): RunInput {
@@ -2198,13 +2319,109 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     finally { diagnosticBefore = null; }
   }
   let detectionPromise: Promise<ControlledMarkerDetection>;
+  const detectOnMainThread = () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const operation = new Promise<ControlledMarkerDetection>((resolve, reject) => {
+      // Yield once so the status update paints before the CPU fallback starts.
+      window.setTimeout(() => {
+        try { resolve(detectControlledMarker(image, seed, options)); }
+        catch (error) { reject(error); }
+      }, 0);
+    });
+    const timeout = new Promise<ControlledMarkerDetection>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("切口识别计算超时；请检查照片范围后重试。")), 12_000);
+    });
+    return Promise.race([operation, timeout]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
+  };
+  const detectBaselineOnMainThread = () => new Promise<ControlledMarkerDetection>((resolve, reject) => {
+    window.setTimeout(() => {
+      try { resolve(detectControlledMarkerBaseline(image, seed, options)); }
+      catch (error) { reject(error); }
+    }, 0);
+  });
   try {
     detectionPromise = worker
-      ? worker.api.detectControlledMarker(Comlink.transfer({ width: image.width, height: image.height, data: image.data }, [image.data.buffer]), seed, options)
-      : Promise.resolve(detectControlledMarker(image, seed, options));
+      ? withWorkflowTimeout(
+        worker.ready.then(() => {
+          // Keep the original pixels for synchronous fallback and rejected-boundary recovery.
+          const data = image.data.slice();
+          return worker.api.detectControlledMarker(
+            Comlink.transfer({ width: image.width, height: image.height, data }, [data.buffer]),
+            seed,
+            options,
+          );
+        }),
+        WORKFLOW_WORKER_TIMEOUT_MS,
+        "切口识别线程启动或计算超时；请检查照片范围后重试。",
+      ).catch((error) => {
+        if (state.worker === worker) {
+          worker.dispose();
+          state.worker = null;
+          state.workerFailed = true;
+        }
+        setStatus(state, "切口识别线程不可用，已切换到本地回退计算…", "warning");
+        return detectOnMainThread().catch(() => detectBaselineOnMainThread());
+      })
+      : detectOnMainThread();
   } catch (error) { diagnosticRun?.finish(null, true); throw error; }
   try {
-    const detection = await detectionPromise;
+    const rawDetection = await detectionPromise;
+    // Refinement may correctly reject a candidate after the synchronous
+    // detector found a drawable outline. Keep that outline diagnostic-only so
+    // a rejected result remains visible without becoming an incision.
+    const resolvedDetection = (() => {
+      const baselineRecovered = (() => {
+        if (rawDetection.ok || (rawDetection.rejected_boundary?.length || 0) >= 3) return rawDetection;
+        try {
+          const baseline = detectControlledMarkerBaseline(image, seed, options);
+          if (baseline.boundary.length < 3) return rawDetection;
+          return {
+            ...rawDetection,
+            rejected_boundary: baseline.boundary.map((point) => ({ ...point })),
+            rejected_geometry_mode: rawDetection.rejected_geometry_mode || baseline.geometry_mode,
+            rejected_reasons: [...new Set([
+              ...(rawDetection.rejected_reasons || []),
+              "refined_candidate_rejected",
+            ])],
+          };
+        } catch {
+          return rawDetection;
+        }
+      })();
+      const lowConfidenceRejected = controlledMarkerLowConfidenceRejection(baselineRecovered);
+      if (lowConfidenceRejected !== baselineRecovered) return lowConfidenceRejected;
+      if (baselineRecovered.ok || (baselineRecovered.rejected_boundary?.length || 0) >= 3) return baselineRecovered;
+      const fallback = diagnosticRejectedBoundaryFromDetection(image, seed, options, baselineRecovered);
+      return fallback.length >= 3 ? {
+        ...baselineRecovered,
+        rejected_boundary: fallback,
+        rejected_reasons: [...new Set([
+          ...(baselineRecovered.rejected_reasons || []),
+          "low_confidence_boundary",
+        ])],
+      } : baselineRecovered;
+    })();
+    // A detector can return an otherwise usable result that is still rejected
+    // by the workflow gate (for example, missing center or unsupported
+    // geometry). Preserve a diagnostic cue for that path as well, so the
+    // operator can see what was rejected without creating a candidate.
+    const detection = (() => {
+      const acceptedGeometry = resolvedDetection.ok
+        && Boolean(resolvedDetection.center)
+        && ["enclosed_region", "dark_component"].includes(resolvedDetection.geometry_mode || "");
+      if (acceptedGeometry || (resolvedDetection.rejected_boundary?.length || 0) >= 3) return resolvedDetection;
+      const fallback = diagnosticRejectedBoundaryFromDetection(image, seed, options, resolvedDetection);
+      return fallback.length >= 3 ? {
+        ...resolvedDetection,
+        rejected_boundary: fallback,
+        rejected_reasons: [...new Set([
+          ...(resolvedDetection.rejected_reasons || []),
+          "low_confidence_boundary",
+        ])],
+      } : resolvedDetection;
+    })();
     diagnosticRun?.finish(detection, false, !state.mounted || requestId !== state.markerRequestId ? "discarded_request"
       : sourceState.planning2d?.getFrameState().revision !== frame.revision ? "discarded_source"
         : !workflowMarkerRequestStillCurrent(started, markerRequestSnapshot(state)) ? "discarded_parameters" : "recorded");
@@ -2234,6 +2451,10 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
         parameters: started,
         reasons: [...(detection.rejected_reasons || [])],
       } : null;
+      // The rejected outline is independent of accepted candidate visibility;
+      // make it paint immediately after the async detector settles.
+      state.markerPreviewSuppressed = false;
+      requestFrame();
       state.repairAvailable = controlledMarkerRepairable(detection) || state.repairStrokes.length > 0;
       const rejectedReasonCopy = (detection.rejected_reasons || [])
         .map((code) => rejectedReasonLabelForStatus(code))
@@ -2275,6 +2496,14 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     }
     if (!centerRef || boundaryRefs.length < 3) {
       completeControlledMarkerAttempt(state, mobileRetrySeed);
+      retainRejectedMarkerPreview(
+        state,
+        frame,
+        requestId,
+        started,
+        detection.boundary,
+        ["boundary_unmapped"],
+      );
       state.repairAvailable = true;
       setStatus(state, "黄色识别边界已保留；无法映射到可用面部表面，暂不能生成切口。可换位置重试或补齐可见缺口。", "warning");
       publish(state, "controlled_marker_unmapped", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
@@ -2298,6 +2527,14 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
       : null;
     if (!detectedTumor || !inspectTumorEngineeringExclusions(detectedTumor, state.verts).passed) {
       completeControlledMarkerAttempt(state, mobileRetrySeed);
+      retainRejectedMarkerPreview(
+        state,
+        frame,
+        requestId,
+        started,
+        detection.boundary,
+        ["engineering_exclusion"],
+      );
       state.repairAvailable = true;
       setStatus(state, "黄色识别边界已保留；识别范围进入眼裂、口裂或鼻孔等非皮肤开口，暂不能生成切口。", "warning");
       publish(state, "controlled_marker_opening_rejected", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
@@ -2325,7 +2562,18 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
     syncSelection(state);
     const outcome = await runWorkflow(state);
     if (!state.mounted || requestId !== state.markerRequestId) return;
-    if (sourceState.planning2d?.getFrameState().revision !== frame.revision) return;
+    // A public static host can finish an asynchronous photo/RSTL update while
+    // candidate generation is running. That makes this request stale after
+    // the detector already produced a valid boundary. Clear the mobile
+    // confirmation lock before returning, otherwise every later tap is
+    // swallowed by blockMarkerBusyPointer and the control appears to reject
+    // all subsequent lesions.
+    if (sourceState.planning2d?.getFrameState().revision !== frame.revision) {
+      completeControlledMarkerAttempt(state, mobileRetrySeed);
+      setStatus(state, "照片在候选生成期间已变化，旧识别结果已丢弃；请重新点击肿物位置。", "warning");
+      publish(state, "controlled_marker_candidate_stale_source", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
+      return;
+    }
     completeControlledMarkerAttempt(state, mobileRetrySeed);
     if (outcome.status === "stale" || outcome.requestId !== state.workflowRequestId) {
       publish(state, "controlled_marker_candidate_stale", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
@@ -2345,6 +2593,11 @@ async function runControlledMarker(state: WorkflowIncisionState, seed: { x: numb
   } catch (error) {
     diagnosticRun?.finish(null, true);
     if (!state.mounted || requestId !== state.markerRequestId) return;
+    if (worker && state.worker === worker) {
+      worker.dispose();
+      state.worker = null;
+      state.workerFailed = false;
+    }
     completeControlledMarkerAttempt(state, mobileRetrySeed);
     setStatus(state, `受控标记识别失败：${error instanceof Error ? error.message : String(error)}`, "warning");
     publish(state, "controlled_marker_error", { actionId: diagnosticActionId, runId: diagnosticRun?.run.run_id });
@@ -2395,7 +2648,25 @@ function diagnosticSourceClientPoint(state: WorkflowIncisionState, point: Vec3) 
   if (!planning || !wrap) return null;
   const frame = planning.getFrameState();
   const transform = frame.transform;
-  if (!transform) return null;
+  // Static hosts can publish a valid image frame before the canvas transform
+  // object is populated. The regular source mapping already handles that
+  // state, so keep the diagnostic-only boundary visible instead of dropping
+  // every point until a later resize event.
+  const transformReady = [
+    transform?.sourceWidth,
+    transform?.sourceHeight,
+    transform?.displayLeft,
+    transform?.displayTop,
+    transform?.displayWidth,
+    transform?.displayHeight,
+    transform?.viewportLeft,
+    transform?.viewportTop,
+  ].every((value) => Number.isFinite(value))
+    && Number(transform?.sourceWidth) > 0
+    && Number(transform?.sourceHeight) > 0
+    && Number(transform?.displayWidth) > 0
+    && Number(transform?.displayHeight) > 0;
+  if (!transform || !transformReady) return sourceClientPoint(state, point);
   const viewportPoint = workflowFocusViewportPoint(
     { x: point[0], y: point[1] },
     { width: frame.width, height: frame.height },
@@ -3226,6 +3497,11 @@ function cancelControlledMarker(state: WorkflowIncisionState): boolean {
     state.workflowBusy = false;
   }
   state.markerBusy = false;
+  if (state.worker) {
+    state.worker.dispose();
+    state.worker = null;
+    state.workerFailed = false;
+  }
   state.repairMode = false;
   state.mobileMarkerTouchIntent = null;
   state.mobileTouchPointers.clear();

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { ReactPage } from "./components/ReactShell";
 import { Card, CardHeader } from "./components/ui/card";
@@ -27,10 +27,12 @@ function RouteFallback() {
 }
 
 export function App() {
+  const { search, hash } = useLocation();
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={<DashboardRoute />} />
+        <Route path="/" element={<Navigate to={{ pathname: "/app/workflow", search, hash }} replace />} />
+        <Route path="/index.html" element={<Navigate to={{ pathname: "/app/workflow", search, hash }} replace />} />
         <Route path="/app" element={<DashboardRoute />} />
         <Route path="/settings/atlas" element={<SettingsRoute section="atlas" />} />
         <Route path="/settings/developer" element={<SettingsRoute section="developer" />} />
@@ -55,7 +57,7 @@ export function App() {
         <Route path="/app/workflow/640-ultralowconf" element={<WorkflowRoute />} />
         <Route path="/app/workflow/640-threshold001" element={<WorkflowRoute />} />
         <Route path="/app/workflow/640-threshold01" element={<WorkflowRoute />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
     </Suspense>
   );

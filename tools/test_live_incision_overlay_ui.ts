@@ -68,9 +68,9 @@ assert.ok(exporter.includes('selectedMime ? new Recorder(stream, { mimeType: sel
   "export controller records with a supported browser MIME type");
 assert.ok(exporter.includes('actualMime.split(";", 1)[0] || "video/webm"'),
   "export controller records a playable MIME type with a webm fallback");
-assert.ok(render.includes("drawIncisionOverlay(lm"), "renderer draws incision overlay on every frame");
+assert.ok(render.includes("drawIncisionOverlay(ctx, lm"), "renderer projects the incision overlay from each renderable frame");
 assert.ok(render.includes("incisionOverlayScreenStyle(overlay.candidate_type")
-  && render.includes("compact: mobileWorkflowViewportActive()"),
+  && render.includes("const compact = mobileWorkflowViewportActive()"),
 "renderer reads the same responsive screen-space contract as the workflow photo overlay");
 assert.ok(render.includes("overlayStyle.boundary.haloColor") && render.includes("overlayStyle.boundary.color"),
   "live tumor boundaries receive the same solid yellow foreground plus a contrast edge");

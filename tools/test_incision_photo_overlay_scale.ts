@@ -21,7 +21,9 @@ for (const compact of [false, true]) {
         `boundary width stays fixed at zoom ${zoom}, compact=${compact}`);
       assert.equal(style.boundary.haloWidth, base.boundary.haloWidth);
       for (const key of ["center", "incisionCenter"] as const) {
-        assert.ok(Math.abs(style[key].radiusCss - base[key].radiusCss * zoom) < 1e-9);
+        const cap = key === "center" ? 1.1 : 1.55;
+        const expected = compact ? Math.min(base[key].radiusCss * zoom, cap) : base[key].radiusCss * zoom;
+        assert.ok(Math.abs(style[key].radiusCss - expected) < 1e-9);
         assert.ok(style[key].radiusCss + style[key].strokeWidthCss / 2 < diameter * zoom / 4,
           "the center marker must leave most of a small lesion visible");
       }
@@ -58,9 +60,12 @@ for (const type of ["fusiform", "linear"]) {
   for (const zoom of [0.1, 0.5, 1, 2, 5, 10]) {
     for (const extent of [1, 8, 40]) {
       const options = { viewScale: zoom, photoWidthCss: 650 * zoom, lesionExtentCss: extent * zoom };
-      assert.deepEqual(incisionOverlayScreenStyle(type, { ...options, compact: false }),
-        incisionOverlayScreenStyle(type, { ...options, compact: true }),
-        "same projected photo must have identical complete paint tokens on both devices");
+      const desktopStyle = incisionOverlayScreenStyle(type, options);
+      const compactStyle = incisionOverlayScreenStyle(type, { ...options, compact: true });
+      assert.deepEqual(compactStyle.candidate, desktopStyle.candidate);
+      assert.deepEqual(compactStyle.boundary, desktopStyle.boundary);
+      assert.equal(compactStyle.incisionCenter.color, "transparent");
+      assert.ok(compactStyle.incisionCenter.radiusCss <= desktopStyle.incisionCenter.radiusCss);
     }
   }
 }

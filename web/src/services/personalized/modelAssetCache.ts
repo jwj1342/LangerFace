@@ -14,6 +14,32 @@ export interface CachedAssetResponse {
   source: "persistent-cache" | "network";
 }
 
+/** Store model responses without materializing their weights in page memory. */
+export async function prefetchModelAssets(
+  urls: readonly string[],
+  cacheName: string,
+  signal: AbortSignal,
+  storage: ModelAssetCacheStorage | null = browserCacheStorage(),
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<void> {
+  if (!storage) return;
+  const cache = await storage.open(cacheName);
+  for (const url of urls) {
+    if (signal.aborted) return;
+    const cached = await cache.match(url);
+    if (cached?.ok && !cached.headers.get("content-type")?.includes("text/html")) {
+      void cached.body?.cancel().catch(() => undefined);
+      continue;
+    }
+    const response = await fetchImpl(url, { cache: "no-cache", priority: "low", signal });
+    if (!response.ok || response.headers.get("content-type")?.includes("text/html")) {
+      void response.body?.cancel().catch(() => undefined);
+      throw new Error(`Model prefetch could not load ${url}: HTTP ${response.status}`);
+    }
+    await cache.put(url, response);
+  }
+}
+
 interface FetchCachedAssetOptions {
   cacheName: string;
   cacheStorage?: ModelAssetCacheStorage | null;

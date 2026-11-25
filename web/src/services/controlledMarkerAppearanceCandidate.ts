@@ -1013,7 +1013,10 @@ function pigmentAnchors(peaks: Point[], seed: Point): Point[] {
     return anchors;
 }
 import type { ControlledMarkerDetection, ControlledMarkerOptions, MarkerImageData, MarkerPoint } from './controlledMarkerDetection.ts';
-import { loadMarkerOpenCv } from './controlledMarkerOpenCvRuntime.ts';
+async function loadMarkerOpenCv() {
+    const runtime = await import('./controlledMarkerOpenCvRuntime.ts');
+    return runtime.loadMarkerOpenCv();
+}
 function meanBoundary(boundary: Point[]): Point {
     return { x: boundary.reduce((sum, p) => sum + p.x, 0) / boundary.length,
         y: boundary.reduce((sum, p) => sum + p.y, 0) / boundary.length };

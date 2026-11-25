@@ -406,10 +406,24 @@ function selectScanLocalCandidate(cv: CV, image: MarkerImageData, scanSeed: Mark
     return { ...selected, route: "scan_local_filled_candidate", result: { ...selected.result, diagnostics: { ...selected.result.diagnostics, scan_local_anchor_count: anchors.length } } };
 }
 let cvReady: Promise<CV> | null = null;
-/** 按需加载并缓存OpenCV，避免每次点击重复初始化。只用于肿物请求；不改变RSTL模型和生命周期。缺少GrabCut时由调用方明确拒识。 */
-async function getCv(): Promise<CV> { if (!cvReady)
-    cvReady = (async () => { const { loadMarkerOpenCv } = await import("./controlledMarkerOpenCvRuntime.ts"), api = await loadMarkerOpenCv(); if (typeof api.grabCut !== "function")
-        throw new Error("OpenCV GrabCut unavailable"); return api; })(); return cvReady; }
+/** 按需加载并缓存OpenCV；缺少GrabCut时报告复核运行时不可用。 */
+async function getCv(): Promise<CV> {
+    if (!cvReady) {
+        const pending = (async () => {
+            const { loadMarkerOpenCv } = await import("./controlledMarkerOpenCvRuntime.ts"), api = await loadMarkerOpenCv();
+            if (typeof api.grabCut !== "function") throw new Error("OpenCV GrabCut unavailable");
+            return api;
+        })();
+        // A static host can transiently fail to fetch/initialize the OpenCV
+        // runtime. Do not retain a rejected promise: that would turn every
+        // later controlled-marker request into a permanent rejection.
+        cvReady = pending.catch((error) => {
+            cvReady = null;
+            throw error;
+        });
+    }
+    return cvReady;
+}
 /** Refinement is loaded only for a controlled-marker request; no RSTL/model lifecycle is changed. */
 /** 正式异步复核主入口：校验输入→保留少数已有强证据路径→生成并检验GrabCut候选→搜索局部锚点→统一输出状态。异常不会伪造成功；会清空接受边界并记录运行时不可用。scanRadius控制扫描覆盖，analysisRadius控制支持尺度；两者单位均为原图像素。 */
 async function refineFilledCandidateBaseline(image: MarkerImageData, seed: MarkerPoint, options: ControlledMarkerOptions, baseline: ControlledMarkerDetection): Promise<ControlledMarkerDetection> {

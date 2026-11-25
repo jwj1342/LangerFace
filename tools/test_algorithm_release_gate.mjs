@@ -72,6 +72,10 @@ assert.match(run('true', 'deploy', { archive: { sourceDigest: 'stale' } }).messa
 assert.equal(run('true', 'deploy', { current: { sourceDigest: 'stale' } }).exitCode, 1);
 assert.equal(run('true', 'pr', { operatorEvaluation: { status: 'pending' } }).exitCode, 1);
 assert.equal(run('true', 'pr', { editorSaveConfirmation: { status: 'unknown' } }).exitCode, 1);
+const pendingScope = run('true', 'pr', { scopeBoundaryReview: { status: 'pending' } }, { withArchive: true });
+assert.equal(pendingScope.exitCode, 1, 'an empty archive worktree diff does not clear a pending scope review');
+assert.match(pendingScope.messages, /责任范围复核待确认/);
+assert.doesNotMatch(pendingScope.messages, /存在 0 个/);
 console.log('algorithm release gate: fresh CI, missing local archive, stale identity and PR evidence checks passed');
 
 assert.equal(run(undefined, 'dev').exitCode, 0, 'committed dev checkout with rollback reference needs no private archive');

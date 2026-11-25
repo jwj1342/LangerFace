@@ -22,6 +22,7 @@ import {
 } from "../web/src/services/personalized/yoloWrinkleOnnx.ts";
 import {
   fetchCachedModelAsset,
+  prefetchModelAssets,
   pruneVersionedModelCaches,
 } from "../web/src/services/personalized/modelAssetCache.ts";
 
@@ -137,6 +138,31 @@ function createMemoryCacheStorage(initialNames = []) {
     cacheStorage,
   });
   assert.equal(fetchCount, 4, "a new model version uses an isolated cache");
+}
+
+{
+  const urls = ["part0", "part1"];
+  const cacheStorage = createMemoryCacheStorage();
+  const cacheName = "prefetched-model";
+  const fetched = [];
+  const fetchPart = async (url) => {
+    fetched.push(url);
+    return new Response(Uint8Array.of(url === "part0" ? 1 : 2));
+  };
+
+  await assert.rejects(prefetchModelAssets(urls, cacheName, new AbortController().signal, cacheStorage,
+    (url) => url === "part0" ? fetchPart(url) : new Response("<html>Missing model</html>", {
+      headers: { "Content-Type": "text/html" },
+    })), /could not load part1/);
+  const bytes = await fetchBinaryChunks(urls, {
+    expectedBytes: 2,
+    persistentCacheName: cacheName,
+    cacheStorage,
+    fetchImpl: fetchPart,
+  });
+  assert.deepEqual([...bytes], [1, 2], "inference can reuse partial prefetch and retry a missing chunk");
+  await prefetchModelAssets(urls, cacheName, new AbortController().signal, cacheStorage, fetchPart);
+  assert.deepEqual(fetched, urls, "cached chunks do not download again");
 }
 
 {

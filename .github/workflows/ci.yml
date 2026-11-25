@@ -89,23 +89,25 @@ jobs:
         run: npm ci
       - name: Verify algorithm release gate and archive checkout regressions
         run: node tools/test_algorithm_release_gate.mjs
-      - name: Verify latest algorithm PR gate
-        working-directory: web
-        run: npm run verify:algorithm-release:pr
       - working-directory: web
         run: npm run build
-      - name: Build and verify lesion candidate runtime identity
-        working-directory: web
-        run: |
-          npm run build:lesion-candidate
-          npm run verify:build-lesion-candidate
       # Pure-node parity tests pin Web TypeScript geometry services against the
       # Python reference (web/test/expected.json).
       - name: Verify case features remain removed
         working-directory: web
         run: node ../tools/test_no_case_features.ts
-      - working-directory: web
+      - name: Run JavaScript engineering tests
+        working-directory: web
         run: npm test
+      # Keep the release gate required, after feedback from engineering tests.
+      - name: Verify latest algorithm PR gate
+        working-directory: web
+        run: npm run verify:algorithm-release:pr
+      - name: Build and verify lesion candidate runtime identity
+        working-directory: web
+        run: |
+          npm run build:lesion-candidate
+          npm run verify:build-lesion-candidate
 
   browser-tests:
     runs-on: ubuntu-latest

@@ -89,7 +89,7 @@ function SettingsSidebar({ section }: SettingsRouteProps) {
       <Card>
         <CardHeader><span>设置导航</span><SlidersHorizontal size={16} /></CardHeader>
         <CardContent>
-          <ReactShellNavLink to="/">
+<ReactShellNavLink to="/app">
             <span>返回工具入口</span>
             <ArrowLeft size={16} />
           </ReactShellNavLink>
@@ -185,7 +185,7 @@ function AtlasSettings() {
           <CardContent>
             <Hint>图谱标注是独立维护工具。完成后返回工具入口，不生成病例或患者档案。</Hint>
             <Button asChild variant="workbench">
-              <Link to="/"><ArrowLeft size={16} />返回工具入口</Link>
+<Link to="/app"><ArrowLeft size={16} />返回工具入口</Link>
             </Button>
           </CardContent>
         </Card>

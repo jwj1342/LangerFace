@@ -35,7 +35,7 @@ export function AnnotateMeshSourcePanel() {
         <Link to="/surgery">张力闭合模拟</Link>
       </Button>
       <Button asChild variant="workbench">
-        <Link to="/">返回工具入口</Link>
+<Link to="/app">返回工具入口</Link>
       </Button>
     </Card>
   );

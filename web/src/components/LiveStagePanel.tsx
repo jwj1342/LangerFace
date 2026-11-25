@@ -37,6 +37,8 @@ export function LiveStagePanel({
       <StageViewport>
         <video id="video" playsInline autoPlay muted />
         <StageCanvas id="canvas" mirror width="1280" height="720" />
+        {workflowOverlay ? <svg id="workflowPhotoVectors" aria-hidden="true"
+          preserveAspectRatio="none" style={{ display: "none" }} /> : null}
         {workflowOverlay}
         <StageOverlayMessage id="overlayMsg" hidden={compactWorkflowChrome} aria-hidden={compactWorkflowChrome}>
           点击「摄像头」或「上传照片」开始

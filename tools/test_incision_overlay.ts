@@ -248,13 +248,12 @@ assert.deepEqual(compactFullPhotoStyle, compactCameraStyle,
   "the full-photo view and camera use identical compact screen-space tokens");
 assert.equal(compactFullPhotoStyle.candidate.lineWidth, 0.95, "both devices share a fixed thin incision stroke");
 assert.equal(compactFullPhotoStyle.boundary.lineWidth, 0.95, "phone boundary is reduced to roughly two-thirds of the earlier width");
-assert.equal(compactFullPhotoStyle.center.radiusCss, 2, "no-photo fallback centers use the shared device-independent default");
+assert.equal(compactFullPhotoStyle.center.radiusCss, 1.1, "phone live tumor center remains small");
 for (const zoom of [0.25, 0.5, 1, 2, 5, 6]) {
   const style = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: zoom });
   assert.equal(style.candidate.lineWidth, 0.95, `incision screen width stays fixed at zoom ${zoom}`);
   assert.equal(style.boundary.lineWidth, 0.95, `boundary screen width stays fixed at zoom ${zoom}`);
-  assert.deepEqual(style, incisionOverlayScreenStyle("fusiform", { compact: false, viewScale: zoom }),
-    "no-photo fallback paint is identical on both devices");
+  assert.equal(style.incisionCenter.color, "transparent", "phone incision center stays hollow at any zoom");
 }
 assert.equal(compactZoomedPhotoStyle.center.strokeColor, incisionOverlayScreenStyle().center.strokeColor,
   "phone and desktop retain the hollow white center convention");

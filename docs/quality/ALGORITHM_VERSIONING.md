@@ -1,3 +1,33 @@
+<a id="pr248-wrinkle-weight-prefetch-20261125"></a>
+
+## PR #248 wrinkle weight prefetch (2026-11-25)
+
+The operator requested that the combined workflow preload YOLO weights on entry. The page requests the versioned model chunks at low priority and stores them in the browser cache; a manual detection reuses the in-progress download and starts inference once it settles. Failed prefetch falls back to the existing on-demand loader. The shared changes concern delivery and Worker request timing. The model, inference algorithm, and clinical boundaries are unchanged.
+
+<a id="pr248-wrinkle-prefetch-operator-evaluation-20261125"></a>
+
+On 2026-11-25, the operator reported “皱纹检测符合预期” after testing the local preview for commit `931f3fc`, then confirmed that all editor changes for this PR had been saved (“已保存”). Both records apply to source digest `dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0`. The evaluation covers wrinkle detection in the preview.
+
+<a id="pr248-review-fixes-20261125"></a>
+
+## PR #248 review follow-up (2026-11-25)
+
+The operator requested fixes for both [review findings](https://github.com/jwj1342/LangerFace/pull/248#issuecomment-7160926534), including the shared RSTL display integration. The Worker now receives a copy so post-transfer errors and rejected-boundary recovery can still use the original pixels. For the photo-camera experiment, the projected RSTL lines feed the frozen edit baseline and the existing live transport. The lesion recognition algorithm, model weights, and clinical status are unchanged.
+
+The regression tests cover an error after real buffer detachment and geometry through pause, edit, resumed motion, and a second pause without applying the edit twice. Chromium also exercised the real Worker message path with an injected post-receipt error and confirmed that the main-thread fallback produced a candidate. The previous operator evaluation remains evidence for its original source digest. Evaluation and editor save confirmation for the new source are pending.
+
+<a id="pr248-workflow-recovery-20261125"></a>
+
+## PR #248 workflow recovery (2026-11-25)
+
+The release gate requires an archive matching the current runtime. The archive at `local_outputs/recovery-packages/pr248-cbe8f55/manifest.json` records source commit `cbe8f55b9e3752c9d341168226efee55c3a088f8` and source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b`. All 272 source copies are checked against the manifest's byte lengths and SHA-256 values. The existing video fixture is fingerprinted only; its contents and model weights are not copied. Files outside the archive scope are recovered from the recorded Git commit.
+
+The manifest's dirty-worktree boundary list is empty because the archive was created from a clean checkout. The full PR diff against `5329c2aaa3cfb7e86ec1985e273b09d564d495bb` still includes shared photo/camera, rendering, model loading and browser test code outside the default archive scope. The archive verification does not supply operator confirmation.
+
+<a id="pr248-operator-confirmation-20261125"></a>
+
+On 2026-11-25, the operator replied “接受改动，符合预期，保存编辑” to the request for PR #248 scope review, practical evaluation, and editor save confirmation. The reply accepts the shared changes, records that the result met expectations, and confirms the edits were saved. This is the operator's overall assessment; no individual scenarios, device results, or clinical validation were reported. It is bound to source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b` and recovery manifest SHA-256 `37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad`.
+
 <a id="rstl-wrinkle-performance-recovery-eol-20261123"></a>
 
 ## PR #247 recovery checkout line endings (2026-11-23)

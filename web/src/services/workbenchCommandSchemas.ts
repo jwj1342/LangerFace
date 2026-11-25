@@ -8,6 +8,7 @@ import {
   type AnnotateDrawCommand,
   type AnnotateLibraryCommand,
   type AnnotateMeshCommand,
+  type CameraSourceOptions,
   type ControllerCommandDetail,
   type LiveRenderCommand,
   type LiveSourceCommand,
@@ -46,8 +47,15 @@ function numberInRange(value: unknown, min: number, max: number): boolean {
 
 export function readLiveSourceCommand(
   event: CommandEvent,
-): ControllerCommandDetail<LiveSourceCommand> | null {
-  return readControllerCommandDetail(eventDetail(event), LIVE_SOURCE_COMMANDS);
+): (ControllerCommandDetail<LiveSourceCommand> & { camera?: CameraSourceOptions }) | null {
+  const detail = readControllerCommandDetail(eventDetail(event), LIVE_SOURCE_COMMANDS);
+  if (!detail) return null;
+  const { camera, command } = detail;
+  if (camera === undefined) return { command };
+  if (command !== "camera_toggle" || typeof camera !== "object" || camera === null
+      || !("facing" in camera) || (camera.facing !== "environment" && camera.facing !== "user")
+      || ("switchCamera" in camera && typeof camera.switchCamera !== "boolean")) return null;
+  return { command, camera: { facing: camera.facing, switchCamera: "switchCamera" in camera && camera.switchCamera === true } };
 }
 
 export function readLiveRenderCommand(

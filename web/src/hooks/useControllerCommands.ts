@@ -4,6 +4,7 @@ import {
   type AnnotateDrawCommand,
   type AnnotateLibraryCommand,
   type AnnotateMeshCommand,
+  type CameraSourceOptions,
   type IncisionEditControlId,
   type IncisionEditCommand,
   type IncisionLibraryCommand,
@@ -27,8 +28,8 @@ import {
 } from "../lib/controllerCommand";
 
 export function useLiveControllerCommands() {
-  const source = useCallback((command: LiveSourceCommand) => {
-    dispatchLiveSourceCommand(command);
+  const source = useCallback((command: LiveSourceCommand, camera?: CameraSourceOptions) => {
+    dispatchLiveSourceCommand(command, camera);
   }, []);
   const render = useCallback((command: LiveRenderCommand, value?: string | number | boolean) => {
     dispatchLiveRenderCommand(command, value);

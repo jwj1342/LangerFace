@@ -9,6 +9,7 @@
 import {
   deleteModelAssetCache,
   fetchCachedModelAsset,
+  prefetchModelAssets,
   pruneVersionedModelCaches,
   type ModelAssetCacheStorage,
 } from "./modelAssetCache.ts";
@@ -70,6 +71,25 @@ const modelChunkBaseUrl = typeof globalThis.location?.origin === "string"
 export const DEFAULT_MODEL_CHUNK_URLS = Object.freeze(
   MODEL_CHUNK_NAMES.map((name) => new URL(name, modelChunkBaseUrl).href),
 );
+
+let modelPrefetch: Promise<void> | null = null;
+
+export function prefetchWrinkleModelWeights(): void {
+  if (modelPrefetch || import.meta.env?.VITE_SERVER_COMPUTE === "true") return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  modelPrefetch = prefetchModelAssets(DEFAULT_MODEL_CHUNK_URLS, YOLO_WRINKLE_MODEL_CACHE_NAME, controller.signal)
+    // A blocked download or unavailable cache leaves the normal detection path usable.
+    .catch(() => undefined)
+    .finally(() => {
+      clearTimeout(timeout);
+      modelPrefetch = null;
+    });
+}
+
+export function pendingWrinkleModelPrefetch(): Promise<void> | null {
+  return modelPrefetch;
+}
 
 type NumericField = ArrayLike<number>;
 type NumericTypedArray = Float32Array | Float64Array | Int8Array | Uint8Array |

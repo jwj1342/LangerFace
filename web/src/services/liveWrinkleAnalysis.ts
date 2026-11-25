@@ -539,6 +539,12 @@ export function updateWrinkleUi(): void {
   els.wrinkleAutoRefine.disabled = !detectionReady || hasManualRefineChanges();
   els.wrinkleRestore.disabled = !state.standardLines
     || (state.status !== "applied" && !hasManualRefineChanges());
+  if (photoProjectionLines) {
+    els.wrinkleDisplayMode.disabled = false;
+    els.wrinkleStatus.textContent = photoProjectionLines.length ? "参考照片皱纹投影" : "参考照片无皱纹结果";
+    setWrinkleSummary("", false);
+    return;
+  }
   if (isDynamicWrinkleSourceKind(sourceState.sourceKind) && !sourceState.paused) {
     const sourceLabel = dynamicWrinkleSourceLabel();
     if (state.status === "error" || state.status === "live-empty") {
@@ -637,10 +643,22 @@ export function shouldDrawRstlLayer(): boolean {
 }
 
 export function shouldDrawWrinkleLayer(): boolean {
-  return state.displayMode !== "rstl" && state.evidenceLines.length > 0;
+  return state.displayMode !== "rstl" && getWrinkleEvidenceLines().length > 0;
+}
+
+let photoProjectionLines: ReturnType<typeof bindWrinkleLinesToFace> | null = null;
+
+export function startPhotoWrinkleProjection(
+  photo: WrinkleDisplayResumeState,
+  landmarks: readonly Vec3[],
+): void {
+  photoProjectionLines = bindWrinkleLinesToFace(photo.evidenceLines, landmarks, modelState.triangles as Triangle[]);
+  state.displayMode = photo.displayMode;
+  updateWrinkleUi();
 }
 
 export function getWrinkleEvidenceLines(): readonly LiveWrinkleEvidenceLine[] {
+  if (photoProjectionLines && sourceState.sourceKind === "camera") return liveDisplayLines;
   if (isDynamicWrinkleSourceKind(sourceState.sourceKind) && !isStaticWrinkleSource()) {
     return liveDisplayLines;
   }
@@ -683,6 +701,12 @@ export function updateLiveWrinkleMeshTracking(
   canvas: HTMLCanvasElement,
   landmarks: Vec3[],
 ): void {
+  if (photoProjectionLines) {
+    liveDisplayLines = landmarks.length >= 468
+      ? mapTrackedWrinkleLines(photoProjectionLines, landmarks, modelState.triangles as Triangle[])
+      : [];
+    return;
+  }
   if (isDynamicWrinkleSourceKind(sourceState.sourceKind)
       && liveWrinkleProcessingMode() === "framewise") {
     skinTracker?.suspend();
@@ -1108,10 +1132,24 @@ export function analyzeCurrentWrinkles(options: { force?: boolean } = {}): Promi
   return analysis;
 }
 
+export async function preparePhotoCameraWrinkles(
+  stillCurrent: () => boolean,
+  canRefine: () => boolean,
+): Promise<void> {
+  const generation = state.generation;
+  await Promise.allSettled([...activeAnalyses]);
+  if (!stillCurrent() || generation !== state.generation) return;
+  await analyzeCurrentWrinkles();
+  // An active incision was reviewed against the existing photo RSTL. Detect
+  // wrinkle lines for projection without silently replacing that baseline.
+  await applyWrinkleGuidedRefinement({ canApply: () => stillCurrent() && canRefine() });
+}
+
 export function updateLiveWrinkleTracking(
   landmarks: Vec3[],
   timeMs: number,
 ): void {
+  if (photoProjectionLines) return;
   const sourceKind = sourceState.sourceKind;
   if (!isDynamicWrinkleSourceKind(sourceKind) || sourceState.paused || !sourceState.running) return;
   if (liveWrinkleProcessingMode() === "framewise") {
@@ -1443,8 +1481,10 @@ export async function waitForLiveWrinkleAnalysis(): Promise<void> {
   await Promise.allSettled([...activeAnalyses]);
 }
 
-export async function applyWrinkleGuidedRefinement(): Promise<void> {
-  if (!isStaticWrinkleSource() || state.status !== "detected"
+export async function applyWrinkleGuidedRefinement({ canApply = () => true }: {
+  canApply?: () => boolean;
+} = {}): Promise<void> {
+  if (!canApply() || !isStaticWrinkleSource() || state.status !== "detected"
       || !state.detectionId || !state.refinementContext || !state.standardLines) return;
   if (hasManualRefineChanges()) {
     updateWrinkleUi();
@@ -1482,6 +1522,10 @@ export async function applyWrinkleGuidedRefinement(): Promise<void> {
       ]),
     });
     if (generation !== state.generation) return;
+    if (!canApply()) {
+      updateStatus("detected");
+      return;
+    }
     const applyStart = profileMode ? performance.now() : 0;
     refinementPerformance = result.performance || null;
     if (refinementPerformance) {
@@ -1577,6 +1621,7 @@ export function restoreStandardRstl(): void {
 }
 
 export function resetLiveWrinkleAnalysis(): void {
+  photoProjectionLines = null;
   refinementPerformance = null;
   framewiseProcessor?.cancel();
   framewiseProcessor = null;

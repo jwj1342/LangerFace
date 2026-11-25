@@ -340,18 +340,27 @@ function reportWorkflowStage(stage: string) {
   console.log(`[workflow-regression-stage] ${stage}`);
 }
 
-test("repeated photo replacement never auto-starts main-thread wrinkle YOLO", async ({ page }) => {
+test("workflow prefetches wrinkle weights before photo upload without starting inference", async ({ page }) => {
   test.setTimeout(120_000);
   const yoloModelRequests: string[] = [];
-  page.on("request", (request) => {
-    if (/wrinkle-yolov8s-seg-640\.onnx.*part\d+/i.test(request.url())) {
-      yoloModelRequests.push(request.url());
-    }
+  const wrinkleWorkers: string[] = [];
+  page.on("worker", (worker) => {
+    if (worker.url().includes("liveWrinklePipeline")) wrinkleWorkers.push(worker.url());
+  });
+  await page.route(/wrinkle-yolov8s-seg-640\.onnx\.part0[0-3]$/, async (route) => {
+    yoloModelRequests.push(new URL(route.request().url()).pathname.split("/").pop()!);
+    await route.fulfill({ body: Buffer.from([1, 2, 3]), contentType: "application/octet-stream" });
   });
 
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+  await expect.poll(() => page.evaluate(async () => {
+    const name = (await caches.keys()).find((key) => key.startsWith("langerface-yolo-wrinkle-"));
+    return name ? (await (await caches.open(name)).keys()).length : 0;
+  })).toBe(4);
+  const expectedParts = [0, 1, 2, 3].map((index) => `wrinkle-yolov8s-seg-640.onnx.part0${index}`);
+  expect([...yoloModelRequests].sort()).toEqual(expectedParts);
 
   for (let uploadIndex = 0; uploadIndex < 3; uploadIndex += 1) {
     await uploadGeneratedPhoto(page, "single", "#fileInput");
@@ -367,7 +376,8 @@ test("repeated photo replacement never auto-starts main-thread wrinkle YOLO", as
   await page.waitForTimeout(6_000);
   await expect(page.locator("#wrinkleStatus")).toHaveText("等待手动检测");
   await expect(page.locator("#workflowStageStatus")).toBeHidden();
-  expect(yoloModelRequests).toEqual([]);
+  expect([...yoloModelRequests].sort()).toEqual(expectedParts);
+  expect(wrinkleWorkers).toEqual([]);
 });
 
 test("workflow keeps reviewed photo geometry stable and reprojects read-only focus views", async ({ page }) => {
@@ -521,7 +531,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
   await uploadGeneratedPhotoWithControlledMarkers(page, [
-    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035, interiorRetrace: true },
+    { xRatio: 0.72, yRatio: 0.50, radiusRatio: 0.035, interiorRetrace: true },
     { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035, interiorRetrace: true },
     { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 },
   ], "#fileInput");
@@ -532,7 +542,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
 
   const initialMarkerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
   await initialMarkerButton.click();
-  await clickWorkflowCanvasRatio(page, 0.32, 0.52);
+  await clickWorkflowCanvasRatio(page, 0.72, 0.50);
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
   const initialCandidateLength = await page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength);
   expect(initialCandidateLength).toMatch(/mm/);

@@ -102,16 +102,16 @@ includesAll(liveSourceControls, [
 includesAll(pipelineSource, [
   'els.pause.textContent = "⏸ 暂停"',
 ], "runtime pause control reset label");
-includesAll(liveRuntime, [
+includesAll(pipelineSource, [
   'els.pause.textContent = "▶ 继续"',
   'els.pause.textContent = "⏸ 暂停"',
 ], "runtime pause/resume control labels");
 assert.ok(![pipelineSource, liveRuntime, liveRefine2d].some((source) => source.includes("定格微调")),
   "camera pause control and dependent guidance must not rename pause/resume as refinement");
-assert.ok(!liveRuntime.includes("继续实时"), "camera resume control must retain the established concise label");
+assert.ok(!pipelineSource.includes("继续实时"), "camera resume control must retain the established concise label");
 assert.equal(liveRuntime.match(/analyzeCurrentWrinkles\(/g)?.length, 1,
   "wrinkle analysis must start only from the explicit detect button, never from pause/resume");
-assert.ok(liveRuntime.includes("可点击“检测皱纹”"),
+assert.ok(pipelineSource.includes("可点击“检测皱纹”"),
   "paused-camera guidance must preserve explicit wrinkle detection semantics");
 
 assert.ok(liveRouteControls.includes("2D 实时贴合"), "Live workbench declares its only supported runtime mode");

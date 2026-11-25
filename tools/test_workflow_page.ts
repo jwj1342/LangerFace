@@ -43,6 +43,9 @@ import {
   smoothWorkflowClosedBoundary,
 } from "../web/src/services/workflowControllerUtils.ts";
 import { svgOverlayExportViewBox } from "../web/src/services/incisionExport.ts";
+import { detectControlledMarker } from "../web/src/services/controlledMarkerDetection.ts";
+import { applyCurveRefinementTransport, buildCurveRefinementTransport } from "../web/src/services/liveRefineMath.ts";
+import { bindWrinkleLinesToFace, mapTrackedWrinkleLines } from "../web/src/services/liveWrinkleTracking.ts";
 import { incisionCandidateScreenStyle, incisionOverlayScreenStyle } from "../web/src/services/incisionOverlayStyle.ts";
 import { buildPhotoSpaceDiameterEstimate, type SurfaceProjectedFusiformFit } from "../web/src/services/incisionPhotoPlanning.ts";
 import type { Vec3 } from "../web/src/services/softBody.ts";
@@ -127,6 +130,104 @@ assert.deepEqual(
 assert.match(controller, /const refs = recovered[\s\S]*?workflowSurfaceRefAtSource\(state, frame, point, true\)/,
   "the complete closed freehand outline uses the same explicit-boundary surface trust as its center");
 const markerFunction = controllerAst.statements.find((node: any) => ts.isFunctionDeclaration(node) && node.name?.text === "runControlledMarker");
+const markerWorkerBranch = markerFunction.body.statements.find((node: any) => ts.isTryStatement(node)
+  && node.getText(controllerAst).includes("detectionPromise = worker"));
+assert.ok(markerWorkerBranch, "extract the production marker dispatch and fallback");
+const runMarkerDispatch = runInNewContext(ts.transpileModule(
+  `(async function({ worker, image, seed, options, state, detectOnMainThread, detectBaselineOnMainThread }) {
+    let detectionPromise;
+    ${markerWorkerBranch.getText(controllerAst)}
+    return await detectionPromise;
+  })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText, {
+  Comlink: { transfer: (image: object, transfer: ArrayBuffer[]) => structuredClone(image, { transfer }) },
+  withWorkflowTimeout: (pending: Promise<unknown>) => pending,
+  WORKFLOW_WORKER_TIMEOUT_MS: 100,
+  setStatus() {},
+});
+const markerPixels = new Uint8ClampedArray(96 * 96 * 4).fill(255);
+for (let y = 0; y < 96; y++) {
+  for (let x = 0; x < 96; x++) {
+    const radius = Math.hypot(x - 48, y - 48);
+    if (radius < 23 && radius > 17) markerPixels.fill(12, 4 * (y * 96 + x), 4 * (y * 96 + x) + 3);
+  }
+}
+const markerImage = { width: 96, height: 96, data: markerPixels };
+const markerSeed = { x: 48, y: 48 };
+const markerOptions = { roiRadius: 36 };
+const expectedFallback = detectControlledMarker(markerImage, markerSeed, markerOptions);
+assert.equal(expectedFallback.ok, true, "the synthetic marker must be recognizable");
+let workerDelivered = false;
+const brokenWorker = {
+  ready: Promise.resolve(),
+  api: { async detectControlledMarker(payload: typeof markerImage) {
+    assert.equal(payload.data.byteLength, 96 * 96 * 4);
+    assert.equal(payload.data.some((channel) => channel === 12), true);
+    workerDelivered = true;
+    throw new Error("simulated computation failure after receiving transferred image");
+  } },
+  dispose() {},
+};
+const workerFailureState = { worker: brokenWorker, workerFailed: false };
+const resultAfterTransfer = await runMarkerDispatch({
+  worker: brokenWorker, image: markerImage, seed: markerSeed, options: markerOptions, state: workerFailureState,
+  detectOnMainThread: async () => detectControlledMarker(markerImage, markerSeed, markerOptions),
+  detectBaselineOnMainThread: () => assert.fail("the primary synchronous fallback should succeed"),
+});
+assert.equal(workerDelivered, true);
+assert.equal(workerFailureState.workerFailed, true);
+assert.equal(markerImage.data.byteLength, 96 * 96 * 4);
+assert.deepEqual(resultAfterTransfer, expectedFallback, "post-transfer failure keeps the exact fallback recognition result");
+
+const refineModule = ts.createSourceFile("liveRefine2d.ts", read("web/src/services/liveRefine2d.ts"), ts.ScriptTarget.Latest, true);
+const projectedRefineNames = ["beginFrozenRefineSession", "setLatestAutoLines", "projectPhotoRstlBaseline",
+  "startPhotoRstlProjection", "getDisplayLines", "commitRefineForLive", "toggleRefine2d"];
+const projectedRefineSource = refineModule.statements.filter((node: any) => ts.isFunctionDeclaration(node)
+  && projectedRefineNames.includes(node.name?.text))
+  .map((node: any) => node.getText(refineModule).replace(/^export /, "")).join("\n");
+const refineState: any = {};
+const refineSource = { sourceKind: "camera", paused: false, lastLM: [[0, 0, 0]], frozenFrame: {} };
+const projectedRefine = runInNewContext(ts.transpileModule(`(() => {
+  let photoRstlProjection = null;
+  ${projectedRefineSource}
+  return { ${projectedRefineNames.join(", ")} };
+})()`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  state: () => refineState, sourceState: refineSource, renderState: { system: "rstl" },
+  modelState: { triangles: [[0, 1, 2]] }, els: { canvas: { width: 200, height: 200 }, refine2dHint: {} },
+  cloneLines: structuredClone, mapTrackedWrinkleLines, bindWrinkleLinesToFace,
+  applyCurveRefinementTransport, buildCurveRefinementTransport, setRefineCanvasViewActive() {},
+  updateRefineUi() {}, requestRefineFrame() {}, sourceLabel: () => "camera",
+});
+const photoLandmarks: Vec3[] = [[0, 0, 0], [100, 0, 0], [0, 100, 0]];
+const translatedFace = (dx: number, dy: number): Vec3[] => photoLandmarks.map(([x, y]) => [x + dx, y + dy, 0]);
+const refLine = { name: "forehead", pts: [[10, 20, 0], [20, 20, 0], [30, 20, 0]], tris: [0, 0, 0] };
+projectedRefine.startPhotoRstlProjection({ lines: [refLine] }, photoLandmarks);
+const firstProjection = projectedRefine.projectPhotoRstlBaseline(translatedFace(20, 30));
+const closeTo = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} vs ${expected}`);
+closeTo(firstProjection[0].pts[1][0], 40);
+closeTo(firstProjection[0].pts[1][1], 50);
+refineSource.paused = true;
+projectedRefine.beginFrozenRefineSession();
+projectedRefine.setLatestAutoLines(firstProjection);
+projectedRefine.toggleRefine2d();
+refineState.lines[0].pts[1][1] += 8;
+closeTo(projectedRefine.getDisplayLines(firstProjection)[0].pts[1][1], 58);
+assert.equal(projectedRefine.commitRefineForLive(), true);
+refineSource.paused = false;
+const nextProjection = projectedRefine.projectPhotoRstlBaseline(translatedFace(25, 40));
+const nextDisplay = projectedRefine.getDisplayLines(nextProjection);
+closeTo(nextDisplay[0].pts[1][0], 45);
+closeTo(nextDisplay[0].pts[1][1], 68);
+closeTo(nextProjection[0].pts[1][1], 60);
+refineSource.paused = true;
+projectedRefine.beginFrozenRefineSession();
+projectedRefine.setLatestAutoLines(nextProjection);
+projectedRefine.toggleRefine2d();
+closeTo(projectedRefine.getDisplayLines(nextProjection)[0].pts[1][1], 68);
+assert.equal(projectedRefine.commitRefineForLive(), true);
+refineSource.paused = false;
+closeTo(projectedRefine.getDisplayLines(nextProjection)[0].pts[1][1], 68);
+
 const markerTry = markerFunction.body.statements.find((node: any) => ts.isTryStatement(node)
   && node.getText(controllerAst).includes("const outcome = await runWorkflow(state)"));
 const markerCompletion = markerTry.tryBlock.statements;
@@ -163,8 +264,9 @@ function controllerHarness() {
   let planner: () => Promise<any> = async () => ({ result: { candidate: { type: "fusiform" }, guardrails: { passed: true } } });
   const neutral = () => ({ angle_offset_deg: 0, length_scale: 1, width_scale: 1, reason: "" });
   const context = {
-    sourceState: { sourceKind: "image", paused: false, planning2d: { getFrameState: () => frame, setOverlaySummary() {} } },
+    sourceState: { sourceKind: "image", paused: false, workflowPhotoCamera: false, planning2d: { getFrameState: () => frame, setOverlaySummary() {} } },
     renderState: render, neutralIncisionEdit: neutral, cloneIncisionEdit: (edit: any) => ({ ...edit }),
+    workflowOverlayMatchesPhoto: (overlay: any, source: object) => overlay?.photo === source,
     cancelCandidateRecompute() {}, cancelMobileEditPreview() {}, cancelWorkflowDraftRestoreRetry() {},
     scheduleWorkflowDraftRestoreRetry() {}, resetMarkerRepair() {},
     completeWorkflowDraftRestoreRequest() {},
@@ -264,6 +366,19 @@ await stateRegression("camera projection keeps approved overlay", () => {
   h.frame.kind = "video";
   assert.equal(h.api.reconcileProjectedRstlSnapshot(h.state), false);
   assert.equal(h.render.incisionOverlay.id, h.record.id);
+});
+await stateRegression("photo camera startup only carries the approved candidate from its source photo", () => {
+  const h = controllerHarness();
+  h.context.sourceState.workflowPhotoCamera = true;
+  assert.equal(h.api.activatedCandidateShouldSurviveSourceChange(h.state), false);
+  h.api.activateRecord(h.state, h.record);
+  h.render.incisionOverlay.photo = h.frame.source;
+  assert.equal(h.api.activatedCandidateShouldSurviveSourceChange(h.state), true);
+  h.frame.source = {};
+  assert.equal(h.api.activatedCandidateShouldSurviveSourceChange(h.state), false);
+  h.frame.kind = "camera";
+  h.render.incisionOverlay = null;
+  assert.equal(h.api.activatedCandidateShouldSurviveSourceChange(h.state), true);
 });
 await stateRegression("confirmation reuses the complete legacy load-and-activate path", () => {
   const h = controllerHarness();
@@ -793,8 +908,6 @@ assert.match(controller, /controlledMarkerScale\?\.sourceRevision === frame\.rev
 assert.match(controller, /state\.controlledMarkerScale = null;[\s\S]*?state\.photoFrameRevision = frame\.revision/, "a new photo revision invalidates the cached marker scale");
 assert.match(controller, /function resetWorkflowForSourceChange\([\s\S]*?preserveActiveCandidate[\s\S]*?if \(preserveActiveCandidate\) resetFreehandPhotoBoundary\(state\);[\s\S]*?else \{[\s\S]*?state\.centerRef = null;[\s\S]*?state\.boundaryRefs = \[\];[\s\S]*?invalidateCandidate\(state\)/,
   "source replacement preserves an activated reviewed candidate while still clearing unapproved media-bound drafts");
-assert.match(controller, /function activatedCandidateShouldSurviveSourceChange[\s\S]*?state\.activeReviewRecordId && state\.result\?\.candidate/,
-  "camera startup uses the durable activated review record instead of the renderer's transient overlay slot");
 assert.match(controller, /function cameraIncisionActionsDisabled[\s\S]*?liveSnapshot\?\.source\?\.kind === "camera"[\s\S]*?sourceState\.sourceKind === "camera"/,
   "camera incision gates cover both the published snapshot and the immediate runtime source");
 assert.match(controller, /async function runWorkflow[\s\S]*?camera_incision_generation_blocked/,
@@ -907,7 +1020,7 @@ assert.ok(
 );
 assert.match(controlledMarkerHandler, /detection\.boundary[\s\S]*?workflowSurfaceRefAtSource\(state, frame, point\)/,
   "controlled-marker boundaries share the bounded outer-face recovery used by ordinary photo picks");
-assert.match(liveRail, /<LiveSourceControlsPanel\s*\/>/, "workflow receives the existing Live upload controls through its only left rail");
+assert.match(liveRail, /<LiveSourceControlsPanel\s+requireCameraPhoto=\{requireCameraPhoto\}\s*\/>/, "workflow receives the existing Live upload controls through its only left rail");
 assert.match(liveRail, /<LiveRenderControlsPanel\s*\/>/, "workflow receives the existing Live mirror control through its only left rail");
 assert.match(liveSourceControls, /commands\.source\("upload_source"\)/, "the shared photo upload dispatches the single Live source command");
 assert.match(liveRenderControls, /commands\.render\("mirror_toggle", checked\)/, "the shared mirror toggle dispatches the single Live render command");
@@ -1072,6 +1185,14 @@ assert.match(styles, /\[data-workflow-rejected-marker\]\s*\{[^}]*stroke:\s*#d946
   "a detector-rejected marker is a distinct purple dashed boundary");
 assert.match(controller, /rejected_boundary[\s\S]*?rejectedMarkerPreview[\s\S]*?肿物边界识别触碰门禁/,
   "only detector-owned rejected geometry is previewed and its marker gate is stated separately in concise Chinese");
+assert.match(controller, /diagnosticRejectedBoundaryFromDetection[\s\S]*?low_confidence_boundary/,
+  "a low-confidence detector failure retains a purple diagnostic boundary even when no polygon was returned");
+assert.match(controller, /const fallback = diagnosticRejectedBoundaryFromDetection[\s\S]*?rejected_boundary:\s*fallback/,
+  "the fallback boundary stays on the rejected-preview path and cannot become an accepted selection");
+assert.match(controller, /controlledMarkerLowConfidenceRejection[\s\S]*?low_contrast_near_circular_recovered[\s\S]*?rejected_boundary/,
+  "explicit low-contrast circular recovery is rendered as a purple diagnostic boundary instead of an accepted lesion");
+assert.match(controller, /if \(!transform \|\| !transformReady\) return sourceClientPoint\(state, point\)/,
+  "rejected diagnostic geometry falls back to the shared source mapping while a photo transform is still initializing");
 assert.match(styles, /\.workflow-incision-overlay \[data-workflow-marker-scan-circle\]\s*{[^}]*border-radius|\.workflow-incision-overlay \[data-workflow-marker-scan-circle\]\s*{[^}]*stroke:/s,
   "workflow scan feedback has an explicit visible circular stroke");
 const unlayeredOverrides = styles.indexOf("/* Critical, unlayered overrides");
@@ -1135,8 +1256,8 @@ assert.match(mobileControls, /setMobileRstlLayerVisible\(nextRstl\)[\s\S]*?setMo
   "all three overlay switches keep independent display-only visibility gates");
 assert.match(mobileControls, /aria-pressed=\{visibility\.rstl\}[\s\S]*?aria-pressed=\{visibility\.wrinkles\}[\s\S]*?aria-pressed=\{visibility\.incision\}/,
   "both layouts expose the current shared pressed state instead of keeping local copies");
-assert.match(mobileControls, /if \(!cameraActive\) return;[\s\S]*?setMobileRstlLayerVisible\(true\);[\s\S]*?setMobileWrinkleLayerVisible\(true\);[\s\S]*?writeWrinkleDisplayMode\("both"\);[\s\S]*?\}, \[cameraActive\]\);/,
-  "camera startup re-synchronizes the shared RSTL and wrinkle display gates");
+assert.match(mobileControls, /if \(!cameraActive \|\| workflowPhotoCameraEnabled\) return;[\s\S]*?setMobileRstlLayerVisible\(true\);[\s\S]*?setMobileWrinkleLayerVisible\(true\);[\s\S]*?writeWrinkleDisplayMode\("both"\);[\s\S]*?\}, \[cameraActive\]\);/,
+  "legacy camera startup re-synchronizes the display gates; photo projection preserves the user's layer selection");
 assert.match(liveRuntime, /root\.querySelector\("\.workflow-workbench"\)[\s\S]*?resetMobileWorkflowVisibility\(\);\s*setWrinkleDisplayMode\("both"\);/,
   "the workflow runtime initializes the shared layer state to all visible");
 assert.match(styles, /\.workflow-canvas-tools\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[^}]*overflow:\s*hidden;/,
@@ -1346,8 +1467,11 @@ assert.ok(canvasTools.includes("data-workflow-boundary-halo")
 for (const zoom of [0.1, 1, 1.5, 5]) {
   const shared = incisionOverlayScreenStyle("fusiform", { compact: true, viewScale: zoom });
   assert.equal(shared.candidate.lineWidth, 0.95, "fallback candidate stroke stays fixed");
-  assert.deepEqual(shared, incisionOverlayScreenStyle("fusiform", { compact: false, viewScale: zoom }),
-    "workflow fallback paint follows the same complete contract on both layouts");
+  const desktop = incisionOverlayScreenStyle("fusiform", { compact: false, viewScale: zoom });
+  assert.deepEqual(shared.candidate, desktop.candidate, "fallback incision strokes match across layouts");
+  assert.deepEqual(shared.boundary, desktop.boundary, "fallback boundary strokes match across layouts");
+  assert.ok(shared.center.radiusCss < desktop.center.radiusCss, "compact layout shrinks the lesion center marker");
+  assert.ok(shared.incisionCenter.radiusCss < desktop.incisionCenter.radiusCss, "compact layout shrinks the incision center marker");
 }
 assert.match(styles, /\.workflow-incision-overlay \[data-workflow-boundary\]\s*\{[^}]*stroke:\s*#fde047;[^}]*stroke-width:\s*0\.95;/,
   "shared CSS fallback uses the same fine yellow boundary on both layouts");

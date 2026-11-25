@@ -1,5 +1,6 @@
 import { LIVE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
 import type { RstlSourceContract } from "./rstlSourceContract";
+import type { CameraFacingMode } from "./cameraSource";
 
 export { LIVE_SNAPSHOT_SCHEMA_VERSION };
 
@@ -19,6 +20,9 @@ export interface LiveSourceState {
   running: boolean;
   paused: boolean;
   liveLabel: string;
+  cameraFacing?: CameraFacingMode;
+  cameraPending?: boolean;
+  cameraError?: string;
 }
 
 export interface LiveRenderSettings {
@@ -66,6 +70,9 @@ export interface LiveSnapshotInput {
   sourceFileName?: string | null;
   sourceRunning?: boolean;
   sourcePaused?: boolean;
+  cameraFacing?: CameraFacingMode;
+  cameraPending?: boolean;
+  cameraError?: string | null;
   liveLabel?: string;
   renderSystem?: string;
   densityFrac?: number;
@@ -110,6 +117,9 @@ export function buildLiveControllerSnapshot({
   sourceFileName = null,
   sourceRunning = false,
   sourcePaused = false,
+  cameraFacing,
+  cameraPending,
+  cameraError,
   liveLabel = "待机",
   renderSystem = "",
   densityFrac = 0,
@@ -138,6 +148,9 @@ export function buildLiveControllerSnapshot({
       running: Boolean(sourceRunning),
       paused: Boolean(sourcePaused),
       liveLabel: liveLabel || "待机",
+      ...(sourceKind === "camera" && cameraFacing ? { cameraFacing } : {}),
+      ...(cameraPending ? { cameraPending } : {}),
+      ...(cameraError ? { cameraError } : {}),
     },
     render: {
       system: renderSystem,

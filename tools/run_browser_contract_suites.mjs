@@ -11,6 +11,7 @@ import { captureMarkerIdentity } from "./marker_runtime_identity.mts";
 // Fixed inventory approved with the routing change. Adding/removing a test
 // requires an explicit inventory update, rather than silently reducing coverage.
 export const EXPECTED = [
+  {"file":"web/e2e/workflow-entry.spec.ts","full_title_parts":["site root opens the workflow and the launcher retains all three tools"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/clinical-theme.spec.ts","full_title_parts":["public workflow entrypoints share the blue clinical action theme"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/freehand-mobile-regression.spec.ts","full_title_parts":["workflow scroll and upload remain usable: fine393"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/freehand-mobile-regression.spec.ts","full_title_parts":["workflow scroll and upload remain usable: fine560"],"project":"chromium","suite":"production"},
@@ -49,7 +50,7 @@ export const EXPECTED = [
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["simplified workflow keeps one confirmed current record and removes candidate-library actions"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["PR226 v035 reviewed original generates and activates a fresh incision"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["PR226 v035 simplified workflow keeps an approved incision active in the camera stream"],"project":"chromium","suite":"production"},
-  {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["repeated photo replacement never auto-starts main-thread wrinkle YOLO"],"project":"chromium","suite":"production"},
+  {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["workflow prefetches wrinkle weights before photo upload without starting inference"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["workflow keeps reviewed photo geometry stable and reprojects read-only focus views"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["disabled workflow hints use a two-second mouse, touch, and keyboard release window"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-regressions.spec.ts","full_title_parts":["merged workflow preserves incision geometry, warning priority, and RSTL refresh ownership"],"project":"chromium","suite":"production"},
@@ -649,7 +650,7 @@ export async function main(args = process.argv.slice(2)) {
   const npmCli = process.env.npm_execpath;
   const ci = { prepared: false, attached: false };
   try {
-    assert.equal(EXPECTED.length, 47);
+    assert.equal(EXPECTED.length, 48);
     assertInventory(EXPECTED, EXPECTED);
     assert.equal(SOURCE.length, 2);
     await assertPortsClosed();

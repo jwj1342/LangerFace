@@ -137,6 +137,10 @@ export interface LiveRefine2dState {
 
 export interface LiveSourceState {
   planning2d: PhotoPlanningController | null;
+  workflowPhotoCamera: boolean;
+  cameraFacing: import("./cameraSource").CameraFacingMode;
+  cameraPending: boolean;
+  cameraError: string | null;
   readonly source: unknown | null;
   readonly sourceKind: "camera" | "video" | "image" | null;
   imageFileName: string | null;
@@ -227,6 +231,10 @@ export const renderState: LiveRenderState = {
 
 export const sourceState: LiveSourceState = {
   planning2d: null,
+  workflowPhotoCamera: false,
+  cameraFacing: "unknown",
+  cameraPending: false,
+  cameraError: null,
   get source() {
     return this.planning2d?.getFrameState().source ?? null;
   },
@@ -258,6 +266,10 @@ export function currentLiveSource(): unknown | null {
 
 export function currentLiveSourceKind(): "camera" | "video" | "image" | null {
   return sourceState.planning2d?.getFrameState().kind ?? null;
+}
+
+export function usesPhotoCameraProjection(): boolean {
+  return sourceState.workflowPhotoCamera && currentLiveSourceKind() === "camera";
 }
 
 export const recordingState: LiveRecordingState = {

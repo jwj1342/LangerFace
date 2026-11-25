@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { cpSync, readFileSync } from "node:fs";
 
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 import { localWrinkleV10Plugin } from "./dev/localWrinkleV10Plugin.ts";
 import { localExportDownloadPlugin } from "./dev/localExportDownloadPlugin.ts";
@@ -34,10 +34,37 @@ function shouldServeSpaIndex(url = "") {
   return false;
 }
 
+// The public HF host redirects large LFS modules to a CDN. Their JS imports
+// must still resolve against the original app origin after that redirect.
+function staticOpenCvImports(): Plugin {
+  const configuredOrigin = process.env.LANGERFACE_STATIC_ORIGIN;
+  const origin = configuredOrigin ? new URL(configuredOrigin).origin : null;
+  return {
+    name: "static-opencv-imports",
+    apply: "build",
+    renderChunk: {
+      order: "post",
+      handler(code, chunk) {
+        if (!origin || !chunk.moduleIds.some((id) =>
+          id.replaceAll("\\", "/").endsWith("/@techstark/opencv-js/dist/opencv.js")
+        )) return null;
+        return code.replace(
+          /(\bfrom\s*["'])(\.\/[^"']+)(["'])/g,
+          (_match, start: string, path: string, end: string) =>
+            start + origin + "/" + chunk.fileName.slice(0, chunk.fileName.lastIndexOf("/") + 1) + path.slice(2) + end,
+        );
+      },
+    },
+  };
+}
+
 export default defineConfig({
   base: "/",
   assetsInclude: ["**/*.task"],
+  // Keep the worker entry small enough to be served from the app origin.
+  worker: { format: "es", plugins: () => [staticOpenCvImports()] },
   plugins: [
+    staticOpenCvImports(),
     tailwindcss(),
     localExportDownloadPlugin(),
     localWrinkleV10Plugin(),
