@@ -3218,6 +3218,39 @@ body:has(.dark-workbench-page) {
     grid-template-columns: 1fr 1fr;
   }
 
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-selection {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-selection select {
+    min-width: 0;
+    min-height: 42px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-mirror {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 42px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-mirror:has(input:disabled) {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-error {
+    color: #fcd34d;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
   .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3246,9 +3279,7 @@ body:has(.dark-workbench-page) {
   .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
     .workflow-incision-overlay [data-workflow-candidate-halo],
   .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
-    .workflow-incision-overlay [data-workflow-diagnostic-candidate],
-  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
-    .workflow-incision-overlay [data-workflow-rejected-marker] {
+    .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
     display: none;
   }
 

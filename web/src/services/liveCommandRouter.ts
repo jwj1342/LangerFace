@@ -1,4 +1,5 @@
 import type {
+  CameraSourceOptions,
   LiveRenderCommand,
   LiveSourceCommand,
 } from "../lib/controllerCommand.ts";
@@ -13,7 +14,7 @@ type LiveTemplate = "rstl" | "langer";
 export interface LiveCommandActions {
   run(reason: string, action: () => unknown): unknown;
   uploadSource(): unknown;
-  cameraToggle(): unknown;
+  cameraToggle(camera?: CameraSourceOptions): unknown;
   pauseToggle(): unknown;
   recordingToggle(): unknown;
   imageExport(): unknown;
@@ -46,12 +47,12 @@ export class LiveCommandRouter {
     return true;
   }
 
-  source(command: LiveSourceCommand): true {
+  source(command: LiveSourceCommand, camera?: CameraSourceOptions): true {
     switch (command) {
       case "upload_source":
         return this.execute(command, () => this.actions.uploadSource());
       case "camera_toggle":
-        return this.execute(command, () => this.actions.cameraToggle());
+        return this.execute(command, () => this.actions.cameraToggle(camera));
       case "pause_toggle":
         return this.execute(command, () => this.actions.pauseToggle());
       case "recording_toggle":
@@ -91,7 +92,7 @@ export class LiveCommandRouter {
 
   handleSourceEvent(event: LiveCommandEvent): boolean {
     const detail = readLiveSourceCommand(event);
-    return detail ? this.source(detail.command) : false;
+    return detail ? this.source(detail.command, detail.camera) : false;
   }
 
   handleRenderEvent(event: LiveCommandEvent): boolean {

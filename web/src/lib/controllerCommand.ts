@@ -11,6 +11,7 @@ import {
   LIVE_RENDER_REACT_COMMAND_EVENT,
   LIVE_SOURCE_REACT_COMMAND_EVENT,
 } from "./controllerEvents.ts";
+import type { CameraFacingSelection } from "../services/cameraSource.ts";
 
 export interface ControllerCommandDetail<TCommand extends string = string> {
   command: TCommand;
@@ -169,8 +170,12 @@ export function dispatchControllerCommand<TDetail extends ControllerCommandDetai
   dispatchControllerEvent(eventName, detail);
 }
 
-export function dispatchLiveSourceCommand(command: LiveSourceCommand) {
-  dispatchControllerCommand(LIVE_SOURCE_REACT_COMMAND_EVENT, { command });
+export type CameraSourceOptions =
+  | { facing: CameraFacingSelection; switchCamera?: boolean }
+  | undefined;
+
+export function dispatchLiveSourceCommand(command: LiveSourceCommand, camera?: CameraSourceOptions) {
+  dispatchControllerCommand(LIVE_SOURCE_REACT_COMMAND_EVENT, camera ? { command, camera } : { command });
 }
 
 export function dispatchLiveRenderCommand(command: LiveRenderCommand, value?: string | number | boolean) {

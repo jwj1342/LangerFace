@@ -4,6 +4,7 @@ import { liveBenchmark, sampleBenchmarkLines } from "./liveBenchmark.ts";
 import { LivePreviewCadence } from "./livePreviewCadence.ts";
 import type { ZoomRegion } from "./constants.ts";
 import { ctx as boundCtx, els } from "./liveDom.ts";
+import { photoVectorOverlay, type OverlayPathContext } from "./photoVectorOverlay.ts";
 import {
   estimateFacePoseQuality,
   faceBBox,
@@ -45,7 +46,7 @@ import {
   symmetryAxisX,
   symmetryPartnerIndex,
 } from "./liveRefine2d";
-import { modelState, renderState, sourceState } from "./liveState.ts";
+import { modelState, renderState, sourceState, usesPhotoCameraProjection } from "./liveState.ts";
 import {
   mobileIncisionCandidateVisible,
   mobileRstlLayerVisible,
@@ -306,17 +307,6 @@ function currentCtx(): CanvasRenderingContext2D {
   return boundCtx;
 }
 
-const ctx = new Proxy({} as CanvasRenderingContext2D, {
-  get(_target, key: PropertyKey) {
-    const value = (currentCtx() as AnyRecord)[key as keyof CanvasRenderingContext2D];
-    return typeof value === "function" ? value.bind(currentCtx()) : value;
-  },
-  set(_target, key: PropertyKey, value: unknown) {
-    (currentCtx() as AnyRecord)[key as keyof CanvasRenderingContext2D] = value;
-    return true;
-  },
-});
-
 const modelTriangles = (): Triangle[] => modelState.triangles as Triangle[];
 const modelNoseTris = (): number[] => modelState.noseTris as number[];
 const toPoint2 = (point: number[]): Point2 => [Number(point[0]), Number(point[1])];
@@ -526,6 +516,20 @@ function stopBrowMasksBeforeForehead(lines: MappedAtlasLine[], masks: number[][]
  * visibility hole is filled before this pass, which removes the isolated
  * eye-orbit breaks caused by alternating triangle winding.
  */
+let lastPhotoMask: { key: string; result: number[][] } | undefined;
+function staticPhotoMasks(lines: MappedAtlasLine[], masks: number[][], excluded: boolean[][]) {
+  // The topology guard reads point geometry, names/regions and visibility only.
+  // Cache values, not mutable line identities; diagnostics must still run on demand.
+  if (location.search.includes("rstlCrossDebug") || location.search.includes("wrinkleDebug")) {
+    return buildTopologySafeRstlMasks(lines, masks, excluded);
+  }
+  const key = JSON.stringify([lines.map(l => [l.name, l.region, l.pts]), masks, excluded]);
+  if (!lastPhotoMask || key !== lastPhotoMask.key) {
+    lastPhotoMask = { key, result: buildTopologySafeRstlMasks(lines, masks, excluded) };
+  }
+  return lastPhotoMask.result;
+}
+
 function buildTopologySafeRstlMasks(
   lines: MappedAtlasLine[],
   masks: number[][],
@@ -794,7 +798,9 @@ function estimateRenderQualityGate(lm: Vec3[], W: number, H: number): AnyRecord 
 
 export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): number {
   // Resolve once per frame, avoiding proxy lookups and method binding per point.
-  const ctx = currentCtx();
+  const vectors = sourceState.sourceKind === "image" ? photoVectorOverlay(els.canvas) : undefined;
+  vectors?.beginFrame();
+  const ctx = vectors ?? currentCtx();
   const benchmark = liveBenchmark();
   const sample = benchmark?.current;
   const begin = sample ? performance.now() : 0;
@@ -829,7 +835,9 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
   // live transport; writing that result back as the baseline would apply the
   // same accepted displacement again on the next redraw.
   const baselineDisplayLines = smooth0119EndpointDisplayLines(mapped, H);
-  const allDisplayLines = smooth0119EndpointDisplayLines(getDisplayLines(mapped), H);
+  const allDisplayLines = smooth0119EndpointDisplayLines(
+    getDisplayLines(mapped, sourceState.sourceKind === "camera" ? lm : undefined), H,
+  );
   if (sourceState.sourceKind === "image" || sourceState.paused) {
     setLatestAutoLines(baselineDisplayLines);
   }
@@ -1008,7 +1016,7 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     const liveSource = sourceState.sourceKind === "video" || sourceState.sourceKind === "camera";
     const liveOverlayActive = Boolean(renderState.incisionOverlay);
     const safeMasks = sourceState.sourceKind === "image" || sourceState.paused
-      ? buildTopologySafeRstlMasks(displayLines, rawMasks, hardExcludedMasks)
+      ? staticPhotoMasks(displayLines, rawMasks, hardExcludedMasks)
       : liveSource || liveOverlayActive
         ? rawMasks
         : buildLiveTopologyMasks(displayLines, rawMasks, hardExcludedMasks, lm, W, H);
@@ -1155,12 +1163,12 @@ export function draw(lm: Vec3[], W: number, H: number, masks: HandMask[] = []): 
     for (let i = 0; i < lm.length; i += 1) {
       if (hasMasks && pointInHandMasks(toPoint2(lm[i]), masks)) continue;
       ctx.beginPath();
-      ctx.arc(lm[i][0], lm[i][1], Math.max(2, W / 650), 0, 6.283);
+      ctx.arc(lm[i][0], lm[i][1], Math.max(2, W / 650), 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
   }
-  drawIncisionOverlay(lm, W, H, masks, vis, innerMouth, frameQualityGate, localRegionQuality, localRegionMasks);
+  drawIncisionOverlay(ctx, lm, W, H, masks, vis, innerMouth, frameQualityGate, localRegionQuality, localRegionMasks);
   ctx.restore();
   return count;
 }
@@ -1183,6 +1191,7 @@ function overlayMask(
 }
 
 function strokeOverlayRefs(
+  ctx: OverlayPathContext,
   refs: SurfaceRef[],
   lm: Vec3[],
   masks: HandMask[],
@@ -1630,6 +1639,7 @@ function recordLocalRegionQuality(localRegionQuality: AnyRecord | null | undefin
 }
 
 function drawIncisionOverlay(
+  ctx: OverlayPathContext,
   lm: Vec3[],
   W: number,
   H: number,
@@ -1671,25 +1681,36 @@ function drawIncisionOverlay(
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const cssScale = Math.max(0.1, els.canvas.getBoundingClientRect().width / Math.max(W, 1));
-  const overlayStyle = incisionOverlayScreenStyle(overlay.candidate_type, {
-    compact: mobileWorkflowViewportActive(),
-  });
+  const compact = mobileWorkflowViewportActive();
   const boundaryRefs = surfaceRefs(overlay.tumor?.boundary_refs);
-  strokeOverlayRefs(boundaryRefs, lm, masks, vis, innerMouth, {
+  let lesionExtentCss: number | undefined;
+  if (compact && boundaryRefs.length >= 3) {
+    const points = mapSurfaceRefs(boundaryRefs, lm, modelTriangles()).pts;
+    const bounds = points.reduce((b, [x, y]) => ({
+      left: Math.min(b.left, x), right: Math.max(b.right, x),
+      top: Math.min(b.top, y), bottom: Math.max(b.bottom, y),
+    }), { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity });
+    if (points.length >= 3) lesionExtentCss = Math.min(bounds.right - bounds.left, bounds.bottom - bounds.top) * cssScale;
+  }
+  const overlayStyle = incisionOverlayScreenStyle(overlay.candidate_type, {
+    compact,
+    lesionExtentCss,
+  });
+  strokeOverlayRefs(ctx, boundaryRefs, lm, masks, vis, innerMouth, {
     color: overlayStyle.boundary.haloColor,
     lineWidth: overlayStyle.boundary.haloWidth / cssScale,
   }, localRegionMasks);
-  strokeOverlayRefs(boundaryRefs, lm, masks, vis, innerMouth, {
+  strokeOverlayRefs(ctx, boundaryRefs, lm, masks, vis, innerMouth, {
     color: overlayStyle.boundary.color,
     lineWidth: overlayStyle.boundary.lineWidth / cssScale,
   }, localRegionMasks);
   const candidateRefs = surfaceRefs(overlay.candidate?.polyline_refs);
   if (mobileIncisionCandidateVisible()) {
-    strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+    strokeOverlayRefs(ctx, candidateRefs, lm, masks, vis, innerMouth, {
       color: overlayStyle.candidate.haloColor,
       lineWidth: overlayStyle.candidate.haloWidth / cssScale,
     }, localRegionMasks);
-    strokeOverlayRefs(candidateRefs, lm, masks, vis, innerMouth, {
+    strokeOverlayRefs(ctx, candidateRefs, lm, masks, vis, innerMouth, {
       color: overlayStyle.candidate.color,
       lineWidth: overlayStyle.candidate.lineWidth / cssScale,
     }, localRegionMasks);
@@ -1706,7 +1727,7 @@ function drawIncisionOverlay(
     ctx.lineWidth = overlayStyle.center.strokeWidthCss / cssScale;
     ctx.beginPath();
     ctx.arc(center[0], center[1], overlayStyle.center.radiusCss / cssScale, 0, Math.PI * 2);
-    ctx.fill();
+    if (overlayStyle.center.color !== "transparent") ctx.fill();
     ctx.stroke();
     ctx.globalAlpha = savedAlpha;
   } };
@@ -1717,7 +1738,7 @@ function drawIncisionOverlay(
     ctx.lineWidth = overlayStyle.incisionCenter.strokeWidthCss / cssScale;
     ctx.beginPath();
     ctx.arc(incisionCenter[0], incisionCenter[1], radius, 0, Math.PI * 2);
-    ctx.fill();
+    if (overlayStyle.incisionCenter.color !== "transparent") ctx.fill();
     ctx.stroke();
   }
   drawLesionCenter();
@@ -1739,7 +1760,7 @@ export function buildZoomCards(onSelect: () => void = () => {}): void {
     card.setAttribute("aria-label", item.region ? `进入${item.label}局部微调` : "返回全脸视图");
     card.title = item.region ? `点击进入${item.label}局部微调` : "点击返回全脸视图";
     const cv = document.createElement("canvas"); cv.width = 300; cv.height = 300;
-    if (renderState.mirror) cv.classList.add("mirror");
+    if (renderState.mirror && !usesPhotoCameraProjection()) cv.classList.add("mirror");
     const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = item.label;
     card.appendChild(cv); card.appendChild(tag); els.zoomStrip.appendChild(card);
     const select = () => {
@@ -1798,12 +1819,14 @@ export function drawZooms(lm: Vec3[], W: number): void {
     zoomCadence.reset();
   }
   if (!zoomCadence.shouldDraw(performance.now(), sourceState.sourceKind === "image" || sourceState.paused)) return;
+  const preview = (sourceState.sourceKind === "image"
+    ? photoVectorOverlay(els.canvas)?.uncroppedComposite() : null) ?? els.canvas;
   const faceW = faceBBox(lm).w || W;
   for (const zc of renderState.zoomCards as LiveZoomCard[]) {
     const g = zc.ctx, dw = zc.canvas.width, dh = zc.canvas.height;
     g.fillStyle = "#05070a"; g.fillRect(0, 0, dw, dh);
     if (!zc.region) {
-      drawFullFrameCard(g, dw, dh, W, els.canvas.height);
+      drawFullFrameCard(g, preview, dw, dh, W, els.canvas.height);
       continue;
     }
     const box = zoomRegionBounds(lm, zc.region);
@@ -1811,16 +1834,16 @@ export function drawZooms(lm: Vec3[], W: number): void {
     const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
     let s = Math.max(box.w, box.h) * 1.7;
     s = Math.max(s, faceW * 0.13);   // 避免过度放大、保留一点周边
-    g.drawImage(els.canvas, cx - s / 2, cy - s / 2, s, s, 0, 0, dw, dh);
+    g.drawImage(preview, cx - s / 2, cy - s / 2, s, s, 0, 0, dw, dh);
   }
   syncFocusCards();
 }
 
-function drawFullFrameCard(g: CanvasRenderingContext2D, dw: number, dh: number, W: number, H: number): void {
+function drawFullFrameCard(g: CanvasRenderingContext2D, source: HTMLCanvasElement, dw: number, dh: number, W: number, H: number): void {
   const scale = Math.min(dw / W, dh / H);
   const tw = W * scale;
   const th = H * scale;
-  g.drawImage(els.canvas, 0, 0, W, H, (dw - tw) / 2, (dh - th) / 2, tw, th);
+  g.drawImage(source, 0, 0, W, H, (dw - tw) / 2, (dh - th) / 2, tw, th);
 }
 
 function boundsFromPoints(points: Array<number[] | null | undefined> | null | undefined): Bounds | null {
@@ -1863,21 +1886,15 @@ function zoomRegionBounds(lm: Vec3[], region: RenderRegion): Bounds | null {
 
 export function drawFocusedRegion(lm: Vec3[] | null, W: number, H: number): void {
   const region = renderState.focusRegion as RenderRegion;
-  if (!region || !lm) {
-    setFocusCrop(null);
-    return;
-  }
-  const crop = focusCropRect(lm, region, W, H);
-  if (!crop) {
-    setFocusCrop(null);
-    return;
-  }
+  const crop = region && lm ? focusCropRect(lm, region, W, H) : null;
   setFocusCrop(crop);
+  if (sourceState.sourceKind === "image") photoVectorOverlay(els.canvas)?.show(crop);
+  if (!crop) return;
 
   focusScratch.width = W;
   focusScratch.height = H;
   focusCtx.drawImage(els.canvas, 0, 0);
-  ctx.drawImage(focusScratch, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
+  currentCtx().drawImage(focusScratch, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
 }
 
 function setFocusCrop(crop: { sx: number; sy: number; sw: number; sh: number } | null): void {

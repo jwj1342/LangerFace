@@ -42,7 +42,7 @@ export interface IncisionOverlayStyleOptions {
 }
 
 export interface IncisionOverlayScreenStyleOptions {
-  /** Compatibility input; annotation paint is identical across device layouts. */
+  /** Use smaller hollow center markers on the phone workflow. */
   compact?: boolean;
   /** Photo-only view zoom. Camera/video stay at 1. */
   viewScale?: number;
@@ -56,6 +56,29 @@ function boundedOverlayViewScale(viewScale?: number): number {
   const value = Number(viewScale);
   if (!Number.isFinite(value) || value <= 1) return 1;
   return Math.min(value, 1.25);
+}
+
+function compactCenterMarkers(
+  style: Omit<IncisionOverlayStyle, "rstlLineWidth">,
+  options: IncisionOverlayScreenStyleOptions,
+): Omit<IncisionOverlayStyle, "rstlLineWidth"> {
+  if (!options.compact) return style;
+  const extent = options.lesionExtentCss && Number.isFinite(options.lesionExtentCss) && options.lesionExtentCss > 0
+    ? options.lesionExtentCss : Infinity;
+  return {
+    ...style,
+    center: {
+      ...style.center,
+      radiusCss: Math.min(style.center.radiusCss, 1.1, extent * 0.1),
+      strokeWidthCss: Math.min(style.center.strokeWidthCss, 0.55, extent * 0.05),
+    },
+    incisionCenter: {
+      color: "transparent",
+      strokeColor: style.incisionCenter.color,
+      radiusCss: Math.min(style.incisionCenter.radiusCss, 1.55, extent * 0.14),
+      strokeWidthCss: Math.min(style.incisionCenter.strokeWidthCss, 0.65, extent * 0.05),
+    },
+  };
 }
 
 /**
@@ -76,7 +99,7 @@ export function incisionOverlayScreenStyle(
     // Photo paths are already in CSS pixels. Keep both the yellow boundary
     // and the confirmable incision line in screen space so image zoom cannot
     // make either line visually thicker.
-    return {
+    return compactCenterMarkers({
       ...base,
       candidate: {
         ...base.candidate,
@@ -99,13 +122,13 @@ export function incisionOverlayScreenStyle(
         strokeWidthCss: Math.min(0.5 * scale, 0.025 * extent),
       },
       endpointRadius: Math.min(1.5 * scale, 0.12 * extent),
-    };
+    }, options);
   }
   const viewScale = boundedOverlayViewScale(options.viewScale);
   const linear = candidateType === "linear";
   const candidateLineWidth = SHARED_ANNOTATION_LINE_WIDTH;
   const boundaryLineWidth = SHARED_ANNOTATION_LINE_WIDTH;
-  return {
+  return compactCenterMarkers({
     candidate: {
       color: linear ? LINEAR_HIGHLIGHT_COLOR : FUSIFORM_HIGHLIGHT_COLOR,
       lineWidth: candidateLineWidth,
@@ -135,7 +158,7 @@ export function incisionOverlayScreenStyle(
       strokeWidthCss: 1,
     },
     endpointRadius: 3 * viewScale,
-  };
+  }, options);
 }
 
 export function incisionCandidateScreenStyle(candidateType: IncisionOverlayCandidateType = "fusiform") {

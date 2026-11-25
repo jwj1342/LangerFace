@@ -38,6 +38,30 @@ const localVisionWasmFileset: VisionWasmFileset = {
   ).href,
 };
 let visionResolver: VisionWasmFileset | null = null;
+let visionWasmBinaryObjectUrl: string | null = null;
+
+async function resolveVisionWasmFileset(): Promise<VisionWasmFileset> {
+  if (visionWasmBinaryObjectUrl) {
+    return {
+      wasmLoaderPath: localVisionWasmFileset.wasmLoaderPath,
+      wasmBinaryPath: visionWasmBinaryObjectUrl,
+    };
+  }
+  const response = await fetch(localVisionWasmFileset.wasmBinaryPath, { cache: "no-cache" });
+  if (!response.ok) {
+    throw new Error(`MediaPipe Vision WASM 加载失败（HTTP ${response.status}）`);
+  }
+  const binary = await response.arrayBuffer();
+  const magic = new Uint8Array(binary.slice(0, 4));
+  if (binary.byteLength < 4 || magic[0] !== 0x00 || magic[1] !== 0x61 || magic[2] !== 0x73 || magic[3] !== 0x6d) {
+    throw new Error("MediaPipe Vision WASM 内容无效；请刷新页面后重试。");
+  }
+  visionWasmBinaryObjectUrl = URL.createObjectURL(new Blob([binary], { type: "application/wasm" }));
+  return {
+    wasmLoaderPath: localVisionWasmFileset.wasmLoaderPath,
+    wasmBinaryPath: visionWasmBinaryObjectUrl,
+  };
+}
 
 async function initializeAssetsReady(): Promise<void> {
   const startedAt = performance.now();
@@ -85,7 +109,9 @@ async function initializeAssetsReady(): Promise<void> {
     faceLandmarker: "mediapipe/tasks-vision@0.10.35",
     handLandmarker: "mediapipe/tasks-vision@0.10.35",
   });
-  visionResolver = localVisionWasmFileset;
+  // Loading the binary ourselves avoids the MediaPipe loader's streaming path,
+  // which can be aborted by static hosts while serving a large WASM response.
+  visionResolver = await resolveVisionWasmFileset();
   recordMetricSample("model.assetsAndVisionReadyMs", performance.now() - startedAt);
   logInfo("图谱与 MediaPipe Vision 运行时加载完成。", {
     triangles: modelState.triangles.length,

@@ -8,6 +8,7 @@ export interface LiveCanvasInteractionCallbacks {
   cancelRefinePointer?(pointerId: number): boolean;
   sourceKind(): string | null;
   isSourcePaused?(): boolean;
+  isCameraViewGestureEnabled?(): boolean;
   panImageViewBy(deltaX: number, deltaY: number): void;
   zoomImageViewAt(clientX: number, clientY: number, deltaY: number): boolean;
   zoomImageViewByFactorAt?(clientX: number, clientY: number, factor: number): boolean;
@@ -68,8 +69,9 @@ export function bindLiveCanvasInteractions(
 
   const mobileTouchGestureEnabled = (event: PointerEvent): boolean => (
     event.pointerType === "touch"
-    && (callbacks.sourceKind() === "image" || callbacks.isSourcePaused?.() === true)
-    && callbacks.isMobileTouchImageGestureEnabled?.() === true
+    && (callbacks.isCameraViewGestureEnabled?.() === true
+      || ((callbacks.sourceKind() === "image" || callbacks.isSourcePaused?.() === true)
+        && callbacks.isMobileTouchImageGestureEnabled?.() === true))
   );
 
   const captureTouchPointers = (): void => {
@@ -203,6 +205,15 @@ export function bindLiveCanvasInteractions(
   };
 
   const wheel = (event: WheelEvent): void => {
+    if (callbacks.isCameraViewGestureEnabled?.()) {
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? surface.clientHeight : 1;
+      if (callbacks.zoomImageViewAt(event.clientX, event.clientY, event.deltaY * unit)) {
+        if (callbacks.isRefineActive()) callbacks.updateRefineUi();
+        callbacks.onImageViewChanged?.();
+      }
+      event.preventDefault();
+      return;
+    }
     if (callbacks.sourceKind() === "image" || callbacks.isRefineActive()) {
       if (callbacks.zoomImageViewAt(event.clientX, event.clientY, event.deltaY)) {
         if (callbacks.isRefineActive()) callbacks.updateRefineUi();

@@ -7,8 +7,32 @@ export type WorkflowWorkerTumorQuality = Awaited<ReturnType<WorkflowWorkerApi["s
 
 export interface WorkflowWorkerClient {
   api: Comlink.Remote<WorkflowWorkerApi>;
+  ready: Promise<void>;
   dispose: () => void;
 }
+
+/**
+ * Browser workers have no cancellation API for an individual Comlink call.
+ * Keep the UI recoverable when a worker module or a WASM-backed operation
+ * never settles; callers terminate the worker after this rejects.
+ */
+export function withWorkflowTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([operation, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
+// Keep this below the browser acceptance wait so a stuck recognition or plan
+// reports a recoverable failure before the page appears frozen indefinitely.
+export const WORKFLOW_WORKER_TIMEOUT_MS = 45_000;
 
 export interface WorkflowWorkerProbeResult {
   diagnostics: WorkflowWorkerDiagnostics;
@@ -22,10 +46,28 @@ export function createWorkflowWorkerClient(): WorkflowWorkerClient {
     name: "langerface-workflow-worker",
   });
   const api = Comlink.wrap<WorkflowWorkerApi>(worker);
+  let resolveReady: (() => void) | undefined;
+  let rejectReady: ((reason?: unknown) => void) | undefined;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  const failReady = (message: string) => rejectReady?.(new Error(message));
+  const onWorkerError = () => failReady("切口识别线程启动失败；请刷新页面后重试。");
+  const onWorkerMessageError = () => failReady("切口识别线程通信失败；请刷新页面后重试。");
+  worker.addEventListener("error", onWorkerError);
+  worker.addEventListener("messageerror", onWorkerMessageError);
+  void ready.catch(() => undefined);
+  void api.diagnostics().then(() => resolveReady?.()).catch((error) => {
+    rejectReady?.(error);
+  });
 
   return {
     api,
+    ready,
     dispose() {
+      worker.removeEventListener("error", onWorkerError);
+      worker.removeEventListener("messageerror", onWorkerMessageError);
       const releasable = api as Comlink.Remote<WorkflowWorkerApi> & {
         [Comlink.releaseProxy]?: () => void;
       };

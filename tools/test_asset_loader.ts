@@ -231,6 +231,7 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   const originalLoadAtlas = dataSource.loadAtlas;
   const originalCreateFace = FaceLandmarker.createFromOptions;
   const originalCreateHand = HandLandmarker.createFromOptions;
+  const originalVisionFetch = globalThis.fetch;
   const originalBadge = els.badge;
   const originalConsoleInfo = console.info;
   const originalConsoleWarn = console.warn;
@@ -247,6 +248,7 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   };
   let topologyLoads = 0;
   let atlasLoads = 0;
+  let wasmLoads = 0;
   const faceDelegates: string[] = [];
   const handDelegates: string[] = [];
   const faceRunningModes: string[] = [];
@@ -260,6 +262,11 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
   }));
 
   try {
+    globalThis.fetch = async (input, init) => {
+      if (!String(input).endsWith("/vision_wasm_internal.wasm")) return originalVisionFetch(input, init);
+      wasmLoads += 1;
+      return new Response(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+    };
     modelState.landmarker = null;
     modelState.imageLandmarker = null;
     modelState.handLandmarker = null;
@@ -343,6 +350,7 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
     assert.deepEqual(faceRunningModes, ["VIDEO", "VIDEO"], "continuous-frame retry remains isolated to VIDEO mode");
     assert.equal(topologyLoads, 1, "shared failed attempt loads topology once");
     assert.equal(atlasLoads, 2, "shared failed attempt loads each atlas once");
+    assert.equal(wasmLoads, 1, "photo and camera readiness share one Vision WASM download");
 
     rejectFaceAttempt = false;
     const retryA = ensureReady();
@@ -360,6 +368,7 @@ for (const rel of ["web/src/services/pipelineModels.ts"]) {
     dataSource.loadAtlas = originalLoadAtlas;
     FaceLandmarker.createFromOptions = originalCreateFace;
     HandLandmarker.createFromOptions = originalCreateHand;
+    globalThis.fetch = originalVisionFetch;
     console.info = originalConsoleInfo;
     console.warn = originalConsoleWarn;
     if (originalBadge === undefined) delete (els as Partial<typeof els>).badge;

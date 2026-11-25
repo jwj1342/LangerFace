@@ -195,7 +195,7 @@ assert.match(pipelineSource, /catch \(error\) \{\s*releasePendingStream\(\);/,
   "camera startup failures release streams before reporting or ignoring stale operations");
 assert.match(
   pipelineSource,
-  /const openedCamera = await openPreferredCameraStream\(\s*undefined,\s*\(\) => operationId === sourceOperationId,\s*\);/,
+  /openPreferredCameraStream\(\s*undefined,\s*\(\) => operationId === sourceOperationId(?:,)?\s*\)/,
   "pipeline uses the bounded rear-camera preference helper with an operation-ownership retry guard",
 );
 assert.match(
@@ -215,13 +215,13 @@ assert.doesNotMatch(
 );
 assert.match(
   pipelineSource,
-  /if \(currentLiveSourceKind\(\) === "camera"\) \{\s*restoreStaticSourceOrPlaceholder\(renderState\.incisionOverlay\)/,
+  /if \(cameraActive && !switching\) \{\s*restoreStaticSourceOrPlaceholder\(renderState\.incisionOverlay\)/,
   "the camera command is a real toggle whose off path restores the previous static source when available",
 );
 assert.match(
   pipelineSource,
-  /restoreRefineDisplayState\(resume\.refinement\);\s*restoreWrinkleDisplayState\(resume\.wrinkle\);\s*renderState\.densityFrac = 1;\s*els\.density\.value = "100";\s*els\.densityVal\.textContent = "100%";\s*renderState\.incisionOverlay = activeIncisionOverlay/,
-  "closing the camera restores static RSTL, wrinkle, and incision state while resetting line density to 100%",
+  /restoreRefineDisplayState\(resume\.refinement\);\s*restoreWrinkleDisplayState\(resume\.wrinkle\);\s*renderState\.densityFrac = sourceState\.workflowPhotoCamera \? resume\.densityFrac : 1;[\s\S]*?renderState\.incisionOverlay = activeIncisionOverlay/,
+  "closing the camera restores photo layers and preserves the legacy 100% density outside the experiment",
 );
 assert.match(
   pipelineSource,
@@ -242,7 +242,7 @@ assert.match(
 const liveRuntime = readFileSync(new URL("../web/src/services/liveRuntime.ts", import.meta.url), "utf8");
 const mobileControls = readFileSync(new URL("../web/src/components/MobileWorkflowControls.tsx", import.meta.url), "utf8");
 const desktopControls = readFileSync(new URL("../web/src/components/LiveSourceControlsPanel.tsx", import.meta.url), "utf8");
-assert.match(mobileControls, /cameraActive \? "关闭后置摄像头" : "开启后置摄像头"/,
+assert.match(mobileControls, /aria-pressed=\{cameraActive\}/,
   "mobile camera control exposes an explicit on/off state");
 assert.match(desktopControls, /cameraActive \? "■ 关闭摄像头" : "◉ 开启摄像头"/,
   "desktop camera control exposes an explicit on/off state");
@@ -250,7 +250,7 @@ assert.match(liveRuntime, /renderState\.mirror = eventChecked\(e\);\s*els\.mirro
   "programmatic camera mirror changes keep the visible mirror control synchronized");
 assert.match(
   liveRuntime,
-  /cameraToggle: \(\) => startCamera\(\{\s*onFacingMode\(\) \{\s*handleMirrorChange\(checkedEvent\(false\)\);\s*\},\s*\}\)/,
+  /cameraToggle: \(camera\) => startCamera\(\{[\s\S]*?onFacingMode\(\) \{\s*handleMirrorChange\(checkedEvent\(false\)\);\s*\},\s*\}\)/,
   "every successfully opened camera disables automatic display mirroring before the first source frame",
 );
 assert.doesNotMatch(

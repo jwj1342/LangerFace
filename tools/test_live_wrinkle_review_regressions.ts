@@ -104,6 +104,7 @@ const els = {
 const update = actualFunction("function setWrinkleSummary(",
   "\nexport function setWrinkleDisplayMode", {
     els, state, sourceState: { sourceKind: "image", paused: false },
+    photoProjectionLines: null,
     isWrinkleFrameReady: () => true,
     isStaticWrinkleSource: () => true,
     isDynamicWrinkleSourceKind: () => false,

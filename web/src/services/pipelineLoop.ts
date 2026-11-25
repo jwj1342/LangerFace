@@ -4,12 +4,14 @@ import { buildHandMasks, type HandMask } from "./geometryOccluders.ts";
 import type { Vec3 } from "./softBody.ts";
 import { countMetric, logWarn, recordMetricSample } from "./logger.ts";
 import { clearZooms, draw, drawFocusedRegion, drawZooms, updateStats } from "./render2d.ts";
+import { clearPhotoVectors } from "./photoVectorOverlay.ts";
 import {
   currentLiveSource,
   currentLiveSourceKind,
   modelState,
   renderState,
   sourceState,
+  usesPhotoCameraProjection,
 } from "./liveState.ts";
 import { setMsg } from "./liveUi.ts";
 import {
@@ -57,7 +59,10 @@ export function detectHands(timeMs: number, width: number, height: number): Hand
   const start = sample ? performance.now() : 0;
   const result = imageMode
     ? detector.detect?.(currentLiveSource())
-    : detector.detectForVideo(liveBenchmark()?.handInput === "canvas" ? els.canvas : currentLiveSource(), timeMs);
+    : detector.detectForVideo(
+      liveBenchmark()?.handInput === "canvas" || (usesPhotoCameraProjection() && renderState.mirror)
+        ? els.canvas : currentLiveSource(), timeMs,
+    );
   const maskStart = sample ? performance.now() : 0;
   if (sample) {
     sample.stages.handDetector = maskStart - start;
@@ -104,6 +109,23 @@ export function cancelFrame(): void {
   frameScheduler.cancel();
 }
 
+export function drawSourceFrame(
+  target: CanvasRenderingContext2D, source: CanvasImageSource, width: number, height: number,
+): void {
+  if (!usesPhotoCameraProjection() || !renderState.mirror) {
+    target.drawImage(source, 0, 0, width, height);
+    return;
+  }
+  target.save();
+  try {
+    target.translate(width, 0);
+    target.scale(-1, 1);
+    target.drawImage(source, 0, 0, width, height);
+  } finally {
+    target.restore();
+  }
+}
+
 export function loop(): void {
   if (!sourceState.running || sourceState.paused) return;
   if (!ctx) return;
@@ -121,7 +143,8 @@ export function loop(): void {
     stages: {} as Record<string, number>,
   } : null;
   if (benchmark) benchmark.current = sample || undefined;
-  ctx.drawImage(source, 0, 0, width, height);
+  // Flip only the camera pixels. Detectors and overlays share this frame.
+  drawSourceFrame(ctx, source, width, height);
   const timeMs = performance.now();
   if (sample) sample.stages.capture = timeMs - sample.wallTime;
 
@@ -218,8 +241,15 @@ export function loop(): void {
   const trackingStart = sample ? performance.now() : 0;
   if (sample) sample.stages.landmarksAndHands = trackingStart - timeMs;
   if (sourceKind === "camera" || sourceKind === "video") {
+    const photoCamera = sourceKind === "camera" && sourceState.workflowPhotoCamera;
+    if (photoCamera && !wrinkleLandmarks) {
+      landmarks = null;
+      sourceState.lastLM = null;
+      sourceState.presence = 0;
+      renderState.smoother.reset();
+    }
     updateLiveWrinkleTracking(wrinkleLandmarks || [], timeMs);
-    updateLiveWrinkleMeshTracking(els.canvas, wrinkleLandmarks || []);
+    updateLiveWrinkleMeshTracking(els.canvas, (photoCamera ? landmarks : wrinkleLandmarks) || []);
   }
   if (sample) sample.stages.wrinkleTracking = performance.now() - trackingStart;
 
@@ -240,9 +270,11 @@ export function loop(): void {
     } catch (error) {
       if (!drawFailureLogged) logWarn("渲染图谱失败，本帧已跳过。", error);
       drawFailureLogged = true;
+      if (sourceKind === "image") clearPhotoVectors(els.canvas);
       clearZooms();
     }
   } else {
+    if (sourceKind === "image") clearPhotoVectors(els.canvas);
     clearZooms();
   }
   updateStats(landmarks, width, height, lineCount);

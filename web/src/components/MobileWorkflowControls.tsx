@@ -10,10 +10,14 @@ import {
   workflowLayerVisibilitySnapshot,
 } from "../services/mobileWorkflowVisibility";
 import { setWrinkleDisplayMode } from "../services/liveWrinkleAnalysis";
+import type { CameraFacingSelection } from "../services/cameraSource";
+import { workflowCameraPhotoRequired, workflowPhotoCameraEnabled } from "../services/workflowPhotoCamera";
 import { useIncisionStore } from "../stores/incisionStore";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
 import { FieldValue, Label } from "./ui/label";
+import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
 
 type WrinkleDisplayMode = "rstl" | "wrinkles" | "both";
@@ -46,10 +50,16 @@ export function MobileWorkflowControls() {
   const paused = Boolean(liveSnapshot?.source.paused);
   const recording = Boolean(liveSnapshot?.recording);
   const cameraActive = running && liveSnapshot?.source.kind === "camera";
+  const cameraPending = Boolean(liveSnapshot?.source.cameraPending);
+  const [preferredFacing, setPreferredFacing] = useState<CameraFacingSelection>("environment");
+  const activeFacing = liveSnapshot?.source.cameraFacing;
+  const selectedFacing = cameraActive && activeFacing && activeFacing !== "unknown" ? activeFacing : preferredFacing;
+  const photoReady = useIncisionStore((state) => state.snapshot?.workflowTools?.photoReady);
+  const cameraBlocked = workflowPhotoCameraEnabled && !cameraActive && !(photoReady && liveSnapshot?.source.kind === "image");
   const hasSource = running || Boolean(liveSnapshot?.source.kind);
 
   useEffect(() => {
-    if (!cameraActive) return;
+    if (!cameraActive || workflowPhotoCameraEnabled) return;
     // Camera startup resets the wrinkle runtime. Re-apply the visible phone
     // controls afterwards so their pressed state and both render gates agree.
     setMobileRstlLayerVisible(true);
@@ -68,7 +78,7 @@ export function MobileWorkflowControls() {
           <Button
             variant="workbenchPrimary"
             type="button"
-            disabled={!sourceControlsReady}
+            disabled={!sourceControlsReady || cameraPending}
             title={sourceControlsReady ? undefined : "工作台正在初始化，请稍候"}
             onClick={() => liveCommands.source("upload_source")}
           >
@@ -78,9 +88,14 @@ export function MobileWorkflowControls() {
             variant="workbench"
             type="button"
             aria-pressed={cameraActive}
-            onClick={() => liveCommands.source("camera_toggle")}
+            disabled={cameraBlocked || cameraPending}
+            title={cameraBlocked ? workflowCameraPhotoRequired : undefined}
+            onClick={() => liveCommands.source("camera_toggle",
+              workflowPhotoCameraEnabled && !cameraActive ? { facing: selectedFacing } : undefined)}
           >
-            <Camera size={15} /> {cameraActive ? "关闭后置摄像头" : "开启后置摄像头"}
+            <Camera size={15} /> {cameraPending ? "摄像头准备中…" : cameraActive
+              ? (workflowPhotoCameraEnabled ? "关闭摄像头" : "关闭后置摄像头")
+              : (workflowPhotoCameraEnabled && selectedFacing === "user" ? "开启前置摄像头" : "开启后置摄像头")}
           </Button>
           <Button variant="workbench" type="button" disabled={!running} onClick={() => liveCommands.source("pause_toggle")}>
             {paused ? <Play size={15} /> : <Pause size={15} />} {paused ? "继续" : "暂停"}
@@ -103,6 +118,36 @@ export function MobileWorkflowControls() {
             <ImagePlus size={15} /> 导出图片
           </Button>
         </div>
+        {workflowPhotoCameraEnabled && (
+          <div className="mobile-camera-selection">
+            <Label htmlFor="mobileCameraFacing">摄像头</Label>
+            <Select
+              id="mobileCameraFacing"
+              value={selectedFacing}
+              disabled={!sourceControlsReady || cameraPending}
+              onChange={(event) => {
+                const facing = event.currentTarget.value;
+                if (facing !== "user" && facing !== "environment") return;
+                setPreferredFacing(facing);
+                if (cameraActive) liveCommands.source("camera_toggle", { facing, switchCamera: true });
+              }}
+            >
+              <option value="environment">后置</option>
+              <option value="user">前置</option>
+            </Select>
+            <label className="mobile-camera-mirror">
+              <Checkbox
+                checked={Boolean(cameraActive && liveSnapshot?.render.mirror)}
+                disabled={!cameraActive || cameraPending || paused}
+                onChange={(event) => liveCommands.render("mirror_toggle", event.currentTarget.checked)}
+              />
+              水平镜像
+            </label>
+          </div>
+        )}
+        {workflowPhotoCameraEnabled && liveSnapshot?.source.cameraError && (
+          <small className="mobile-camera-error" role="status">{liveSnapshot.source.cameraError}</small>
+        )}
       </div>
       <div className="mobile-workflow-section">
         <div className="mobile-workflow-heading">

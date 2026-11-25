@@ -2,14 +2,17 @@ import { useRef, useState } from "react";
 
 import { useLiveControllerCommands } from "../hooks/useControllerCommands";
 import { isDeveloperMode } from "../services/developerMode";
+import { workflowCameraPhotoRequired } from "../services/workflowPhotoCamera";
+import { useIncisionStore } from "../stores/incisionStore";
 import { useLiveStore } from "../stores/liveStore";
 import { Button } from "./ui/button";
 import { ButtonRow } from "./ui/button-row";
 import { Card } from "./ui/card";
+import { CheckboxField } from "./ui/checkbox-field";
 import { Input } from "./ui/input";
 import { PersistentTooltip } from "./ui/persistent-tooltip";
 
-export function LiveSourceControlsPanel() {
+export function LiveSourceControlsPanel({ requireCameraPhoto = false }: { requireCameraPhoto?: boolean }) {
   const commands = useLiveControllerCommands();
   const snapshot = useLiveStore((state) => state.snapshot);
   const sourceControlsReady = snapshot !== null;
@@ -17,6 +20,8 @@ export function LiveSourceControlsPanel() {
   const paused = Boolean(snapshot?.source.paused);
   const recording = Boolean(snapshot?.recording);
   const cameraActive = running && snapshot?.source.kind === "camera";
+  const photoReady = useIncisionStore((state) => state.snapshot?.workflowTools?.photoReady);
+  const cameraBlocked = requireCameraPhoto && !cameraActive && !(photoReady && snapshot?.source.kind === "image");
   const hasSource = running || Boolean(snapshot?.source.kind);
   const developerMode = isDeveloperMode();
   const uploadTooltipAnchor = useRef<HTMLButtonElement>(null);
@@ -58,7 +63,16 @@ export function LiveSourceControlsPanel() {
       /> : null}
       <Input type="file" id="fileInput" accept="image/*,video/*" disabled={!sourceControlsReady} hidden />
       <ButtonRow>
-        <Button variant="workbench" id="camBtn" type="button" aria-pressed={cameraActive} onClick={() => commands.source("camera_toggle")}>{cameraActive ? "■ 关闭摄像头" : "◉ 开启摄像头"}</Button>
+        <Button variant="workbench" id="camBtn" type="button" aria-pressed={cameraActive} disabled={cameraBlocked} title={cameraBlocked ? workflowCameraPhotoRequired : undefined} onClick={() => commands.source("camera_toggle")}>{cameraActive ? "■ 关闭摄像头" : "◉ 开启摄像头"}</Button>
+        {requireCameraPhoto && (
+          <CheckboxField checkboxProps={{
+            checked: Boolean(cameraActive && snapshot?.render.mirror),
+            disabled: !cameraActive || Boolean(snapshot?.source.cameraPending) || paused,
+            onChange: (event) => commands.render("mirror_toggle", event.currentTarget.checked),
+          }}>
+            水平镜像
+          </CheckboxField>
+        )}
         <Button variant="workbench" id="pauseBtn" type="button" disabled={!running} onClick={() => commands.source("pause_toggle")}>{paused ? "▶ 继续" : "⏸ 暂停"}</Button>
         <Button variant="workbench" id="exportBtn" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => commands.source("recording_toggle")}>{recording ? "■ 停止视频" : "⬇ 导出视频"}</Button>
         <Button variant="workbench" type="button" disabled={!hasSource} onClick={() => commands.source("image_export")}>▣ 导出图片</Button>

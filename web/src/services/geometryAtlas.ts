@@ -165,6 +165,50 @@ function segmentsConflict(a: [Vec3, Vec3], b: [Vec3, Vec3], clearance: number): 
   ) <= clearance;
 }
 
+// Each caller owns this index for one pass over immutable candidate curves.
+function curveConflictPass(clearance: number) {
+  type Seg = [Vec3, Vec3];
+  type Box = { x0: number; x1: number; y0: number; y1: number };
+  const box = (edges: Seg[]): Box => {
+    const b = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+    for (const edge of edges) for (const p of edge) {
+      b.x0 = Math.min(b.x0, p[0] - clearance); b.x1 = Math.max(b.x1, p[0] + clearance);
+      b.y0 = Math.min(b.y0, p[1] - clearance); b.y1 = Math.max(b.y1, p[1] + clearance);
+    }
+    return b;
+  };
+  const apart = (a: Box, b: Box) => a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0;
+  const index = (edges: Seg[]) => {
+    const groups = [];
+    for (let k = 0; k < edges.length; k += 8) {
+      const part = edges.slice(k, k + 8);
+      groups.push({ bounds: box(part), part });
+    }
+    return { bounds: box(edges), groups };
+  };
+  const cache = new WeakMap<Seg[], ReturnType<typeof index>>();
+  const prepared = (edges: Seg[]) => {
+    let value = cache.get(edges);
+    if (!value) { value = index(edges); cache.set(edges, value); }
+    return value;
+  };
+  const byPoints = new WeakMap<Vec3[], Seg[]>();
+  const edges = (p: Vec3[]) => {
+    let value = byPoints.get(p);
+    if (!value) { value = lineSegments(p); byPoints.set(p, value); }
+    return value;
+  };
+  const check = (points: Vec3[], other: Seg[]) => {
+    const a = prepared(edges(points)), b = prepared(other);
+    if (apart(a.bounds, b.bounds)) return false;
+    for (const x of a.groups) for (const y of b.groups) {
+      if (!apart(x.bounds, y.bounds) && x.part.some(p => y.part.some(q => segmentsConflict(p, q, clearance)))) return true;
+    }
+    return false;
+  };
+  return { check, curves: (a: Vec3[], b: Vec3[]) => check(a, edges(b)) };
+}
+
 function lineSegments(points: Vec3[]): Array<[Vec3, Vec3]> {
   return points.slice(1).map((point, index) => [points[index], point]);
 }
@@ -469,8 +513,7 @@ function bringBrowTurnsMedially(lines: MappedAtlasLine[], landmarks: Vec3[]): vo
   const bottoms = prior.map(points => Math.max(...points.map(p => p[1]))).sort((a, b) => a - b);
   const turnHeight = (bottoms[Math.floor(bottoms.length / 2)] ?? top) - top;
   const obstacleSegments = obstacles.map((line) => lineSegments(line.pts));
-  const conflict = (a: Vec3[], bSegments: Array<[Vec3, Vec3]>) => lineSegments(a).some(segment =>
-    bSegments.some(other => segmentsConflict(segment, other, 0.25)));
+  const conflict = curveConflictPass(0.25).check;
   // Validate the whole group at the same strength; never deform lines one by
   // one against already-moved neighbours or silently truncate their tails.
   for (const scale of [1, 0.85, 0.7, 0.55, 0.4, 0.25, 0]) {
@@ -654,8 +697,7 @@ function addLowerBrowBridge(lines: MappedAtlasLine[], landmarks: Vec3[], count =
     });
     const corridorSegments = corridorLines.map(line => lineSegments(line.pts));
     const pairSegments = pair.map(points => lineSegments(points));
-    const conflicts = (a: Vec3[], bSegments: Array<[Vec3, Vec3]>) => lineSegments(a).some(segment =>
-      bSegments.some(other => segmentsConflict(segment, other, 0.75)));
+    const conflicts = curveConflictPass(0.75).check;
     if (pair.some((points, i) => corridorSegments.some(segments => conflicts(points, segments))
       || pair.slice(0, i).some((_, j) => conflicts(points, pairSegments[j])))) continue;
 
@@ -702,8 +744,7 @@ function tightenBrowTemporalSpacing(lines: MappedAtlasLine[]): void {
     if (!heights.every(Number.isFinite)) continue;
     const candidate = selected.map((line, rank) => line.pts.map((p): Vec3 =>
       [p[0], p[1] + (heights[2] - heights[rank]) * 0.15, p[2]]));
-    const conflicts = (a: Vec3[], b: Vec3[]) => lineSegments(a).some(segment =>
-      lineSegments(b).some(other => segmentsConflict(segment, other, 0.75)));
+    const conflicts = curveConflictPass(0.75).curves;
     const obstacles = lines.filter(line => !selected.includes(line));
     if (candidate.some((points, i) => obstacles.some(other =>
       conflicts(points, other.pts) && !conflicts(selected[i].pts, other.pts))
@@ -726,8 +767,7 @@ function lowerBrowTemporalBundles(lines: MappedAtlasLine[], landmarks: Vec3[]): 
     const selected = group.map(line => line!);
     const candidate = selected.map(line => line.pts.map((p): Vec3 => [p[0], p[1] + shift, p[2]]));
     const obstacles = lines.filter(line => !selected.includes(line));
-    const conflicts = (a: Vec3[], b: Vec3[]) => lineSegments(a).some(segment =>
-      lineSegments(b).some(other => segmentsConflict(segment, other, 0.75)));
+    const conflicts = curveConflictPass(0.75).curves;
     if (candidate.some((points, i) => obstacles.some(other =>
       conflicts(points, other.pts) && !conflicts(selected[i].pts, other.pts)))) continue;
     selected.forEach((line, i) => { line.pts = candidate[i]; });
@@ -773,8 +813,7 @@ function regularizeCanthusArcs(lines: MappedAtlasLine[], tighten = 0.75): void {
     const obstacles = lines.filter(line => !selected.includes(line));
     const obstacleSegments = obstacles.map(line => lineSegments(line.pts));
     const originalSegments = original.map(points => lineSegments(points));
-    const conflicts = (a: Vec3[], bSegments: Array<[Vec3, Vec3]>) => lineSegments(a).some(segment =>
-      bSegments.some(other => segmentsConflict(segment, other, 0.75)));
+    const conflicts = curveConflictPass(0.75).check;
     for (const flatten of [0.28, 0.20, 0.12, 0]) {
       const centerAt = (t: number): Vec3 => {
         const p = mean(t);

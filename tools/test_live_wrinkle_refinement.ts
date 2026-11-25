@@ -231,8 +231,6 @@ const runtime = fs.readFileSync(
 assert.match(runtime, /analyzeCurrentWrinkles/);
 assert.match(runtime, /applyWrinkleGuidedRefinement/);
 assert.doesNotMatch(runtime, /if \(!isRefineActive\(\)\) toggleRefine2d\(\)/);
-assert.match(runtime, /beginFrozenRefineSession\(\)/,
-  "every frozen frame must start a fresh geometry session");
 assert.match(runtime, /function handleTemplateChange[\s\S]*resetRefineForNewSource\(\);[\s\S]*resetLiveWrinkleAnalysis\(\);/,
   "changing the atlas must invalidate refinement and wrinkle results from the previous geometry");
 assert.doesNotMatch(runtime, /preloadLiveWrinkleModel|scheduleWrinkleModelPreload|requestIdleCallback/,
@@ -242,6 +240,8 @@ const pipelineSource = fs.readFileSync(
   new URL("../web/src/services/pipelineSource.ts", import.meta.url),
   "utf8",
 );
+assert.match(pipelineSource, /beginFrozenRefineSession\(\)/,
+  "every frozen frame must start a fresh geometry session");
 assert.doesNotMatch(pipelineSource, /sourceSha256|crypto\.subtle\.digest\(\s*"SHA-256"/,
   "the shared upload path must not hash every image for one experiment sample");
 assert.doesNotMatch(pipelineSource, /sourceFile/,
@@ -256,7 +256,7 @@ assert.doesNotMatch(renderRuntime, /WRINKLE_PHOTO_SHA256|sourceSpecificForeheadV
 assert.match(renderRuntime, /ln\.hiddenPointRuns\?\.some/,
   "the deployed renderer must honor the latest nose-root intersection visibility gaps");
 assert.match(renderRuntime,
-  /const baselineDisplayLines = smooth0119EndpointDisplayLines\(mapped, H\);[\s\S]*?const allDisplayLines = smooth0119EndpointDisplayLines\(getDisplayLines\(mapped\), H\);[\s\S]*?setLatestAutoLines\(baselineDisplayLines\)/,
+  /const baselineDisplayLines = smooth0119EndpointDisplayLines\(mapped, H\);[\s\S]*?const allDisplayLines = smooth0119EndpointDisplayLines\(\s*getDisplayLines\(mapped, sourceState\.sourceKind === "camera" \? lm : undefined\), H,\s*\);[\s\S]*?setLatestAutoLines\(baselineDisplayLines\)/,
   "redraws must preserve an untransported automatic baseline while rendering transported display lines");
 assert.doesNotMatch(renderRuntime, /setLatestAutoLines\(allDisplayLines\)/,
   "already transported display lines must never become the next automatic baseline");
@@ -358,7 +358,7 @@ assert.match(analysisRuntime,
 assert.match(pipelineLoop, /sourceKind === "camera" \|\| sourceKind === "video"/,
   "the frame loop must schedule wrinkle tracking for video and camera frames");
 assert.match(pipelineLoop,
-  /updateLiveWrinkleTracking\(wrinkleLandmarks \|\| \[\], timeMs\);[\s\S]*updateLiveWrinkleMeshTracking\(els\.canvas, wrinkleLandmarks \|\| \[\]\)/,
+  /updateLiveWrinkleTracking\(wrinkleLandmarks \|\| \[\], timeMs\);[\s\S]*updateLiveWrinkleMeshTracking\(els\.canvas, \(photoCamera \? landmarks : wrinkleLandmarks\) \|\| \[\]\)/,
   "wrinkles must use current unsmoothed landmarks and clear the overlay when face detection fails");
 assert.match(pipelineLoop, /detectForVideo\(els\.canvas, timeMs\)/,
   "face landmarks must come from the frozen pixels displayed this frame");

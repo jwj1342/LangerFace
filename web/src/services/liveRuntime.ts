@@ -3,6 +3,7 @@ import { bindDom, clearDomBinding, els } from "./liveDom.ts";
 import { fitCanvasDisplayToStage, observeCanvasStageResize, panImageViewBy, transformImageViewGesture, zoomImageViewAt, zoomImageViewByFactorAt } from "./liveCanvasFit.ts";
 import { validateIncisionOverlay } from "./incisionOverlay.ts";
 import { ensureImageReady, handleFile, redrawPausedFrame, requestFrame, restoreOfficialAtlas, setActiveAtlas, startCamera, stopSource } from "./pipeline.ts";
+import { handlePauseToggle } from "./pipelineSource.ts";
 import { adjustFocusZoom, buildZoomCards } from "./render2d.ts";
 import {
   LIVE_CONTROLLER_STATE_EVENT,
@@ -24,19 +25,20 @@ import { dataSource } from "./dataSource";
 import { countMetric, logError } from "./logger";
 import { LiveActionScheduler } from "./liveActionScheduler";
 import { bindLiveCanvasInteractions } from "./liveCanvasInteraction";
+import { syncPhotoVectorView } from "./photoVectorOverlay.ts";
 import { LiveCommandRouter } from "./liveCommandRouter";
 import type { RecordingExtraCanvas } from "./canvasRecording";
 import { createLiveRecordingActions } from "./liveRecordingActions";
-import { modelState, recordingState, renderState, sourceState } from "./liveState";
+import { modelState, recordingState, renderState, sourceState, usesPhotoCameraProjection } from "./liveState";
+import { workflowPhotoCameraEnabled } from "./workflowPhotoCamera.ts";
 import { resetMobileWorkflowVisibility } from "./mobileWorkflowVisibility";
 import { narrowTouchWorkflowViewportActive } from "./workflowViewport";
 import { createPhotoPlanningController } from "./photoPlanningController";
 import {
   adjustRefineImageZoom,
-  beginFrozenRefineSession,
   beginRefinePointer,
   cancelRefinePointer,
-  commitRefineForLive,
+  clearPointGuide,
   endRefinePointer,
   exportRefine,
   isRefineActive,
@@ -58,7 +60,6 @@ import {
 import {
   clearLiveUiMessageTimer,
   setIncisionOverlayQa,
-  setLive,
   setMsg,
   setProvenance,
   setTransientMsg,
@@ -119,6 +120,9 @@ function publishLiveState(reason = "state_update"): void {
     sourceFileName: sourceState.imageFileName,
     sourceRunning: sourceState.running,
     sourcePaused: sourceState.paused,
+    cameraFacing: sourceState.workflowPhotoCamera ? sourceState.cameraFacing : undefined,
+    cameraPending: sourceState.workflowPhotoCamera && sourceState.cameraPending,
+    cameraError: sourceState.workflowPhotoCamera ? sourceState.cameraError : null,
     liveLabel: els.live?.dataset?.k || liveTextOf(els.live) || "待机",
     renderSystem: renderState.system,
     densityFrac: renderState.densityFrac,
@@ -246,47 +250,6 @@ function visibleRecordingCanvases(): RecordingExtraCanvas[] {
   return extras;
 }
 
-function handlePauseToggle(): void {
-  if (!sourceState.running || sourceState.sourceKind === "image") return;
-  if (!sourceState.paused) {
-    if (!sourceState.lastLM || sourceState.presence <= 0) {
-      setMsg("尚未获得稳定人脸，请正对摄像头后再定格。");
-      return;
-    }
-    const frozen = document.createElement("canvas");
-    frozen.width = els.canvas.width;
-    frozen.height = els.canvas.height;
-    frozen.getContext("2d")?.drawImage(sourceState.source as CanvasImageSource, 0, 0, frozen.width, frozen.height);
-    sourceState.frozenFrame = frozen;
-    sourceState.paused = true;
-    resetLiveWrinkleAnalysis();
-    beginFrozenRefineSession();
-    els.mainWrap.classList.add("image-viewer");
-    els.canvas.classList.add("refine-image-source");
-    fitCanvasDisplayToStage({ resetView: true });
-    els.pause.textContent = "▶ 继续";
-    els.pause.setAttribute("aria-pressed", "true");
-    setLive(false, "已定格 · 可微调");
-    setTransientMsg("已暂停当前画面。可点击“检测皱纹”，或使用“医生手动微调”继续处理。");
-    redrawPausedFrame();
-    setRefineAvailability();
-    updateWrinkleUi();
-    return;
-  }
-  sourceState.paused = false;
-  els.mainWrap.classList.remove("image-viewer");
-  els.canvas.classList.remove("refine-image-source");
-  sourceState.frozenFrame = null;
-  const refinementCommitted = commitRefineForLive();
-  resetLiveWrinkleAnalysis();
-  els.pause.textContent = "⏸ 暂停";
-  els.pause.setAttribute("aria-pressed", "false");
-  if (refinementCommitted) setTransientMsg("已返回实时画面，当前微调曲线会继续跟随人脸。");
-  else setMsg(null);
-  setLive(true, sourceState.sourceKind === "camera" ? "实时摄像头" : "视频");
-  requestFrame();
-}
-
 function handleTemplateChange(e: Event | ValueControlEvent): void {
   renderState.system = String(eventValue(e) ?? "");
   resetRefineForNewSource();
@@ -330,10 +293,26 @@ function handleHandOccChange(e: Event | CheckedControlEvent): void {
 }
 
 function handleMirrorChange(e: Event | CheckedControlEvent): void {
+  const mirrorCameraFrame = usesPhotoCameraProjection();
+  if (mirrorCameraFrame && sourceState.paused) return;
+  const wasMirrored = renderState.mirror;
   renderState.mirror = eventChecked(e);
   els.mirror.checked = renderState.mirror;
-  els.canvas.classList.toggle("mirror", renderState.mirror);
-  renderState.zoomCards.forEach((zc: LiveZoomCard) => zc.canvas.classList.toggle("mirror", renderState.mirror));
+  const mirrorDisplay = renderState.mirror && !mirrorCameraFrame;
+  els.canvas.classList.toggle("mirror", mirrorDisplay);
+  syncPhotoVectorView(els.canvas);
+  renderState.zoomCards.forEach((zc: LiveZoomCard) => zc.canvas.classList.toggle("mirror", mirrorDisplay));
+  if (mirrorCameraFrame && wasMirrored !== renderState.mirror) {
+    renderState.smoother.reset();
+    sourceState.presence = 0;
+    sourceState.lastLM = null;
+    sourceState.lastHulls = [];
+    sourceState.planning2d?.setDetection({
+      sourceRevision: sourceState.planning2d.sourceRevision(),
+      status: "detecting",
+    });
+    requestFrame();
+  }
   refreshStaticImage();
 }
 
@@ -369,7 +348,8 @@ const recordingActions = createLiveRecordingActions({
 const liveCommands = new LiveCommandRouter({
   run: runLiveAction,
   uploadSource: () => els.file.click(),
-  cameraToggle: () => startCamera({
+  cameraToggle: (camera) => startCamera({
+    ...(sourceState.workflowPhotoCamera ? camera : undefined),
     onFacingMode() {
       handleMirrorChange(checkedEvent(false));
     },
@@ -473,6 +453,7 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
     endRefinePointer,
     sourceKind: () => sourceState.sourceKind,
     isSourcePaused: () => sourceState.paused && Boolean(sourceState.frozenFrame),
+    isCameraViewGestureEnabled: usesPhotoCameraProjection,
     panImageViewBy,
     zoomImageViewAt,
     zoomImageViewByFactorAt,
@@ -480,7 +461,10 @@ function bindLiveEvents(signal: AbortSignal, root: ParentNode | Document): void 
     adjustFocusZoom,
     updateRefineUi,
     refreshStaticImage,
-    onImageViewChanged: () => window.dispatchEvent(new Event("langerface:image-view-changed")),
+    onImageViewChanged: () => {
+      if (usesPhotoCameraProjection() && sourceState.paused) redrawPausedFrame();
+      window.dispatchEvent(new Event("langerface:image-view-changed"));
+    },
   }, { signal });
 }
 
@@ -488,6 +472,7 @@ function isActiveSession(session: number): boolean {
   return mounted && session === activeSession;
 }
 export function disposeLiveWorkbench() {
+  clearPointGuide();
   mounted = false;
   activeSession += 1;
   liveActions.dispose();
@@ -511,6 +496,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   disposeLiveWorkbench();
   bindDom(root);
   sourceState.planning2d = createPhotoPlanningController({ owner: "live" });
+  sourceState.workflowPhotoCamera = workflowPhotoCameraEnabled && Boolean(root.querySelector(".workflow-workbench"));
   mounted = true;
   activeSession += 1;
   abortController = new AbortController();
@@ -526,7 +512,7 @@ export function mountLiveWorkbench(root: ParentNode | Document = document) {
   updateWrinkleUi();
   buildZoomCards(refreshStaticImage);
   resizeCleanup = observeCanvasStageResize(() => {
-    if (sourceState.sourceKind === "image") fitCanvasDisplayToStage();
+    if (sourceState.sourceKind === "image" || usesPhotoCameraProjection()) fitCanvasDisplayToStage();
   });
   els.smoothVal.textContent = smoothLabel(+els.smooth.value);
   configureLandmarkSmoothing();

@@ -2,6 +2,7 @@ import { els } from "./liveDom.ts";
 import { resetImageView, setRefineCanvasViewActive, stepImageViewZoom } from "./liveCanvasFit.ts";
 import type { MappedAtlasLine } from "./geometryAtlas.ts";
 import type { Vec3 } from "./softBody";
+import { bindWrinkleLinesToFace, mapTrackedWrinkleLines } from "./liveWrinkleTracking.ts";
 import {
   assessRefineLineQuality,
   applyCurveRefinementTransport,
@@ -20,6 +21,7 @@ import {
 import {
   renderState,
   sourceState,
+  modelState,
   type EditableRefineLine,
   type LiveRefine2dState,
   type RefineMode,
@@ -40,7 +42,53 @@ const cloneLines = (lines: readonly RefineLine[] | null | undefined): EditableRe
   pts: (line.pts || []).map((point) => [point[0], point[1], point[2] || 0] as Vec3),
 }))
 );
-const requestRefineFrame = () => window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+let pendingDragRedraw: number | null = null;
+let pointGuide: SVGSVGElement | null = null;
+export function clearPointGuide() {
+  if (pendingDragRedraw !== null) cancelAnimationFrame(pendingDragRedraw);
+  pendingDragRedraw = null;
+  pointGuide?.remove();
+  pointGuide = null;
+}
+const requestRefineFrame = () => {
+  clearPointGuide();
+  window.dispatchEvent(new CustomEvent("langerface:refine2d-redraw"));
+};
+function requestDragRedraw() {
+  if (state().mode !== "point") { requestRefineFrame(); return; }
+  if (pendingDragRedraw !== null) return;
+  pendingDragRedraw = requestAnimationFrame(() => {
+    pendingDragRedraw = null;
+    const s = state(), pick = s.drag?.pick;
+    if (!s.active || !pick) return;
+    const line = s.lines?.[pick.lineIndex];
+    if (!line || !line.pts[pick.pointIndex]) return;
+    const c = els.canvas, box = c.getBoundingClientRect(), crop = renderState.focusCrop;
+    const ns = "http://www.w3.org/2000/svg";
+    if (!pointGuide) {
+      pointGuide = document.createElementNS(ns, "svg");
+      pointGuide.setAttribute("aria-hidden", "true");
+      pointGuide.style.cssText = "position:fixed;pointer-events:none;overflow:hidden;z-index:10";
+      const segment = document.createElementNS(ns, "polyline");
+      segment.setAttribute("style", "fill:none;stroke:#42daca;stroke-width:2;stroke-dasharray:3 2");
+      const handle = document.createElementNS(ns, "circle");
+      handle.setAttribute("style", "fill:#16413e;stroke:white;stroke-width:1.5");
+      handle.setAttribute("r", "4");
+      pointGuide.append(segment, handle);
+      document.body.append(pointGuide);
+    }
+    Object.assign(pointGuide.style,{left:box.left+"px",top:box.top+"px",width:box.width+"px",height:box.height+"px"});
+    const project = (p: Vec3) => {
+      const x = (p[0]-(crop?.sx ?? 0))/(crop?.sw || c.width);
+      return [(c.classList.contains("mirror") ? 1-x : x)*box.width,(p[1]-(crop?.sy ?? 0))/(crop?.sh || c.height)*box.height];
+    };
+    const w = curvePointWindow(line.pts.length,pick.pointIndex,s.pointCount);
+    pointGuide.children[0].setAttribute("points",line.pts.slice(Math.max(0,w.start-1),w.end+2).map(p=>project(p).join(",")).join(" "));
+    const [x,y]=project(line.pts[pick.pointIndex]);
+    pointGuide.children[1].setAttribute("cx",String(x));
+    pointGuide.children[1].setAttribute("cy",String(y));
+  });
+}
 
 export interface RefineDisplayResumeState {
   lines: EditableRefineLine[] | null;
@@ -58,7 +106,7 @@ function canvasPoint(event: PointerEvent): [number, number] {
   const rect = els.canvas.getBoundingClientRect();
   let x = (event.clientX - rect.left) * els.canvas.width / Math.max(1, rect.width);
   let y = (event.clientY - rect.top) * els.canvas.height / Math.max(1, rect.height);
-  if (renderState.mirror) x = els.canvas.width - x;
+  if (els.canvas.classList.contains("mirror")) x = els.canvas.width - x;
   [x, y] = mapRefineViewportPoint(
     [x, y],
     { width: els.canvas.width, height: els.canvas.height },
@@ -215,11 +263,20 @@ export function hasManualRefineChanges(): boolean {
 
 export function getDisplayLines(
   mapped: readonly MappedAtlasLine[],
+  cameraLandmarks?: readonly Vec3[],
 ): Array<MappedAtlasLine & {
   hidden?: boolean;
   hiddenPointRuns?: Array<[number, number]>;
 }> {
   const s = state();
+  if (photoRstlProjection?.system === renderState.system && cameraLandmarks) {
+    const { lines, bound } = photoRstlProjection;
+    return mapTrackedWrinkleLines(bound, cameraLandmarks, modelState.triangles || [])
+      .map((line, index) => ({
+        ...lines[index],
+        pts: line.points.map(([x, y]): Vec3 => [x, y, 0]),
+      }));
+  }
   if (s.active) {
     if (!s.lines) setLatestAutoLines(mapped);
     return s.lines || [...mapped];
@@ -232,6 +289,26 @@ export function getDisplayLines(
     });
   }
   return [...mapped];
+}
+
+let photoRstlProjection: {
+  system: string;
+  lines: EditableRefineLine[];
+  bound: ReturnType<typeof bindWrinkleLinesToFace>;
+} | null = null;
+
+export function startPhotoRstlProjection(photo: RefineDisplayResumeState, landmarks: readonly Vec3[]): void {
+  const lines = photo.lines ?? photo.latestAutoLines;
+  if (!lines?.length) return;
+  photoRstlProjection = {
+    system: renderState.system,
+    lines,
+    bound: bindWrinkleLinesToFace(lines.map((line, index) => ({
+      id: String(index),
+      className: line.region,
+      points: line.pts.map(([x, y]): [number, number] => [x, y]),
+    })), landmarks, modelState.triangles || []),
+  };
 }
 
 /** Commit current frozen-frame edits for transport to subsequent live frames. */
@@ -330,6 +407,7 @@ export function restoreRefineDisplayState(snapshot: RefineDisplayResumeState): v
 export function resetRefineForNewSource(
   { preserveLiveTransport = false }: { preserveLiveTransport?: boolean } = {},
 ): void {
+  photoRstlProjection = null;
   const s = state();
   const liveTransport = preserveLiveTransport ? s.liveTransport : null;
   s.active = false;
@@ -742,7 +820,7 @@ export function moveRefinePointer(event: PointerEvent): boolean {
   );
   s.selected = s.drag.pick;
   s.dirty = true;
-  requestRefineFrame();
+  requestDragRedraw();
   return true;
 }
 
@@ -800,7 +878,7 @@ export function nudgeSelected(direction: string): boolean {
   };
   const vector = vectors[direction];
   if (!vector) return false;
-  const visualX = renderState.mirror ? -vector[0] : vector[0];
+  const visualX = els.canvas.classList.contains("mirror") ? -vector[0] : vector[0];
   const offset: [number, number] = [visualX * s.nudgeStep, vector[1] * s.nudgeStep];
   captureHistory(`精调 ${line.name}`, false);
   const original = line.pts.map((point) => [...point] as Vec3);

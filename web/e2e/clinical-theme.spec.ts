@@ -8,7 +8,7 @@ const DARK_SIDEBAR = "rgb(13, 17, 23)";
 const DARK_PANEL = "rgb(18, 24, 32)";
 
 test("public workflow entrypoints share the blue clinical action theme", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/app", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".react-page")).toHaveClass(/dark-workbench-page/);
   const dashboardEyebrow = page.getByText("STATELESS WORKBENCH");
   await expect(dashboardEyebrow).toHaveClass(/text-blue-300/);
