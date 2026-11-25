@@ -1728,7 +1728,7 @@ assert.ok(!reviewPanel.includes('id="reviewDecision"') && !reviewPanel.includes(
 assert.ok(!reviewPanel.includes("ButtonRow"), "React review panel exposes one unambiguous save action without a redundant button row");
 assert.ok(reviewPanel.includes("WorkbenchCard"), "React review panel uses the shared shadcn-style workbench card primitive");
 assert.ok(reviewPanel.includes('variant="workbenchPrimary"'), "React review panel keeps primary workbench button styling through Button variants");
-assert.ok(incisionWorkbench.includes('to="/"'), "React incision workbench returns to the stateless tool launcher");
+assert.ok(incisionWorkbench.includes('to="/app"'), "React incision workbench returns to the stateless tool launcher");
 assert.ok(!incisionStagePanel.includes('to="/settings/atlas"'), "React incision stage hides atlas maintenance from the clinical workflow");
 assert.ok(!incisionStagePanel.includes('to="/annotate"'), "React incision stage should not bypass atlas settings");
 for (const dependencyType of incisionRuntimeDependencyTypes) {
@@ -1974,7 +1974,7 @@ assert.ok(annotateDrawPanel.includes("<Card"), "React annotate draw panel uses t
 assert.ok(annotateDrawPanel.includes('variant="workbenchPrimary"'), "React annotate draw panel keeps primary workbench button styling through Button variants");
 assert.ok(annotateHelpPanel.includes("标注帮助"), "React annotate help panel keeps the user-facing annotation guide");
 assert.ok(annotateHelpPanel.includes("HelpDisclosure"), "React annotate help panel uses the shared help disclosure primitive");
-assert.ok(annotateStagePanel.includes('to="/"'), "React annotate stage returns to the stateless tool launcher");
+assert.ok(annotateStagePanel.includes('to="/app"'), "React annotate stage returns to the stateless tool launcher");
 for (const id of [
   "annStatus",
   "lineList",
@@ -2010,7 +2010,7 @@ assert.ok(annotateSnapshotsService.includes("buildAnnotateDraftSnapshot"), "shar
 assert.ok(annotateSnapshotsService.includes("buildAnnotateSavedSummary"), "shared annotation snapshot service builds saved line summaries");
 assert.ok(annotateSnapshotsService.includes("buildAnnotateExportState"), "shared annotation snapshot service builds export capability state");
 assert.ok(annotateMeshSourcePanel.includes('to="/surgery"'), "React annotation mesh source panel links to the React surgery closure route");
-assert.ok(annotateMeshSourcePanel.includes('to="/"'), "React annotation mesh source panel returns to the stateless tool launcher");
+assert.ok(annotateMeshSourcePanel.includes('to="/app"'), "React annotation mesh source panel returns to the stateless tool launcher");
 for (const dependencyType of annotateRuntimeDependencyTypes) {
   assert.ok(
     fs.existsSync(path.join(web, dependencyType)),

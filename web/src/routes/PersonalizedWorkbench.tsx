@@ -10,7 +10,7 @@ export function PersonalizedWorkbench() {
             </div>
             <h1>中性脸 RSTL 个性化</h1>
             <p className="personalized-hint personalized-heading-hint">最新 v8.1.67 · 133 条 RSTL · 每个表情采集一次 · 采集中质量检查 · 采集后在线 YOLO 0.07 严格并集 + V6</p>
-            <a className="personalized-nav" href="/">← 返回研究工具入口</a>
+<a className="personalized-nav" href="/app">← 返回研究工具入口</a>
           </div>
 
           <div className="personalized-card" id="guideCard">
@@ -62,7 +62,7 @@ export function PersonalizedWorkbench() {
               <EvidenceCanvas title="V6 去重/骨架证据图" hint="V6 实际用于曲线匹配的单次骨架证据；原始严格并集仍单独保留。" canvasId="wrinkleEvidenceCanvas" buttonId="wrinkleEvidenceDownloadBtn" buttonLabel="下载 V6 证据图 PNG" />
             </div>
             <button className="personalized-button primary" id="usePersonalizedBtn" type="button" disabled>进入切口设计（应用个性化 RSTL）</button>
-            <a className="personalized-button personalized-nav-button" href="/">返回研究工具入口</a>
+<a className="personalized-button personalized-nav-button" href="/app">返回研究工具入口</a>
             <div className="personalized-exports" id="exports"><span className="personalized-hint">完成后可下载对比图</span></div>
           </div>
           <p className="personalized-disclaimer">local YOLO strict-union + RSTL V6 refinement — experimental, not a surgical instruction</p>

@@ -111,6 +111,10 @@ async function runModes(base, production) {
         viewport: { width: input.width, height: 844 },
         isMobile: touch, hasTouch: touch,
       });
+      if (!touch) {
+        // Desktop emulation can still report the Windows host's touch hardware.
+        await context.addInitScript(() => Object.defineProperty(navigator, "maxTouchPoints", { get: () => 0 }));
+      }
       if (input.hover) {
         await context.addInitScript(({ fine }) => {
           const nativeMatchMedia = window.matchMedia.bind(window);

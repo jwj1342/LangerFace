@@ -12,7 +12,7 @@
       "可恢复"
     ],
     "status": "candidate",
-    "sourceDigest": "8313a1e44b006b3227cb38dafb273a3552390871ebebff4aae05e55eb301db1d",
+    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "changeSlug": "public-static-refinement-runtime-recovery",
     "previous": {
@@ -320,11 +320,11 @@
   },
   "operatorEvaluation": {
     "status": "pending",
-    "sourceDigest": "8313a1e44b006b3227cb38dafb273a3552390871ebebff4aae05e55eb301db1d"
+    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b"
   },
   "editorSaveConfirmation": {
     "status": "pending",
-    "sourceDigest": "8313a1e44b006b3227cb38dafb273a3552390871ebebff4aae05e55eb301db1d"
+    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b"
   },
   "history": [
     {

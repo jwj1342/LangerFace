@@ -521,7 +521,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
   await uploadGeneratedPhotoWithControlledMarkers(page, [
-    { xRatio: 0.32, yRatio: 0.52, radiusRatio: 0.035, interiorRetrace: true },
+    { xRatio: 0.72, yRatio: 0.50, radiusRatio: 0.035, interiorRetrace: true },
     { xRatio: 0.50, yRatio: 0.30, radiusRatio: 0.035, interiorRetrace: true },
     { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 },
   ], "#fileInput");
@@ -532,7 +532,7 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
 
   const initialMarkerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
   await initialMarkerButton.click();
-  await clickWorkflowCanvasRatio(page, 0.32, 0.52);
+  await clickWorkflowCanvasRatio(page, 0.72, 0.50);
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateType), { timeout: 45_000 }).toContain("梭形");
   const initialCandidateLength = await page.evaluate(() => Reflect.get(window, "__pr226Incision")?.resultView?.candidateLength);
   expect(initialCandidateLength).toMatch(/mm/);

@@ -284,7 +284,7 @@ test("route remount removes and rebinds one canvas listener set", async ({ page 
   });
 
   await page.getByRole("link", { name: "返回工具入口" }).click();
-  await expect(page).toHaveURL(/\/$/);
+await expect(page).toHaveURL(/\/app$/);
   await expect.poll(listenerBalance).toEqual({
     pointerdown: 0,
     pointermove: 0,

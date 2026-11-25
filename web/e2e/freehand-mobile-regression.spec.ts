@@ -1,7 +1,12 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
 import { captureMarkerIdentity } from "../../tools/marker_runtime_identity.mts";
+
+function emulateMouseOnly(context: BrowserContext) {
+  // Playwright's hasTouch=false can still expose the Windows host's touch points.
+  return context.addInitScript(() => Object.defineProperty(navigator, "maxTouchPoints", { get: () => 0 }));
+}
 
 async function assertSourceRuntime(page: Page) {
   const expected = captureMarkerIdentity(undefined);
@@ -176,6 +181,7 @@ for (const layout of scrollLayouts) {
       isMobile: layout.touch,
       deviceScaleFactor: 1,
     });
+    if (!layout.touch) await emulateMouseOnly(context);
     const page = await context.newPage();
     try {
       await page.goto("/app/workflow?developer=1");
@@ -258,6 +264,7 @@ test("workflow wheel assertion detects a locked narrow fallback root", async ({ 
     baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
   });
   try {
+    await emulateMouseOnly(context);
     const page = await context.newPage();
     await page.goto("/app/workflow?developer=1");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
@@ -285,6 +292,7 @@ test("narrow mouse layout preserves the original canvas and real refine quality"
     baseURL, viewport: { width: 393, height: 726 }, hasTouch: false, isMobile: false,
   });
   try {
+    await emulateMouseOnly(context);
     const page = await context.newPage();
     await page.goto("/app/workflow?developer=1");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
@@ -344,6 +352,7 @@ test("width transitions retain desktop controls and layer state on fine pointers
     baseURL, viewport: { width: 900, height: 900 }, hasTouch: false, isMobile: false,
   });
   try {
+    await emulateMouseOnly(context);
     const page = await context.newPage();
     await page.goto("/app/workflow?developer=1");
     await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪");
