@@ -306,17 +306,17 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "5e80668d4ac359b1d99f9421b607d68273e65fbb286665825f20f3dcc59922a5",
-    "manifestPath": "local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/manifest.json",
-    "manifestSha256": "416b254c66f0a4f939866c4ee06d43f6664033683ab8126bb8a3fe8ab1e3a230",
+    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
+    "manifestPath": "local_outputs/recovery-packages/pr248-cbe8f55/manifest.json",
+    "manifestSha256": "37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad",
     "scopeConfigSha256": "81e074193fada64bb8ac1aafc6a47d379be58fd174945484d88a3df77e480ce8",
-    "verifiedAt": "2026-11-23T08:01:47.141116+00:00",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-recovery-fix-20261123",
-    "note": "Self-contained replacement archive includes explicitly listed RSTL performance tests, matching runtime implementations and fixture. Previous frozen archive retained unchanged."
+    "verifiedAt": "2026-11-25",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-workflow-recovery-20261125",
+    "note": "Verified source-scope archive for cbe8f55; Git is needed for files outside this scope. The earlier RSTL integration archive remains frozen."
   },
   "scopeBoundaryReview": {
     "status": "pending",
-    "scope": "Workflow camera and rendering integration; exact revision scope review pending."
+    "scope": "PR #248 changes shared photo/camera, rendering, model loading, and browser test code outside the default scope. Operator confirmation for this archive is pending."
   },
   "operatorEvaluation": {
     "status": "pending",

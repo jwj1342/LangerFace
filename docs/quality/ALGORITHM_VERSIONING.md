@@ -1,3 +1,11 @@
+<a id="pr248-workflow-recovery-20261125"></a>
+
+## PR #248 workflow recovery (2026-11-25)
+
+The release gate requires an archive matching the current runtime. The archive at `local_outputs/recovery-packages/pr248-cbe8f55/manifest.json` records source commit `cbe8f55b9e3752c9d341168226efee55c3a088f8` and source digest `7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b`. All 272 source copies are checked against the manifest's byte lengths and SHA-256 values. The existing video fixture is fingerprinted only; its contents and model weights are not copied. Files outside the archive scope are recovered from the recorded Git commit.
+
+The manifest's dirty-worktree boundary list is empty because the archive was created from a clean checkout. The full PR diff against `5329c2aaa3cfb7e86ec1985e273b09d564d495bb` still includes shared photo/camera, rendering, model loading and browser test code outside the default archive scope. The scope review, operator evaluation and editor save confirmation remain pending. The archive verification does not supply those confirmations.
+
 <a id="rstl-wrinkle-performance-recovery-eol-20261123"></a>
 
 ## PR #247 recovery checkout line endings (2026-11-23)

@@ -1,0 +1,50 @@
+import {
+  StageCanvas,
+  StageActions,
+  StageMeta,
+  StageOverlayMessage,
+  StageShell,
+  StageStatus,
+  StageViewport,
+  StageZoomStrip,
+} from "./StageShell";
+import type { ReactNode } from "react";
+
+interface LiveStagePanelProps {
+  compactWorkflowChrome?: boolean;
+  workflowActions?: ReactNode;
+  workflowOverlay?: ReactNode;
+  workflowStatus?: ReactNode;
+}
+
+export function LiveStagePanel({
+  compactWorkflowChrome = false,
+  workflowActions,
+  workflowOverlay,
+  workflowStatus,
+}: LiveStagePanelProps = {}) {
+  return (
+    <StageShell
+      top={(
+        <>
+          <StageStatus id="livePill" hidden={compactWorkflowChrome} aria-hidden={compactWorkflowChrome}>待机</StageStatus>
+          {workflowStatus}
+          {workflowActions ? <StageActions className="workflow-stage-actions">{workflowActions}</StageActions> : null}
+          <StageMeta id="fps" hidden={compactWorkflowChrome} aria-hidden={compactWorkflowChrome}>— fps</StageMeta>
+        </>
+      )}
+    >
+      <StageViewport>
+        <video id="video" playsInline autoPlay muted />
+        <StageCanvas id="canvas" mirror width="1280" height="720" />
+        {workflowOverlay ? <svg id="workflowPhotoVectors" aria-hidden="true"
+          preserveAspectRatio="none" style={{ display: "none" }} /> : null}
+        {workflowOverlay}
+        <StageOverlayMessage id="overlayMsg" hidden={compactWorkflowChrome} aria-hidden={compactWorkflowChrome}>
+          点击「摄像头」或「上传照片」开始
+        </StageOverlayMessage>
+      </StageViewport>
+      <StageZoomStrip id="zoomStrip" />
+    </StageShell>
+  );
+}

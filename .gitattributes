@@ -6,3 +6,4 @@ docs/quality/algorithm-archive-scope.json text eol=crlf
 local_outputs/recovery-packages/pr244-master-20261117/** -text
 local_outputs/recovery-packages/rstl-wrinkle-performance-20261123/** -text
 local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/** -text
+local_outputs/recovery-packages/pr248-cbe8f55/** -text
