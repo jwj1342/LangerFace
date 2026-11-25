@@ -1,0 +1,1078 @@
+// Dependency-free tests for the TypeScript incision workflow services.
+import fs from "node:fs";
+
+import {
+  __incisionToolsForTests as T,
+  annotateCandidateEngineeringViolations,
+  buildMediaPipeEngineeringExclusionZones,
+} from "../web/src/services/incisionTools.ts";
+
+let passed = 0;
+function ok(cond, msg) {
+  if (!cond) throw new Error("FAIL: " + msg);
+  passed++;
+}
+function near(a, b, eps = 1e-9) {
+  return Math.abs(a - b) <= eps;
+}
+function vectorNear(actual, wanted, eps = 1e-12) {
+  return actual.length === wanted.length && actual.every((value, index) => near(value, wanted[index], eps));
+}
+function sub(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+function norm(a) {
+  return Math.hypot(a[0], a[1], a[2]);
+}
+function leftTipAngleDeg(candidate) {
+  const outline = candidate.outline;
+  const tip = outline[0];
+  const upper = sub(outline[1], tip);
+  const lower = sub(outline[outline.length - 1], tip);
+  const cos = Math.max(-1, Math.min(1, dot(upper, lower) / (norm(upper) * norm(lower))));
+  return Math.acos(cos) * 180 / Math.PI;
+}
+
+function sameJson(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function rectangularBoundary(cx, cy, width, height) {
+  return [
+    [cx - width / 2, cy - height / 2, 0],
+    [cx + width / 2, cy - height / 2, 0],
+    [cx + width / 2, cy + height / 2, 0],
+    [cx - width / 2, cy + height / 2, 0],
+  ];
+}
+
+const clinicalRules = JSON.parse(
+  fs.readFileSync(new URL("../assets/clinical_rules_face_incision.json", import.meta.url), "utf8"),
+);
+const fusiformParity = JSON.parse(
+  fs.readFileSync(new URL("../tests/fixtures/fusiform_candidates.json", import.meta.url), "utf8"),
+);
+ok(fusiformParity.schema === "fusiform-incision-parity/v0.2", "fusiform parity fixture schema is current");
+for (const fixture of fusiformParity.cases) {
+  const rules = structuredClone(T.DEFAULT_RULES);
+  Object.assign(rules.fusiform_cutaneous, fixture.rules);
+  rules.version = fixture.rules.version;
+  const candidate = T.generateFusiformIncision(
+    fixture.tumor,
+    fixture.direction,
+    fixture.units_per_mm,
+    fixture.normal,
+    rules,
+  );
+  const expected = fixture.expected;
+  for (const [key, value] of Object.entries(expected.normalization || {})) {
+    ok(typeof value === "number" ? near(candidate.metrics[key], value) : candidate.metrics[key] === value,
+      `${fixture.name}: normalization ${key}`);
+  }
+  if (expected.normalization) {
+    if (fixture.tumor.boundary.length === 4) {
+      ok(near(candidate.metrics.detected_lesion_area_mm2, 4), `${fixture.name}: analytic diamond area`);
+      ok(near(candidate.metrics.detected_enclosing_diameter_mm, 4), `${fixture.name}: analytic enclosing diameter`);
+      ok(near(candidate.metrics.detected_equivalent_diameter_mm, 4 / Math.sqrt(Math.PI)), `${fixture.name}: equivalent diameter`);
+      ok(near(candidate.metrics.detected_lesion_compactness, Math.PI / 5), `${fixture.name}: compactness`);
+      ok(vectorNear(candidate.metrics.detected_boundary_centroid, [2, 0, 0]), `${fixture.name}: area centroid retained for audit`);
+    }
+    if (fixture.tumor.photo_boundary_enclosing_diameter_mm === 2 && fixture.tumor.boundary.length === 4) {
+      ok(candidate.metrics.boundary_point_count === 4, `${fixture.name}: original detected boundary remains containment evidence`);
+      ok(near(candidate.metrics.boundary_area_mm2, 4), `${fixture.name}: original detected boundary area is retained`);
+      ok(candidate.metrics.boundary_scale_shape === "directional_extents", `${fixture.name}: boundary drives short-axis containment`);
+    }
+    ok(candidate.provenance.boundary_source === fixture.tumor.boundary_source, `${fixture.name}: source retained`);
+    ok(candidate.provenance.lesion_normalization_status === candidate.metrics.lesion_normalization_status,
+      `${fixture.name}: provenance and metrics agree`);
+  }
+  if (!candidate.metrics.boundary_used) {
+    ok(vectorNear(candidate.center, expected.center), `${fixture.name}: boundary-free center matches shared golden`);
+  } else {
+    ok(vectorNear(candidate.metrics.lesion_center, fixture.tumor.center),
+      `${fixture.name}: lesion center remains available independently of the candidate center`);
+    ok(candidate.metrics.boundary_envelope_outside_count === 0,
+      `${fixture.name}: movable candidate center still fully encloses the lesion boundary`);
+  }
+  ok(vectorNear(candidate.axis, expected.axis), `${fixture.name}: axis matches shared golden`);
+  ok(vectorNear(candidate.width_axis, expected.width_axis), `${fixture.name}: width axis matches shared golden`);
+  ok(candidate.outline.length === expected.outline_points, `${fixture.name}: outline count matches shared golden`);
+  ok(near(candidate.length_mm, candidate.width_mm * fixture.rules.length_to_width_ratio),
+    `${fixture.name}: final candidate keeps the configured fixed ratio after boundary fitting`);
+  ok(candidate.length_mm > 0,
+    `${fixture.name}: reference size is not a lower bound on the fitted candidate`);
+  ok(near(candidate.metrics.length_ratio_target_mm,
+    candidate.metrics.length_ratio_basis_mm * fixture.rules.length_to_width_ratio),
+  `${fixture.name}: long-axis target is three times the equal-area reference circle`);
+  ok(near(candidate.metrics.tip_angle_target_deg, expected.tip_angle_target_deg),
+    `${fixture.name}: tip target matches shared golden`);
+  ok(candidate.metrics.tip_angle_limited_by_ratio === expected.tip_angle_limited_by_ratio,
+    `${fixture.name}: ratio-limit state matches shared golden`);
+  ok(candidate.metrics.boundary_used === (Array.isArray(fixture.tumor.boundary)
+    && fixture.tumor.boundary.length >= 3 && expected.boundary_used),
+    `${fixture.name}: only an actual boundary supplies short-axis containment evidence`);
+  for (const field of ["boundary_point_count", "boundary_area_mm2", "boundary_envelope_outside_count"]) {
+    if (Object.hasOwn(expected, field)) {
+      ok(near(candidate.metrics[field], expected[field]), `${fixture.name}: ${field} matches shared golden`);
+    }
+  }
+}
+ok(T.DEFAULT_RULES.version === clinicalRules.version, "web clinical rules version matches asset");
+for (const [section, fields] of Object.entries({
+  linear_subcutaneous: ["length_multiplier", "min_length_mm", "max_length_mm"],
+  fusiform_cutaneous: ["length_to_width_ratio", "tip_angle_deg", "min_length_mm", "max_length_mm", "samples"],
+})) {
+  for (const field of fields) {
+    ok(T.DEFAULT_RULES[section][field] === clinicalRules[section][field],
+      `web ${section}.${field} matches clinical rules asset`);
+  }
+}
+for (const field of [
+  "low_direction_confidence",
+  "low_region_confidence",
+  "free_margin_distance_warn_mm",
+  "min_freehand_boundary_points",
+  "min_boundary_area_diameter_disk_fraction",
+  "boundary_center_shift_diameter_multiplier",
+]) {
+  ok(T.DEFAULT_RULES.guardrails[field] === clinicalRules.guardrails[field],
+    `web guardrails.${field} matches clinical rules asset`);
+}
+ok(sameJson(
+  T.DEFAULT_RULES.guardrails.free_margin_distance_thresholds_mm,
+  clinicalRules.guardrails.free_margin_distance_thresholds_mm,
+), "web free-margin thresholds match clinical rules asset");
+ok(sameJson(
+  T.DEFAULT_RULES.guardrails.protective_direction_hints,
+  clinicalRules.guardrails.protective_direction_hints,
+), "web protective direction hints match clinical rules asset");
+
+const verts = [
+  [0, 0, 0],
+  [10, 0, 0],
+  [0, 10, 0],
+  [10, 10, 0],
+];
+const tris = [[0, 1, 2], [1, 3, 2]];
+const atlas = {
+  system: "rstl",
+  lines: [{
+    name: "horizontal_rstl",
+    region: "cheek",
+    points: [
+      [0, 0.7, 0.1],
+      [0, 0.35, 0.45],
+      [0, 0.0, 0.8],
+    ],
+  }],
+};
+
+const direction = T.queryDirection([4, 2, 0], verts, tris, atlas);
+ok(direction.confidence > 0.5, "queryDirection returns useful confidence near atlas line");
+ok(Math.abs(direction.vector[0]) > 0.95, "queryDirection follows horizontal atlas tangent");
+ok(direction.source === "rstl_atlas_weighted_nearest", "queryDirection uses weighted nearest support");
+ok(direction.support_count >= 1, "queryDirection records support count");
+const repeatedAngles = Array.from({ length: 100 }, () => T.queryDirection([4, 2, 0], verts, tris, atlas).angle_deg);
+ok(Math.max(...repeatedAngles) - Math.min(...repeatedAngles) < 1e-9, "queryDirection is stable across repeated static queries");
+const farDirection = T.queryDirection([10, 10, 0], verts, tris, atlas);
+ok(farDirection.confidence < 0.1, "queryDirection returns low confidence far from atlas support");
+ok(farDirection.confidence_reasons.includes("nearest_atlas_support_far"),
+  "queryDirection records far-atlas confidence reason");
+const emptyDirection = T.queryDirection([4, 2, 0], verts, tris, { system: "rstl", lines: [] });
+ok(emptyDirection.confidence === 0 && emptyDirection.confidence_reasons.includes("empty_atlas"),
+  "queryDirection records empty-atlas confidence reason");
+const point3dAtlas = {
+  system: "rstl",
+  topologyId: "flame-2023",
+  lines: [{
+    name: "flame_points3d_horizontal",
+    points3d: [[1, 1, 0], [4, 1, 0], [7, 1, 0]],
+    points: [[9999, 0, 0]],
+  }],
+};
+const point3dDirection = T.queryDirection([4, 1, 0], verts, tris, point3dAtlas);
+ok(point3dDirection.confidence > 0.8, "queryDirection consumes FLAME preview points3d atlas samples");
+ok(Math.abs(point3dDirection.vector[0]) > 0.95, "points3d atlas tangent drives the RSTL direction");
+
+const crossingBundlesDirection = T.queryDirection([5, 5, 0], verts, tris, {
+  system: "rstl",
+  lines: [
+    { name: "local_vertical", points3d: [[5, 4.9, 0], [5, 5, 0], [5, 5.1, 0]] },
+    { name: "nearby_horizontal", points3d: [[4.96, 5.002, 0], [4.98, 5.002, 0], [5.02, 5.002, 0], [5.04, 5.002, 0]] },
+  ],
+});
+ok(Math.abs(crossingBundlesDirection.vector[1]) > 0.99,
+  "queryDirection follows the nearest RSTL line instead of averaging a crossing bundle");
+ok(crossingBundlesDirection.support_count <= 3,
+  "queryDirection excludes directionally incompatible crossing support");
+
+const wrapVerts = [
+  [0.2, 0.0035, 0],
+  [0, 0, 0],
+  [-0.2, -0.0035, 0],
+  [0.2, -0.0035, 0],
+  [0, 0, 0],
+  [-0.2, 0.0035, 0],
+];
+const wrapTris = [[0, 1, 2], [3, 4, 5]];
+const wrapAtlas = {
+  system: "rstl",
+  lines: [
+    { name: "wrap_negative", region: "cheek", points: [[0, 1, 0], [0, 0, 1], [0, 0, 0]] },
+    { name: "wrap_positive", region: "cheek", points: [[1, 1, 0], [1, 0, 1], [1, 0, 0]] },
+  ],
+};
+const wrapDirection = T.queryDirection([0, 0, 0], wrapVerts, wrapTris, wrapAtlas);
+ok(wrapDirection.support_count >= 2, "queryDirection keeps local wrapped-angle support samples");
+ok(wrapDirection.angular_spread_deg < 3, "queryDirection treats 179/-179 as low axial spread");
+ok(wrapDirection.confidence > 0.9, "queryDirection does not penalize confidence across axial angle wrap");
+
+const linear = T.generateLinearIncision(
+  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 1.2, 0.6), boundary_source: "manual_freehand" },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+);
+ok(linear.type === "linear", "linear candidate generated");
+ok(near(linear.length_mm, 12), "linear length equals the boundary projection along RSTL");
+ok(near(linear.metrics.length_target_mm, 12), "linear records the directional Feret target length");
+ok(near(linear.metrics.diameter_coverage_deficit_mm, 0), "linear records zero diameter coverage deficit");
+ok(near(linear.endpoints[0][0], 3.4) && near(linear.endpoints[1][0], 4.6), "linear endpoints match the boundary projection limits");
+ok(linear.provenance.candidate_version === 2 && Array.isArray(linear.provenance.edit_history),
+  "linear candidate starts with versioned provenance");
+const lowDirectionLinear = T.generateLinearIncision(
+  { kind: "subcutaneous", center: [10, 10, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(10, 10, 1, 0.5), boundary_source: "controlled_marker_confirmed" },
+  farDirection,
+  0.1,
+);
+ok(lowDirectionLinear.provenance.direction_confidence_reasons.includes("nearest_atlas_support_far"),
+  "linear provenance keeps RSTL confidence reasons");
+const lowDirectionGuard = T.evaluateGuardrails(lowDirectionLinear, { region: "cheek", confidence: 0.8 });
+ok(lowDirectionGuard.warnings.some((w) => w.code === "low_rstl_confidence" && w.message.includes("nearest_atlas_support_far")),
+  "low RSTL guardrail reports confidence reason");
+
+const longBoundaryLinear = T.generateLinearIncision(
+  { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 8, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 4, 0.6), boundary_source: "manual_freehand" },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+);
+ok(near(longBoundaryLinear.length_mm, 40), "linear boundary length is not clipped by the retired 35 mm cap");
+ok(longBoundaryLinear.metrics.length_clamped_by_max === false, "linear metrics record that no legacy cap was applied");
+let missingBoundaryBlocked = false;
+try {
+  T.generateLinearIncision(
+    { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5 },
+    { vector: [1, 0, 0], confidence: 0.9 },
+    0.1,
+  );
+} catch (error) {
+  missingBoundaryBlocked = String(error).includes("requires a valid detected or clinician-drawn boundary");
+}
+ok(missingBoundaryBlocked, "subcutaneous generation blocks instead of inventing a circle when boundary is missing");
+
+const fusiform = T.generateFusiformIncision(
+  {
+    kind: "cutaneous",
+    center: [4, 2, 0],
+    diameter_mm: 8,
+    margin_mm: 2,
+    author: "clinician",
+  },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(fusiform.type === "fusiform", "fusiform candidate generated");
+ok(near(fusiform.width_mm, 12), "fusiform width includes margins");
+ok(near(fusiform.length_mm, 36), "fusiform final long axis remains three times its margin-expanded short axis");
+ok(near(fusiform.metrics.length_ratio_basis_mm, 8),
+  "fusiform long axis uses the equal-area reference-circle diameter, not its widened short axis");
+ok(fusiform.metrics.length_ratio_basis === "equivalent_area_reference_circle_diameter",
+  "fusiform records the confirmed equal-area reference-circle basis");
+ok(fusiform.metrics.clinical_ratio_basis_status === "confirmed_equivalent_area_reference_circle",
+  "fusiform records the confirmed baseline geometry contract");
+ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform tip angle follows configured rule");
+ok(fusiform.metrics.profile === "cubic_hermite_tip_angle_constrained", "fusiform records constrained profile");
+ok(near(fusiform.metrics.tip_angle_error_deg, 0, 1e-9), "fusiform records near-zero tip angle error");
+ok(fusiform.metrics.outline_area_mm2 > 0, "fusiform records outline area");
+ok(fusiform.metrics.outline_self_intersection === false, "fusiform outline is simple");
+ok(fusiform.metrics.outline_half_width_monotone === true, "fusiform outline tapers monotonically");
+ok(fusiform.metrics.outline_symmetry_max_error_mm < 1e-9, "fusiform outline records symmetry error");
+ok(fusiform.metrics.boundary_envelope_min_margin_mm === null, "fusiform without boundary records no envelope margin");
+ok(fusiform.metrics.boundary_envelope_outside_count === 0, "fusiform without boundary records zero outside boundary points");
+ok(near(fusiform.tip_angle_deg, 30, 1e-9), "fusiform profile metadata preserves the configured tip rule");
+ok(fusiform.outline.length > 20, "fusiform outline is renderable");
+
+for (const [diameterMm, expectedLengthMm] of [[2, 6], [3, 9], [4, 12]]) {
+  const smallFusiform = T.generateFusiformIncision(
+    {
+      kind: "cutaneous",
+      center: [0, 0, 0],
+      diameter_mm: diameterMm,
+      margin_mm: 0,
+      author: "clinician",
+    },
+    { vector: [1, 0, 0], confidence: 0.9 },
+    1,
+    [0, 0, 1],
+  );
+  ok(near(smallFusiform.width_mm, diameterMm),
+    `${diameterMm} mm cutaneous lesion keeps its own zero-margin candidate width`);
+  ok(near(smallFusiform.length_mm, expectedLengthMm),
+    `${diameterMm} mm cutaneous lesion keeps the 3:1 candidate length instead of reusing the 4 mm floor`);
+}
+
+const ellipseBoundaryIsDisplayOnly = T.generateFusiformIncision(
+  {
+    kind: "cutaneous",
+    center: [0, 0, 0],
+    diameter_mm: 8,
+    margin_mm: 0,
+    boundary: [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]],
+    boundary_mode: "ellipse",
+    boundary_source: "manual_ellipse",
+    author: "clinician",
+  },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  1,
+  [0, 0, 1],
+);
+ok(near(ellipseBoundaryIsDisplayOnly.length_mm, 24)
+  && near(ellipseBoundaryIsDisplayOnly.width_mm, 8),
+"ellipse-mode candidate scale stays at the 8 mm operator diameter instead of changing with projected boundary size");
+ok(ellipseBoundaryIsDisplayOnly.metrics.boundary_drives_candidate_geometry === false,
+  "ellipse boundary is display geometry only; only drawn or detected boundaries may override the diameter");
+
+const boundaryTumor = {
+  kind: "cutaneous",
+  center: [4, 2, 0],
+  diameter_mm: 8,
+  margin_mm: 1,
+  boundary: [[3, 2, 0], [4, 3, 0], [7, 2, 0], [4, 1, 0]],
+  boundary_mode: "freehand",
+  boundary_source: "manual_freehand",
+  author: "clinician",
+};
+const boundarySummary = T.summarizeTumorBoundary(boundaryTumor, [1, 0, 0], [0, 0, 1], 0.1);
+ok(boundarySummary.boundary_used === true, "freehand boundary summary is used");
+ok(boundarySummary.axis_diameter_mm > 35, "freehand boundary records long-axis coverage");
+const boundaryQuality = T.summarizeTumorInputQuality(boundaryTumor);
+ok(boundaryQuality.passed === true, "sparse cutaneous boundary input remains reviewable");
+ok(boundaryQuality.warnings.some((w) => w.code === "sparse_cutaneous_boundary_input"),
+  "tumor input quality flags sparse freehand boundary");
+const boundaryFusiform = T.generateFusiformIncision(boundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+ok(boundaryFusiform.metrics.boundary_used === true, "fusiform candidate records boundary use");
+ok(vectorNear(boundaryFusiform.metrics.lesion_center, boundaryTumor.center),
+  "fusiform candidate retains the selected lesion center independently");
+ok(boundaryFusiform.length_mm >= boundaryFusiform.metrics.boundary_axis_diameter_mm + 2,
+  "fusiform length covers freehand boundary plus margin");
+ok(boundaryFusiform.metrics.axis_coverage_deficit_mm <= 1e-6,
+  "fixed-ratio fitting keeps the configured margin at both long-axis ends");
+ok(boundaryFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
+  "fusiform records non-negative boundary envelope margin for contained freehand boundary");
+ok(boundaryFusiform.metrics.boundary_envelope_outside_count === 0,
+  "fusiform records zero outside points for contained freehand boundary");
+ok(boundaryFusiform.metrics.lesion_normalization_applied === true,
+  "manual freehand enters the shared boundary-scale normalization contract");
+ok(boundaryFusiform.metrics.clinical_scale_source === "manual_freehand_enclosing_circle",
+  "manual freehand records the drawn boundary as its scale source");
+const boundaryFusiformWithDifferentSlider = T.generateFusiformIncision(
+  { ...boundaryTumor, diameter_mm: 30 },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(near(boundaryFusiformWithDifferentSlider.width_mm, boundaryFusiform.width_mm)
+  && near(boundaryFusiformWithDifferentSlider.length_mm, boundaryFusiform.length_mm),
+"changing the disabled manual diameter does not resize a freehand cutaneous candidate");
+
+const controlledMarkerTumor = {
+  ...boundaryTumor,
+  center: [3.8, 2, 0],
+  diameter_mm: 8,
+  margin_mm: 1,
+  boundary: [[3.7, 1.8, 0], [4.3, 1.8, 0], [4.3, 2, 0], [4, 2.2, 0], [3.7, 2, 0]],
+  boundary_mode: "controlled_marker",
+  boundary_source: "controlled_marker_confirmed",
+};
+const controlledMarkerFusiform = T.generateFusiformIncision(
+  controlledMarkerTumor,
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(controlledMarkerFusiform.metrics.lesion_normalization_applied === true,
+  "controlled marker uses the explicit lesion-normalization contract");
+ok(controlledMarkerFusiform.metrics.boundary_drives_candidate_geometry === true,
+  "controlled marker boundary drives envelope centering and containment without deforming the standard fusiform profile");
+ok(controlledMarkerFusiform.width_mm
+  >= controlledMarkerFusiform.metrics.boundary_selected_center_perp_diameter_mm + controlledMarkerTumor.margin_mm * 2,
+"controlled marker short axis starts from the actual boundary span plus bilateral margin and may expand for full tapered-envelope coverage");
+ok(controlledMarkerFusiform.metrics.boundary_envelope_outside_count === 0,
+  "controlled marker fusiform encloses every detected boundary point");
+ok(controlledMarkerFusiform.metrics.outline_self_intersection === false
+  && controlledMarkerFusiform.metrics.outline_half_width_monotone === true,
+"controlled marker envelope correction preserves a simple, smoothly tapered fusiform");
+ok(vectorNear(controlledMarkerFusiform.metrics.lesion_center, controlledMarkerTumor.center),
+  "controlled marker retains the detector-confirmed lesion center while solving an independent incision center");
+ok(near(controlledMarkerFusiform.metrics.length_ratio_basis_mm,
+  controlledMarkerFusiform.metrics.detected_equivalent_diameter_mm),
+  "controlled marker long axis comes from the detected equal-area reference circle");
+ok(controlledMarkerFusiform.metrics.clinical_scale_source === "controlled_marker_enclosing_circle",
+  "controlled marker candidate records the detected region as the scale source");
+ok(controlledMarkerFusiform.metrics.operator_diameter_mm === controlledMarkerTumor.diameter_mm,
+  "the former operator diameter remains available as an audit value");
+const faceEdgePhotoScaledMarker = T.generateFusiformIncision(
+  {
+    ...controlledMarkerTumor,
+    center: [0, 0, 0],
+    margin_mm: 0,
+    boundary: [[-15, -8, 0], [12, -9, 0], [18, 0, 0], [10, 11, 0], [-14, 9, 0]],
+    photo_boundary_enclosing_diameter_mm: 4,
+  },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  1,
+  [0, 0, 1],
+);
+ok(faceEdgePhotoScaledMarker.width_mm >= faceEdgePhotoScaledMarker.metrics.boundary_selected_center_perp_diameter_mm,
+  "face-edge surface snapping keeps the actual detected boundary as short-axis containment evidence");
+ok(near(faceEdgePhotoScaledMarker.length_mm, faceEdgePhotoScaledMarker.width_mm * 3),
+  "photo-space controlled-marker scale keeps the final candidate at exactly 3:1");
+ok(faceEdgePhotoScaledMarker.metrics.photo_boundary_enclosing_diameter_mm === 4,
+  "the preserved photo-space scale remains available for audit");
+const controlledMarkerWithDifferentManualDiameter = T.generateFusiformIncision(
+  { ...controlledMarkerTumor, diameter_mm: 30 },
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+);
+ok(near(controlledMarkerWithDifferentManualDiameter.width_mm, controlledMarkerFusiform.width_mm)
+  && near(controlledMarkerWithDifferentManualDiameter.length_mm, controlledMarkerFusiform.length_mm),
+"changing the manual diameter does not resize a controlled cutaneous candidate");
+const longAsymmetricControlledMarker = T.generateFusiformIncision({
+  ...controlledMarkerTumor,
+  center: [0, 0, 0],
+  boundary: [[-2, -4, 0], [1, -5, 0], [12, -1, 0], [15, 0, 0], [12, 1, 0], [1, 5, 0], [-2, 4, 0]],
+}, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
+ok(vectorNear(longAsymmetricControlledMarker.metrics.lesion_center, [0, 0, 0]),
+  "a long one-sided lesion retains its lesion center independently of the optimized incision center");
+ok(longAsymmetricControlledMarker.metrics.candidate_center_shift_mm >= 0,
+  "the fixed-ratio solver reports the candidate-to-lesion center displacement");
+ok(longAsymmetricControlledMarker.metrics.boundary_envelope_outside_count === 0,
+  "the smooth fusiform fully contains a long asymmetric controlled boundary");
+ok(longAsymmetricControlledMarker.metrics.outline_self_intersection === false
+  && longAsymmetricControlledMarker.metrics.outline_half_width_monotone === true,
+"full asymmetric coverage preserves a simple and smoothly tapered outline");
+const perpendicularCornerFusiform = T.generateFusiformIncision({
+  ...boundaryTumor,
+  center: [0, 0, 0],
+  diameter_mm: 8,
+  margin_mm: 1,
+  boundary: [[-12, -12, 0], [12, -12, 0], [12, 12, 0], [-12, 12, 0]],
+}, { vector: [1, 0, 0], confidence: 0.9 }, 1, [0, 0, 1]);
+ok(perpendicularCornerFusiform.metrics.fixed_ratio_containment_feasible === false
+  && perpendicularCornerFusiform.metrics.length_clamped_by_max === true,
+  "an oversized perpendicular boundary reports the fixed-ratio max-length limit explicitly");
+ok(near(perpendicularCornerFusiform.length_mm, perpendicularCornerFusiform.width_mm * 3),
+  "perpendicular boundary coverage expands both dimensions at the fixed 3:1 ratio");
+ok(perpendicularCornerFusiform.metrics.boundary_envelope_outside_count > 0,
+  "an oversized perpendicular boundary remains blocked rather than exceeding the configured maximum");
+const editedBoundaryFusiform = T.applyCandidateEdit({
+  tumor: boundaryTumor,
+  candidate: boundaryFusiform,
+  anatomy: { region: "cheek", confidence: 0.8 },
+  guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
+  trace: [],
+}, {
+  angle_offset_deg: 35,
+  reason: "manual rotation coverage test",
+}, [0, 0, 1], 0.1);
+ok(editedBoundaryFusiform.candidate.metrics.outline_area_mm2 > 0,
+  "edited fusiform recomputes outline area");
+ok(editedBoundaryFusiform.candidate.metrics.outline_half_width_monotone === true,
+  "edited fusiform recomputes smooth taper metric");
+ok(near(editedBoundaryFusiform.candidate.length_mm, editedBoundaryFusiform.candidate.width_mm * 3),
+  "manual rotation preserves the fixed 3:1 ratio");
+ok(editedBoundaryFusiform.candidate.center.every(Number.isFinite),
+  "manual rotation refits a finite center while retaining the clinician direction");
+ok(near(Math.abs(editedBoundaryFusiform.candidate.axis[0]), Math.cos(35 * Math.PI / 180), 1e-6),
+  "center refitting does not replace the clinician angle with an RSTL direction");
+ok(editedBoundaryFusiform.candidate.metrics.boundary_envelope_outside_count > 0,
+  "an impossible max-length rotation remains explicit instead of breaking the fixed ratio");
+ok(editedBoundaryFusiform.guardrails.warnings.some((w) => w.code === "fusiform_boundary_outside_envelope"),
+  "an impossible max-length rotation is blocked for diagnostic rendering");
+const uniformlyScaledBoundaryFusiform = T.applyCandidateEdit({
+  tumor: boundaryTumor,
+  candidate: boundaryFusiform,
+  anatomy: { region: "cheek", confidence: 0.8 },
+  guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
+  trace: [],
+}, {
+  length_scale: 1.25,
+  width_scale: 1.25,
+  reason: "uniform enlargement test",
+}, [0, 0, 1], 0.1);
+ok(vectorNear(uniformlyScaledBoundaryFusiform.candidate.center, boundaryFusiform.center),
+  "uniform candidate scaling keeps the solved incision center fixed");
+ok(near(uniformlyScaledBoundaryFusiform.candidate.length_mm, boundaryFusiform.length_mm * 1.25)
+  && near(uniformlyScaledBoundaryFusiform.candidate.width_mm, boundaryFusiform.width_mm * 1.25),
+"uniform candidate scaling enlarges long and short axes by the same factor");
+const tipAngleEditedFusiform = T.applyCandidateEdit({
+  tumor: boundaryTumor,
+  candidate: boundaryFusiform,
+  anatomy: { region: "cheek", confidence: 0.8 },
+  guardrails: T.evaluateGuardrails(boundaryFusiform, { region: "cheek", confidence: 0.8 }),
+  trace: [],
+}, {
+  tip_angle_deg: 45,
+  reason: "manual clinician preference",
+}, [0, 0, 1], 0.1);
+ok(near(tipAngleEditedFusiform.candidate.metrics.tip_angle_target_deg, 45),
+  "clinician edit overrides the fusiform tip-angle target");
+ok(near(tipAngleEditedFusiform.candidate.tip_angle_deg, 45),
+  "clinician tip-angle edit rebuilds the fusiform outline");
+ok(tipAngleEditedFusiform.candidate.provenance.clinician_edit.tip_angle_deg === 45,
+  "clinician tip-angle edit is retained in provenance");
+
+const envelopeRules = structuredClone(T.DEFAULT_RULES);
+envelopeRules.fusiform_cutaneous.max_length_mm = 200;
+const rectangularBoundaryTumor = {
+  ...boundaryTumor,
+  center: [5, 2, 0],
+  boundary: [[0, 4, 0], [10, 4, 0], [10, 0, 0], [0, 0, 0]],
+};
+const envelopeFusiform = T.generateFusiformIncision(
+  rectangularBoundaryTumor,
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+  envelopeRules,
+);
+ok(envelopeFusiform.metrics.boundary_envelope_min_margin_mm >= 0,
+  "dimension-aware expansion contains a rectangular boundary when the configured length limit permits it");
+ok(envelopeFusiform.metrics.boundary_envelope_outside_count === 0,
+  "the expanded standard fusiform leaves no rectangular boundary point outside");
+ok(envelopeFusiform.length_mm / envelopeFusiform.width_mm >= 2.2 - 1e-9,
+  "automatic coverage never flattens the candidate below the minimum fusiform aspect ratio");
+const envelopeGuard = T.evaluateGuardrails(envelopeFusiform, { region: "cheek", confidence: 0.8 }, envelopeRules);
+ok(envelopeGuard.warnings.every((w) => w.code !== "fusiform_boundary_outside_envelope"),
+  "a fully contained expanded envelope does not retain a stale outside-boundary warning");
+
+const coverageRules = structuredClone(T.DEFAULT_RULES);
+coverageRules.fusiform_cutaneous.max_length_mm = 40;
+const oversizedBoundaryTumor = {
+  ...boundaryTumor,
+  margin_mm: 2,
+  boundary: [[0, 2, 0], [4, 3, 0], [10, 2, 0], [4, 1, 0]],
+};
+const clampedFusiform = T.generateFusiformIncision(
+  oversizedBoundaryTumor,
+  { vector: [1, 0, 0], confidence: 0.9 },
+  0.1,
+  [0, 0, 1],
+  coverageRules,
+);
+ok(clampedFusiform.metrics.axis_coverage_deficit_mm > 0
+  || clampedFusiform.metrics.boundary_envelope_outside_count > 0,
+"fusiform records the exact containment failure at the configured length limit");
+ok(clampedFusiform.metrics.length_clamped_by_max === true, "fusiform records max-length clamp");
+annotateCandidateEngineeringViolations(clampedFusiform, verts);
+ok(clampedFusiform.hard_violations.some((item) => item.code === "candidate_does_not_cover_lesion_axis"
+  || item.code === "candidate_does_not_enclose_lesion_boundary"),
+"an incomplete fusiform envelope becomes a hard display violation instead of showing a clipped candidate");
+const coverageGuard = T.evaluateGuardrails(clampedFusiform, { region: "cheek", confidence: 0.8 }, coverageRules);
+ok(coverageGuard.passed === false, "boundary coverage deficit fails guardrails");
+ok(coverageGuard.warnings.some((w) => w.code === "fusiform_axis_coverage_deficit"
+  || w.code === "fusiform_boundary_outside_envelope"),
+"guardrails flag the applicable fixed-ratio containment deficit");
+
+const sparseBoundaryTumor = {
+  ...boundaryTumor,
+  boundary: [[3, 2, 0], [4, 3, 0], [5, 2, 0]],
+};
+const sparseFusiform = T.generateFusiformIncision(sparseBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+const sparseGuard = T.evaluateGuardrails(sparseFusiform, { region: "cheek", confidence: 0.8 });
+ok(sparseGuard.passed === true, "sparse cutaneous boundary is a review warning, not an automatic failure");
+ok(sparseGuard.warnings.some((w) => w.code === "cutaneous_boundary_too_few_points" && w.severity === "medium"),
+  "guardrails warn about sparse cutaneous boundary");
+
+const shiftedBoundaryTumor = {
+  ...boundaryTumor,
+  center: [0, 2, 0],
+};
+const shiftedFusiform = T.generateFusiformIncision(shiftedBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+const shiftedGuard = T.evaluateGuardrails(shiftedFusiform, { region: "cheek", confidence: 0.8 });
+ok(shiftedGuard.passed === false, "far-shifted cutaneous boundary fails guardrails");
+ok(shiftedGuard.warnings.some((w) => w.code === "cutaneous_boundary_center_shift"),
+  "guardrails flag cutaneous boundary center shift");
+
+const degenerateBoundaryTumor = {
+  ...boundaryTumor,
+  boundary: [[3, 2, 0], [4, 2.01, 0], [5, 2, 0], [4, 1.99, 0]],
+};
+const degenerateFusiform = T.generateFusiformIncision(degenerateBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+ok(degenerateFusiform.metrics.boundary_area_ratio_to_diameter_disk < 0.08,
+  "fusiform records degenerate boundary area ratio");
+const degenerateGuard = T.evaluateGuardrails(degenerateFusiform, { region: "cheek", confidence: 0.8 });
+ok(degenerateGuard.passed === false, "degenerate cutaneous boundary area fails guardrails");
+ok(degenerateGuard.warnings.some((w) => w.code === "cutaneous_boundary_degenerate_area"),
+  "guardrails flag degenerate cutaneous boundary area");
+
+const selfIntersectingBoundaryTumor = {
+  ...boundaryTumor,
+  boundary: [[3, 1, 0], [5, 3, 0], [3, 3, 0], [5, 1, 0]],
+};
+const selfIntersectingFusiform = T.generateFusiformIncision(selfIntersectingBoundaryTumor, { vector: [1, 0, 0], confidence: 0.9 }, 0.1, [0, 0, 1]);
+ok(selfIntersectingFusiform.metrics.boundary_self_intersection === true,
+  "fusiform records self-intersecting boundary");
+const selfIntersectingGuard = T.evaluateGuardrails(selfIntersectingFusiform, { region: "cheek", confidence: 0.8 });
+ok(selfIntersectingGuard.passed === false, "self-intersecting cutaneous boundary fails guardrails");
+ok(selfIntersectingGuard.warnings.some((w) => w.code === "cutaneous_boundary_self_intersection"),
+  "guardrails flag self-intersecting cutaneous boundary");
+
+const anatomy = T.classifyRegion([3, 6, 0], verts);
+const guard = T.evaluateGuardrails({ direction_confidence: 0.8 }, anatomy);
+ok(anatomy.region === "lower_eyelid", "region classifier reaches sensitive lower eyelid bucket");
+ok(guard.passed === false && guard.warnings.some((w) => w.severity === "high"), "guardrails flag sensitive region");
+ok(guard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.structure === "lower_eyelid" &&
+  o.requires_clinician_override_reason === true),
+  "guardrails suggest protective lower-eyelid direction");
+const segmentAnatomy = T.classifyRegion([4, 5.9, 0], verts);
+ok(segmentAnatomy.free_margin_distance_mm < 1, "free-margin distance uses eyelid margin segments");
+ok(segmentAnatomy.nearby_landmarks.includes("left_lower_eyelid_margin"),
+  "free-margin landmarks include eyelid margin segment");
+ok(segmentAnatomy.confidence_reasons.includes("near_sensitive_free_margin"),
+  "region classifier records sensitive-margin confidence reason");
+const earAnatomy = T.classifyRegion([0.8, 5.5, 0], verts);
+ok(earAnatomy.region === "ear_region", "region classifier reaches ear bucket");
+ok(earAnatomy.confidence_reasons.includes("heuristic_region_low_confidence"),
+  "region classifier records low-confidence heuristic reason");
+ok(earAnatomy.confidence_reasons.includes("lateral_face_edge_bucket"),
+  "region classifier records lateral edge reason");
+ok(Number.isFinite(earAnatomy.region_boundary_margin_norm),
+  "region classifier records normalized boundary margin");
+const earGuard = T.evaluateGuardrails({ type: "linear", direction_confidence: 0.9 }, earAnatomy);
+ok(earGuard.warnings.some((w) => w.code === "low_region_confidence" && w.message.includes("lateral_face_edge_bucket")),
+  "low-region guardrail reports region confidence reason");
+ok(T.classifyRegion([5, 3, 0], verts).region === "lip_vermilion", "region classifier reaches lip vermilion bucket");
+ok(T.classifyRegion([4.2, 4.6, 0], verts).region === "nasal_ala", "region classifier reaches nasal ala bucket");
+const lipGuard = T.evaluateGuardrails({ direction_confidence: 0.9 }, T.classifyRegion([5, 3, 0], verts));
+ok(lipGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.structure === "lip_vermilion" &&
+  o.direction_hint.includes("vermilion")),
+  "guardrails suggest protective lip-vermilion direction");
+const alarGuard = T.evaluateGuardrails({ direction_confidence: 0.9 }, T.classifyRegion([4.2, 4.6, 0], verts));
+ok(alarGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.structure === "nasal_ala" &&
+  o.direction_hint.includes("alar")),
+  "guardrails suggest protective nasal-ala direction");
+const nearMarginCandidate = {
+  type: "linear",
+  direction_confidence: 0.9,
+  polyline: [[2.9, 5.9, 0], [4.5, 5.9, 0]],
+  metrics: { rstl_deviation_deg: 0 },
+};
+T.annotateCandidateSensitiveDistances(nearMarginCandidate, verts);
+ok(nearMarginCandidate.metrics.sensitive_free_margin_min_distance_mm < 5, "candidate path distance to sensitive margin is measured");
+ok(nearMarginCandidate.metrics.sensitive_free_margin_nearest === "left_lower_eyelid_margin",
+  "candidate path distance can use sensitive margin segments");
+const candidateGuard = T.evaluateGuardrails(nearMarginCandidate, { region: "cheek", confidence: 0.8 });
+ok(candidateGuard.passed === false, "candidate geometry near sensitive margin fails guardrails");
+ok(candidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
+  "guardrails flag candidate geometry near sensitive margin");
+ok(candidateGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.source_warning === "candidate_near_sensitive_free_margin" &&
+  o.structure === "lower_eyelid"),
+  "candidate-margin guardrail suggests protective direction");
+const nasalCenterGuard = T.evaluateGuardrails(
+  { type: "linear", direction_confidence: 0.9, metrics: { rstl_deviation_deg: 0 } },
+  { region: "cheek", confidence: 0.8, free_margin_distance_mm: 11, nearby_landmarks: ["nasal_tip"] },
+);
+ok(!nasalCenterGuard.warnings.some((w) => w.code === "near_sensitive_free_margin"),
+  "nasal-tip center threshold does not flag 11 mm");
+const eyelidCenterGuard = T.evaluateGuardrails(
+  { type: "linear", direction_confidence: 0.9, metrics: { rstl_deviation_deg: 0 } },
+  { region: "cheek", confidence: 0.8, free_margin_distance_mm: 11, nearby_landmarks: ["left_lower_eyelid_margin"] },
+);
+ok(eyelidCenterGuard.warnings.some((w) => w.code === "near_sensitive_free_margin" && w.message.includes("threshold 16.0 mm")),
+  "lower-eyelid center threshold flags 11 mm and reports threshold");
+ok(eyelidCenterGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.source_warning === "near_sensitive_free_margin" &&
+  o.structure === "lower_eyelid"),
+  "center-margin guardrail suggests protective lower-eyelid direction");
+const nasalCandidateGuard = T.evaluateGuardrails(
+  {
+    type: "linear",
+    direction_confidence: 0.9,
+    metrics: {
+      rstl_deviation_deg: 0,
+      sensitive_free_margin_min_distance_mm: 11,
+      sensitive_free_margin_nearest: "nasal_tip",
+    },
+  },
+  { region: "cheek", confidence: 0.8 },
+);
+ok(!nasalCandidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin"),
+  "nasal-tip candidate threshold does not flag 11 mm");
+const eyelidCandidateGuard = T.evaluateGuardrails(
+  {
+    type: "linear",
+    direction_confidence: 0.9,
+    metrics: {
+      rstl_deviation_deg: 0,
+      sensitive_free_margin_min_distance_mm: 11,
+      sensitive_free_margin_nearest: "left_lower_eyelid_margin",
+    },
+  },
+  { region: "cheek", confidence: 0.8 },
+);
+ok(eyelidCandidateGuard.warnings.some((w) => w.code === "candidate_near_sensitive_free_margin" && w.message.includes("threshold 16.0 mm")),
+  "lower-eyelid candidate threshold flags 11 mm and reports threshold");
+ok(eyelidCandidateGuard.suggested_overrides.some((o) =>
+  o.kind === "protective_direction" &&
+  o.source_warning === "candidate_near_sensitive_free_margin" &&
+  o.structure === "lower_eyelid"),
+  "candidate-threshold guardrail suggests protective lower-eyelid direction");
+
+const regionCases = {
+  forehead: [5, 8.6, 0],
+  ear_region: [0.8, 5.5, 0],
+  temple_cheek: [1.8, 6.8, 0],
+  upper_eyelid: [3, 7.2, 0],
+  lower_eyelid: [3, 6, 0],
+  inner_canthus: [5, 6, 0],
+  nasal_dorsum: [5, 5.2, 0],
+  nasal_ala: [4.2, 4.6, 0],
+  nasal_tip: [5, 4.2, 0],
+  nasolabial_fold: [3, 4.1, 0],
+  cheek: [7, 5, 0],
+  lip_vermilion: [5, 3, 0],
+  upper_lip: [5, 3.7, 0],
+  oral_commissure: [3.4, 3.1, 0],
+  chin: [5, 1.6, 0],
+  jawline: [2, 2.4, 0],
+};
+for (const [region, point] of Object.entries(regionCases)) {
+  ok(T.classifyRegion(point, verts).region === region, `region classifier covers ${region}`);
+}
+
+const plan = T.planIncisionDeterministic({
+  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 1.2, 0.6), boundary_source: "manual_freehand" },
+  verts,
+  tris,
+  atlas,
+});
+ok(plan.trace.length === 8, "deterministic plan records eight tool calls");
+ok(plan.trace[0].action === "summarize_tumor_input_quality", "deterministic plan checks tumor input first");
+ok(plan.trace[3].action === "inspect_sensitive_structures", "deterministic plan inspects sensitive structures before geometry");
+ok(plan.trace[5].action === "inspect_sensitive_structures", "deterministic plan re-checks sensitive structures after geometry");
+ok(plan.trace.at(-1).action === "preview_incision_on_face", "deterministic plan previews the candidate before review");
+ok(plan.preview.renderable === true, "deterministic preview confirms renderable geometry");
+ok(plan.preview.raw_image_sent === false, "deterministic preview does not send raw images");
+ok(plan.candidate.type === "linear", "deterministic plan returns candidate");
+ok(plan.tumor_quality.warning_count === 1, "deterministic plan returns tumor quality summary");
+ok(plan.tumor_quality.warnings[0].code === "missing_tumor_author", "tumor quality flags missing author");
+ok(plan.sensitive_structure_inspection.schema_version === "sensitive-structure-inspection/v0.1",
+  "deterministic plan returns sensitive structure inspection summary");
+ok(plan.sensitive_structure_inspection.candidate_free_margin_distance_mm != null,
+  "sensitive structure inspection records generated candidate distance");
+ok(plan.workflow_mode === "deterministic_single_candidate", "plan records trace mode");
+ok(plan.direction.source === "rstl_atlas_nearest_segment",
+  "incision workflow consumes the nearest RSTL segment without changing the shared direction service");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "summarize_tumor_input_quality"),
+  "tool schemas include tumor input quality");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "inspect_sensitive_structures"),
+  "tool schemas include sensitive structure inspection");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "preview_incision_on_face"), "tool schemas include face preview");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "clinician_edit_candidate"), "tool schemas include clinician edit");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "compare_candidates"), "tool schemas include candidate comparison");
+ok(T.TOOL_SCHEMAS.some((s) => s.name === "save_review_record"), "tool schemas include review record export");
+
+const workflow = T.planIncisionWorkflow({
+  tumor: { kind: "subcutaneous", center: [4, 2, 0], diameter_mm: 10, depth_mm: 5,
+    boundary: rectangularBoundary(4, 2, 1.2, 0.6), boundary_source: "manual_freehand" },
+  verts,
+  tris,
+  atlas,
+});
+ok(workflow.workflow_mode === "deterministic_multi_candidate",
+  "browser workflow records the migrated multi-candidate trace mode");
+ok(workflow.trace.length > plan.trace.length, "browser workflow runs additional direction-variant tools");
+ok(workflow.trace.some((step) => step.action === "propose_direction_variants"),
+  "browser workflow proposes deterministic direction variants");
+ok(workflow.trace.at(-1).action === "compare_candidates", "browser workflow compares candidates after variant generation");
+ok(workflow.candidate_alternatives.length === 3, "browser workflow searches only the recorded baseline and +/-10 degree directions");
+ok(workflow.candidate_comparison.length === 3, "browser workflow returns deterministic candidate comparison");
+ok(workflow.selected_candidate_id != null && workflow.candidate_display_blocked === false,
+  "browser workflow selects a hard-guardrail-safe candidate for display");
+ok(workflow.workflow_trace_gate.passed === true, "browser workflow trace gate passes");
+ok(workflow.workflow_plan_audit.passed === true, "browser deterministic workflow audit plan passes");
+ok(workflow.workflow_execution_events.passed === true, "browser workflow execution events pass");
+ok(workflow.workflow_execution_events.tool_event_count === workflow.trace.length,
+  "browser workflow execution events cover every trace step");
+ok(workflow.workflow_audit.candidate_count === 3,
+  "browser workflow orchestration audit counts candidate alternatives");
+ok(!("provider" in workflow) && !("llm" in workflow),
+  "browser workflow exports no remote model or provider state");
+ok(typeof workflow.summary === "string" && typeof workflow.next_step === "string",
+  "browser workflow keeps local summary and next-step copy");
+
+const normalizedControlledPlan = T.planIncisionDeterministic({
+  tumor: controlledMarkerTumor,
+  verts,
+  tris,
+  atlas: {
+    lines: [
+      { name: "near_boundary_centroid_vertical", points3d: [[4, 1, 0], [4, 4, 0]] },
+      { name: "through_detector_center_horizontal", points3d: [[3.5, 2, 0], [3.95, 2, 0]] },
+    ],
+  },
+});
+ok(normalizedControlledPlan.tumor_normalization.applied === true,
+  "workflow exposes the controlled-marker lesion normalization contract");
+ok(vectorNear(normalizedControlledPlan.tumor.center, controlledMarkerTumor.center),
+  "workflow preserves the detector-confirmed lesion center after boundary normalization");
+ok(normalizedControlledPlan.direction.line_id === "through_detector_center_horizontal"
+  && Math.abs(normalizedControlledPlan.direction.vector[0]) > 0.99,
+"workflow queries RSTL at the stable detector-confirmed center");
+ok(normalizedControlledPlan.candidate.metrics.boundary_drives_candidate_geometry === true
+  && normalizedControlledPlan.candidate.metrics.boundary_envelope_outside_count === 0,
+  "normalized workflow uses the detected envelope to center and fully contain the lesion");
+
+const photoDirectionOverridePlan = T.planIncisionDeterministic({
+  tumor: controlledMarkerTumor,
+  verts,
+  tris,
+  atlas: { lines: [{ name: "model_horizontal", points3d: [[3.5, 2, 0], [4, 2, 0]] }] },
+  directionOverride: {
+    vector: [0, 1, 0],
+    confidence: 0.92,
+    source: "photo_projected_rstl_nearest_segment",
+    line_id: "displayed_vertical",
+  },
+});
+ok(photoDirectionOverridePlan.direction_override_applied === true,
+  "workflow records that the photo-projected nearest RSTL tangent drove planning");
+ok(photoDirectionOverridePlan.direction.source === "photo_projected_rstl_nearest_segment"
+  && Math.abs(photoDirectionOverridePlan.candidate.axis[1]) > 0.99,
+"the candidate generator and guardrails consume the photo-derived direction instead of only warning afterwards");
+
+const marginDirectionPlans = [0, 2].map((marginMm) => T.planIncisionWorkflow({
+  tumor: {
+    kind: "cutaneous",
+    center: [7, 5, 0],
+    diameter_mm: 8,
+    margin_mm: marginMm,
+    boundary: [[6.7, 5, 0], [7, 5.3, 0], [7.3, 5, 0], [7, 4.7, 0]],
+  },
+  verts,
+  tris,
+  atlas,
+}));
+ok(marginDirectionPlans.every((item) => item.selected_candidate_id === "browser_baseline"),
+  "safe-margin changes keep the RSTL baseline candidate when it remains outside hard openings");
+ok(near(marginDirectionPlans[0].direction.angle_deg, marginDirectionPlans[1].direction.angle_deg),
+  "safe-margin changes do not rotate an otherwise safe incision direction");
+
+const openingVerts = Array.from({ length: 468 }, () => [5, 5, 0]);
+openingVerts[0] = [0, 0, 0]; openingVerts[1] = [10, 0, 0];
+openingVerts[2] = [0, 10, 0]; openingVerts[3] = [10, 10, 0];
+const openingTriangles = [[0, 1, 2], [1, 3, 2]];
+const leftEyeLoop = [33, 160, 158, 133, 153, 144];
+const leftEyePoints = [[3, 6, 0], [3.5, 6.5, 0], [4, 6.5, 0], [4.5, 6, 0], [4, 5.5, 0], [3.5, 5.5, 0]];
+leftEyeLoop.forEach((vertexIndex, index) => { openingVerts[vertexIndex] = leftEyePoints[index]; });
+const eyeZones = buildMediaPipeEngineeringExclusionZones(openingVerts)
+  .filter((zone) => zone.id.includes("eye"));
+ok(eyeZones.length >= 1 && eyeZones.every((zone) => zone.projection_buffer_scale === 1),
+  "eye hard exclusions use the actual topology opening without an unvalidated expansion buffer");
+const openingWorkflow = T.planIncisionWorkflow({
+  tumor: { kind: "subcutaneous", center: [3.7, 6, 0], diameter_mm: 8, depth_mm: 4,
+    boundary: rectangularBoundary(3.7, 6, 0.8, 0.4), boundary_source: "manual_freehand" },
+  verts: openingVerts,
+  tris: openingTriangles,
+  atlas: { lines: [{ points3d: [[2, 6.8, 0], [5, 6.8, 0]] }] },
+});
+ok(openingWorkflow.tumor_engineering_validation.passed === false,
+  "workflow records invalid lesion input at a non-skin opening");
+ok(openingWorkflow.selected_candidate_id === null && openingWorkflow.candidate_display_blocked === true,
+  "invalid lesion input overrides candidate selection and hides the candidate");
+ok(openingWorkflow.candidate_selection_reason === "tumor_input_intersects_non_skin_opening",
+  "workflow explains why the candidate is blocked");
+
+const marginCrossingCandidate = {
+  type: "linear",
+  polyline: [[2, 5.8, 0], [4.2, 6, 0]],
+  metrics: {},
+};
+annotateCandidateEngineeringViolations(marginCrossingCandidate, verts);
+ok(!marginCrossingCandidate.hard_violations.some((item) => item.code === "candidate_crosses_sensitive_free_margin"),
+  "crossing a heuristic sensitive-margin guide is reviewable and not an opening-level hard block");
+
+const incompleteQuality = T.summarizeTumorInputQuality({
+  kind: "subcutaneous",
+  center: [4, 2, 0],
+  diameter_mm: 8,
+  depth_mm: null,
+  units: "cm",
+});
+const incompleteCodes = new Set(incompleteQuality.warnings.map((w) => w.code));
+ok(incompleteQuality.passed === false, "non-mm tumor input fails quality gate");
+ok(incompleteCodes.has("missing_tumor_author"), "tumor input quality flags missing author");
+ok(incompleteCodes.has("non_mm_tumor_units"), "tumor input quality flags non-mm units");
+ok(incompleteCodes.has("missing_subcutaneous_depth"), "tumor input quality flags missing depth");
+
+const edited = T.applyCandidateEdit(plan, {
+  angle_offset_deg: 20,
+  length_scale: 1.2,
+  shift_along_mm: 1,
+  shift_perp_mm: -0.5,
+  reason: "manual free-margin protection",
+}, [0, 0, 1], 0.1);
+ok(edited.candidate.edited === true, "edited candidate is marked");
+ok(near(edited.candidate.length_mm, plan.candidate.length_mm * 1.2), "edited linear length is recalculated");
+ok(near(edited.candidate.metrics.rstl_deviation_deg, 20), "edited candidate records RSTL deviation");
+ok(edited.candidate.provenance.clinician_edit.reason.includes("free-margin"), "edited candidate records override reason");
+ok(edited.candidate.provenance.candidate_version === plan.candidate.provenance.candidate_version + 1,
+  "edited candidate increments candidate version");
+ok(edited.candidate.provenance.parent_candidate_id === plan.candidate.id,
+  "edited candidate records parent candidate id");
+ok(edited.candidate.provenance.edit_history.length === 1,
+  "edited candidate records edit history entry");
+ok(edited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v3_"),
+  "edited candidate records stable edit id");
+ok(edited.trace.some((step) => step.action === "clinician_edit_candidate"), "edited plan adds trace step");
+ok(edited.guardrails.warnings.some((w) => w.code === "rstl_deviation_override"), "edited deviation triggers guardrail warning");
+
+const multiStepEdited = T.applyCandidateEdit(plan, {
+  angle_offset_deg: 10,
+  length_scale: 1.1,
+  shift_along_mm: 2,
+  reason: "manual clinician preference",
+  session_history: [
+    {
+      angle_offset_deg: -5,
+      length_scale: 1,
+      width_scale: 1,
+      shift_along_mm: 0,
+      shift_perp_mm: 0,
+      reason: "manual scar camouflage",
+      interaction: "control_change",
+    },
+    {
+      angle_offset_deg: 10,
+      length_scale: 1.1,
+      width_scale: 1,
+      shift_along_mm: 2,
+      shift_perp_mm: 0,
+      reason: "manual clinician preference",
+      interaction: "endpoint_drag",
+    },
+  ],
+}, [0, 0, 1], 0.1);
+ok(multiStepEdited.candidate.provenance.candidate_version === plan.candidate.provenance.candidate_version + 2,
+  "multi-step edit history increments candidate version per committed edit");
+ok(multiStepEdited.candidate.provenance.edit_history.length === 2,
+  "multi-step edit history is preserved in provenance");
+ok(multiStepEdited.candidate.provenance.clinician_edit.interaction === "endpoint_drag",
+  "latest edit records the interaction source");
+ok(multiStepEdited.candidate.provenance.edit_history[0].edit_id.startsWith("edit_v3_") &&
+  multiStepEdited.candidate.provenance.edit_history[1].edit_id.startsWith("edit_v4_"),
+  "multi-step edit ids track resulting candidate versions");
+
+const comparison = T.compareCandidateRecords([
+  {
+    id: "baseline",
+    label: "低风险候选",
+    review_status: "approved_for_discussion",
+    candidate: { type: "linear", metrics: { rstl_deviation_deg: 0, diameter_coverage_deficit_mm: 0 } },
+    guardrails: { passed: true, warnings: [] },
+  },
+  {
+    id: "high-risk",
+    label: "高风险候选",
+    review_status: "approved_for_discussion",
+    candidate: {
+      type: "linear",
+      metrics: {
+        rstl_deviation_deg: 20,
+        diameter_coverage_deficit_mm: 3,
+        sensitive_free_margin_min_distance_mm: 4,
+        sensitive_free_margin_nearest: "left_lower_eyelid_margin",
+      },
+    },
+    guardrails: { passed: false, warnings: [{ code: "candidate_near_sensitive_free_margin", severity: "high" }] },
+  },
+  {
+    id: "rejected",
+    label: "否决候选",
+    review_status: "rejected_by_clinician",
+    candidate: { type: "fusiform", metrics: { rstl_deviation_deg: 0, tip_angle_error_deg: 0 } },
+    guardrails: { passed: true, warnings: [] },
+  },
+]);
+ok(comparison[0].id === "baseline", "candidate comparison ranks low-risk candidate first");
+ok(comparison[2].id === "rejected", "candidate comparison ranks rejected candidate last");
+ok(comparison[1].reasons.some((r) => r.includes("high guardrail")), "candidate comparison explains high-risk score");
+ok(comparison[1].score_breakdown.sensitive_free_margin_threshold_mm === 16,
+  "candidate comparison records per-structure sensitive-margin threshold");
+ok(comparison[0].clinical_boundary.includes("不是临床推荐"), "candidate comparison records clinical boundary");
+
+const hardBlockedComparison = T.compareCandidateRecords([
+  {
+    id: "blocked-baseline",
+    candidate: { type: "linear", hard_violation_count: 1, metrics: { rstl_deviation_deg: 0 } },
+    guardrails: { hard_violation_count: 1, warnings: [] },
+  },
+  {
+    id: "safe-offset",
+    candidate: { type: "linear", hard_violation_count: 0, metrics: { rstl_deviation_deg: 20 } },
+    guardrails: { hard_violation_count: 0, warnings: [] },
+  },
+]);
+ok(hardBlockedComparison[0].id === "safe-offset", "engineering hard blocks always rank after safe variants");
+ok(hardBlockedComparison[1].reasons.some((reason) => reason.includes("工程硬阻断")),
+  "candidate comparison explains engineering hard blocks");
+
+// A mildly elliptical lesion fits below its equal-area circle diameter.
+// This catches both the old reference-size floor and analytic/chord mismatch.
+const tightBoundary = Array.from({ length: 96 }, (_, i) => {
+  const angle = i * 2 * Math.PI / 96;
+  return [6 * Math.cos(angle), 4 * Math.sin(angle), 0];
+});
+const tightCandidate = T.generateFusiformIncision({
+  kind: "cutaneous", center: [0, 0, 0], diameter_mm: 12, margin_mm: 0,
+  boundary: tightBoundary, boundary_mode: "controlled_marker", boundary_source: "controlled_marker_confirmed",
+}, { vector: [1, 0, 0], confidence: 1 }, 1, [0, 0, 1]);
+ok(tightCandidate.width_mm < tightCandidate.metrics.equivalent_area_reference_circle_diameter_mm - 0.5,
+  "zero-margin fit can shrink below the reference circle size");
+ok(tightCandidate.metrics.boundary_envelope_outside_count === 0,
+  "tight fit encloses the actual sampled outline without relaxing the guardrail");
+ok(tightCandidate.metrics.boundary_envelope_min_margin_mm < 0.001,
+  "zero-margin fit contacts the boundary within one micron");
+ok(tightCandidate.width_mm < 8.02 && Math.hypot(...tightCandidate.center) < 0.001,
+  "symmetric ellipse keeps its center while fitting the sampled tapered profile");
+const half = tightCandidate.outline.slice(0, 57);
+const contacts = tightBoundary.filter(([x, y]) => {
+  const index = half.findIndex((p, i) => i < half.length - 1 && p[0] <= x && half[i + 1][0] >= x);
+  if (index < 0) return false;
+  const a = half[index], b = half[index + 1];
+  const height = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]);
+  return height - Math.abs(y) < 0.001;
+});
+ok(contacts.some((p) => p[1] > 0) && contacts.some((p) => p[1] < 0),
+  "tight zero-margin candidate has opposing contacts on its rendered segments");
+ok(near(tightCandidate.length_mm, 3 * tightCandidate.width_mm), "tight fit preserves 3:1");
+
+console.log(`test_incision_tools: ${passed} assertions passed`);

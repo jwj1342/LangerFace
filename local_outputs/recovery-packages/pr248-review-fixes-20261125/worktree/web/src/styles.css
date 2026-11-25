@@ -1,0 +1,3368 @@
+@import "tailwindcss";
+@import "../clinical-theme.css";
+
+.live-refine-panel{display:flex;min-width:0;flex-direction:column;gap:9px;padding-top:4px}
+.live-refine-panel.hidden,.live-refine-quality.hidden,.live-refine-internal{display:none}
+.btn-row.live-refine-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.live-refine-primary-actions .btn{min-width:0}
+.btn-row.live-refine-modes{grid-template-columns:repeat(3,minmax(0,1fr));max-width:420px;margin-inline:auto;width:100%}
+.live-refine-modes .btn{min-width:0;padding-inline:5px;font-size:12px}
+.btn-row.live-refine-actions{grid-template-columns:repeat(2,minmax(0,1fr));max-width:280px;margin-inline:auto;width:100%}
+.btn-row.live-wrinkle-actions{grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+.live-wrinkle-actions .btn{min-width:0}
+.live-refine-status,.live-refine-range,.live-refine-nudge-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}
+.live-refine-status span:last-child,.live-refine-range output{color:var(--ink);font-weight:700}
+.live-refine-quality{padding:8px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:12px;line-height:1.45}
+.live-refine-quality[data-state="ok"]{border-color:#237a57;color:#8fd8b8;background:#102b21}
+.live-refine-quality[data-state="warning"]{border-color:#b7791f;color:#ffd58a;background:#33250e}
+.live-refine-zoom,.live-refine-point-count{display:flex;min-width:0;flex-direction:column;gap:7px;padding:9px;border:1px solid var(--line);border-radius:4px}
+.live-refine-point-count.hidden{display:none}
+.btn-row.live-refine-zoom-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.live-refine-zoom-actions .btn{min-width:0;padding:7px 5px}
+.live-refine-nudge-head label{display:flex;align-items:center;gap:6px}
+.live-refine-nudge-head select{min-width:0;max-width:96px;padding:4px 6px;font-size:12px}
+.btn-row.live-refine-nudge{grid-template-columns:repeat(4,minmax(0,1fr))}
+.live-refine-nudge .btn{min-width:0;padding:6px;font-size:17px}
+.main-wrap.refining{cursor:crosshair}
+.main-wrap.refining.refine-drag{cursor:grab}
+.main-wrap.refining.refine-drag:active{cursor:grabbing}
+.main-wrap.refining.refine-point{cursor:crosshair}
+@import "../style.css";
+@import "../annotate.css";
+
+/* React workbench controls use this shared class when a feature is removed
+   from the current workflow. Keep hidden controls out of layout entirely. */
+.hidden,
+[hidden] {
+  display: none !important;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .clinical-number {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  .clinical-number-strong {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    font-weight: 600;
+  }
+
+  .react-page {
+    min-height: 100dvh;
+    background: var(--clinical-bg);
+    color: var(--clinical-ink);
+    font-family: var(--font-clinical-sans);
+  }
+
+  .react-shell {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) 1fr;
+    min-height: 100dvh;
+  }
+
+  .react-shell-sidebar {
+    border-right: 1px solid var(--clinical-border);
+    background: var(--clinical-bg);
+    padding: 22px 20px;
+  }
+
+  .react-shell-main {
+    min-width: 0;
+    min-height: 0;
+    background: #0c0f14;
+  }
+
+  .react-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-surface);
+    padding: 10px 12px;
+    color: var(--clinical-ink);
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .react-nav-link:hover {
+    border-color: var(--clinical-border-strong);
+    background: #eef2f6;
+  }
+
+  .react-route-status {
+    border: 1px solid var(--clinical-border-strong);
+    border-radius: 4px;
+    background: #edf2f7;
+    color: #393f46;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .dark-workbench-page .react-shell {
+    grid-template-columns: minmax(320px, 384px) 1fr;
+  }
+
+  .dark-workbench-page {
+    --clinical-bg: var(--clinical-dark-bg);
+    --clinical-surface: var(--clinical-dark-panel);
+    --clinical-surface-muted: var(--clinical-dark-panel-2);
+    --clinical-border: var(--clinical-dark-border);
+    --clinical-border-strong: var(--clinical-dark-border-strong);
+    --clinical-ink: var(--clinical-text-primary);
+    --clinical-muted: var(--clinical-dark-muted);
+    --clinical-muted-2: var(--clinical-dark-faint);
+    background: var(--clinical-dark-bg);
+  }
+
+  .dark-workbench-page .react-shell-sidebar {
+    background: var(--clinical-dark-sidebar);
+    border-right-color: var(--clinical-dark-border);
+    overflow-y: auto;
+  }
+
+  .dark-workbench-page .react-nav-link {
+    background: #111821;
+    color: var(--clinical-text-primary);
+  }
+
+  .dark-workbench-page .react-nav-link:hover {
+    border-color: var(--clinical-dark-border-strong);
+    background: #182230;
+  }
+
+  .dark-workbench-page .react-route-status {
+    border-color: var(--clinical-dark-border-strong);
+    background: #111821;
+    color: #a6c8ff;
+  }
+
+  .dark-workbench-page .badge {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: #111821;
+    color: #d0e2ff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 5px 8px;
+  }
+
+  .dark-workbench-page .brand {
+    border-bottom: 1px solid var(--clinical-dark-border);
+    padding-bottom: 16px;
+  }
+
+  .dark-workbench-page .brand .eyebrow {
+    color: var(--clinical-muted-2);
+    letter-spacing: .08em;
+  }
+
+  .dark-workbench-page .brand h1 {
+    color: var(--clinical-text-primary);
+    font-size: 21px;
+    line-height: 1.22;
+    letter-spacing: 0;
+  }
+
+  .dark-workbench-page .card {
+    border: 1px solid var(--clinical-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+    box-shadow: none;
+  }
+
+  .dark-workbench-page .quality-top {
+    align-items: center;
+    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    padding-bottom: 8px;
+  }
+
+  .dark-workbench-page .quality-top span:last-child {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: normal;
+  }
+
+  .dark-workbench-page .hint {
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .dark-workbench-page .btn {
+    border-color: var(--clinical-border);
+    border-radius: 4px;
+    background: #151b23;
+    color: var(--clinical-text-primary);
+    box-shadow: none;
+  }
+
+  .dark-workbench-page .btn:hover {
+    border-color: var(--clinical-border-strong);
+    background: #1c2530;
+  }
+
+  .dark-workbench-page .btn-primary {
+    border-color: var(--clinical-accent);
+    background: var(--clinical-accent);
+    color: #f4f7fb;
+  }
+
+  .dark-workbench-page .btn-primary:hover {
+    border-color: var(--clinical-accent-hover);
+    background: var(--clinical-accent-hover);
+  }
+
+  .dark-workbench-page input,
+  .dark-workbench-page select,
+  .dark-workbench-page textarea {
+    border-color: var(--clinical-border);
+    border-radius: 4px;
+    background: #0f141b;
+    color: var(--clinical-text-primary);
+  }
+
+  .dark-workbench-page input:focus,
+  .dark-workbench-page select:focus,
+  .dark-workbench-page textarea:focus {
+    border-color: var(--clinical-accent);
+    box-shadow: 0 0 0 2px rgb(15 98 254 / 0.16);
+    outline: none;
+  }
+
+  .dark-workbench-page input[type=range],
+  .dark-workbench-page input[type=checkbox],
+  .dark-workbench-page .check input {
+    accent-color: var(--clinical-accent);
+  }
+
+  .settings-workbench-stack {
+    display: flex;
+    width: min(1120px, 100%);
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-workbench-main {
+    min-width: 0;
+    min-height: 100dvh;
+    overflow: auto;
+    background: var(--clinical-dark-bg);
+    color: var(--clinical-text-primary);
+    padding: 24px;
+  }
+
+  .settings-kicker {
+    display: inline-flex;
+    color: #a6c8ff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .settings-disclosure {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+  }
+
+  .settings-disclosure summary {
+    cursor: pointer;
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 12px 14px;
+  }
+
+  .settings-disclosure-body {
+    border-top: 1px solid var(--clinical-dark-border);
+    padding: 12px 14px;
+  }
+
+  .settings-workbench-page .react-shell {
+    grid-template-columns: minmax(320px, 384px) 1fr;
+  }
+
+  .settings-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+    gap: 18px;
+    align-items: stretch;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 4px;
+    background: #111821;
+    padding: 22px;
+  }
+
+  .settings-hero h2 {
+    max-width: 780px;
+    margin: 12px 0 0;
+    color: var(--clinical-text-primary);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .settings-hero p {
+    max-width: 760px;
+    margin: 10px 0 0;
+    color: var(--clinical-text-secondary);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .settings-hero-readiness,
+  .settings-mini-grid,
+  .settings-action-list,
+  .settings-checklist,
+  .settings-boundary-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .settings-hero-readiness > div {
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 4px;
+    background: #151d27;
+    padding: 12px;
+  }
+
+  .settings-hero-readiness span,
+  .settings-mini-grid span {
+    display: block;
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .settings-hero-readiness b,
+  .settings-mini-grid b {
+    display: block;
+    margin-top: 5px;
+    color: var(--clinical-text-primary);
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .settings-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .settings-panel-grid-wide {
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+  }
+
+  .settings-worker-panel {
+    min-width: 0;
+  }
+
+  .settings-worker-panel .card {
+    height: 100%;
+  }
+
+  .settings-boundary-list p {
+    display: grid;
+    grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    margin: 0;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel-2);
+    padding: 10px;
+  }
+
+  .settings-boundary-list b {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .settings-boundary-list span {
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .react-legacy-banner {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    z-index: 50;
+    transform: translateX(-50%);
+    max-width: min(860px, calc(100vw - 32px));
+    border: 1px solid #8d99ae;
+    border-radius: 4px;
+    background: rgb(244 244 244 / 0.96);
+    color: #343a40;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 8px 12px;
+    pointer-events: none;
+  }
+
+  .react-incision-host {
+    min-height: 100dvh;
+  }
+
+  .react-live-host {
+    min-height: 100dvh;
+  }
+
+  .react-workflow-host {
+    min-height: 100dvh;
+  }
+
+  .workflow-workbench .stage-body {
+    gap: 8px;
+    padding: 10px 12px 12px;
+  }
+
+  .workflow-workbench .workflow-draft-recovery {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 11px;
+    border: 1px solid #34404d;
+    border-radius: 8px;
+    background: #0f141b;
+    color: #e5eaf0;
+  }
+
+  .workflow-workbench .workflow-draft-recovery > div:first-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .workflow-workbench .workflow-draft-recovery small {
+    color: #94a3b8;
+    line-height: 1.35;
+  }
+
+  .workflow-workbench .workflow-draft-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+
+  .workflow-canvas-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px;
+    overflow-x: auto;
+    color: #e8eef5;
+    background: rgb(12 19 27 / 88%);
+    border: 1px solid rgb(190 205 218 / 32%);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 24%);
+    backdrop-filter: blur(8px);
+  }
+
+  .workflow-workbench .stage-top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+    gap: 12px;
+    padding-inline: 12px;
+  }
+
+  .workflow-workbench .workflow-stage-status {
+    min-width: 0;
+    color: #dbe4ee;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workflow-workbench .workflow-stage-status[data-tone="warning"] {
+    color: #fde68a;
+  }
+
+  .workflow-workbench .workflow-stage-actions {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    justify-self: end;
+    overflow: hidden;
+  }
+
+  .workflow-canvas-tools > * {
+    flex: 0 0 auto;
+  }
+
+  .workflow-canvas-tools .workflow-disabled-action[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .workflow-canvas-tools .workflow-disabled-action[aria-disabled="true"]:hover {
+    border-color: #3e4b59;
+    background: #151b23;
+  }
+
+  .workflow-workbench .main-wrap.image-viewer {
+    cursor: crosshair !important;
+  }
+
+  .workflow-workbench .main-wrap.image-viewer.dragging {
+    cursor: grabbing !important;
+  }
+
+  .workflow-workbench .main-wrap[data-workflow-pointer-mode="freehand"],
+  .workflow-workbench .main-wrap[data-workflow-pointer-mode="freehand"] * {
+    cursor: crosshair !important;
+  }
+
+  .workflow-marker-scan {
+    display: grid;
+    grid-template-columns: max-content 92px;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
+    color: #d8e4ed;
+    border-right: 1px solid rgb(190 205 218 / 24%);
+    border-left: 1px solid rgb(190 205 218 / 24%);
+  }
+
+  .workflow-marker-scan input {
+    width: 92px;
+  }
+
+  .workflow-canvas-tools .workflow-mobile-marker-confirm {
+    display: none;
+  }
+
+  .workflow-incision-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .workflow-incision-overlay [data-workflow-boundary] {
+    fill: rgb(253 224 71 / 9%);
+    stroke: #fde047;
+    stroke-width: 0.95;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-boundary-halo] {
+    fill: none;
+    stroke: rgb(3 7 18 / 88%);
+    stroke-width: 1.45;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-candidate] {
+    fill: none;
+    stroke: #67e8f9;
+    stroke-width: 0.95;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-candidate-halo] {
+    fill: none;
+    stroke: #082f49;
+    stroke-width: 0.95;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
+    fill: none;
+    stroke: #ef4444;
+    stroke-width: 0.95;
+    stroke-dasharray: 7 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-rejected-marker] {
+    fill: rgb(217 70 239 / 10%);
+    stroke: #d946ef;
+    stroke-width: 0.95;
+    stroke-dasharray: 6 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-center] {
+    fill: transparent;
+    stroke: #ffffff;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-incision-center] circle {
+    fill: #f43f5e;
+    stroke: #0b1118;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-repair-stroke {
+    fill: none;
+    stroke: #f8fafc;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 5 4;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-marker-scan-circle] {
+    fill: rgb(56 189 248 / 8%);
+    stroke: rgb(56 189 248 / 92%);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .workflow-incision-overlay [data-workflow-marker-scan-label] {
+    fill: #e0f2fe;
+    stroke: rgb(8 15 24 / 92%);
+    stroke-width: 3;
+    paint-order: stroke fill;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0;
+  }
+
+  .workflow-workbench .zoom-strip {
+    max-height: clamp(112px, 18dvh, 168px);
+  }
+
+  .workflow-workbench .zoom-card {
+    max-width: 158px;
+  }
+
+  .live-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .live-workbench .live-inline-top {
+    margin-top: 7px;
+  }
+
+  .live-workbench .live-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .live-workbench .live-two-col {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .live-workbench .mode-actions .btn {
+    min-height: 42px;
+    font-size: 13.5px;
+  }
+
+  .live-workbench .live-hidden-inline {
+    display: none;
+  }
+
+  .react-annotate-host {
+    min-height: 100dvh;
+  }
+
+  .annotate-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .annotate-workbench .annotate-spacing-label {
+    margin-top: 10px;
+  }
+
+  .annotate-workbench .annotate-system-select {
+    margin-top: 7px;
+  }
+
+  .annotate-workbench .annotate-export-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incision-workbench.app {
+    grid-template-columns: minmax(390px, 420px) 1fr;
+  }
+
+  .incision-workbench .sidebar {
+    overflow-x: hidden;
+  }
+
+  .incision-workbench .workbench-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .incision-workbench .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .incision-workbench .metric {
+    background: #f8f9f5;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 10px;
+    min-width: 0;
+  }
+
+  .incision-workbench .incision-state-grid,
+  .annotate-workbench .annotate-state-grid,
+  .live-workbench .live-state-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .incision-workbench .incision-state-grid > div,
+  .annotate-workbench .annotate-state-grid > div,
+  .live-workbench .live-state-grid > div {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f8f9f5;
+    padding: 8px 9px;
+  }
+
+  .incision-workbench .incision-state-grid .k,
+  .annotate-workbench .annotate-state-grid .k,
+  .live-workbench .live-state-grid .k {
+    display: block;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .incision-workbench .incision-state-grid .v,
+  .annotate-workbench .annotate-state-grid .v,
+  .live-workbench .live-state-grid .v {
+    display: block;
+    margin-top: 3px;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 750;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .annotate-workbench .annotate-state-warning {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .metric .k {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .incision-workbench .metric .v {
+    display: block;
+    margin-top: 3px;
+    font-size: 14px;
+    line-height: 1.25;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .quality-top {
+    min-width: 0;
+  }
+
+  .incision-workbench .quality-top span {
+    min-width: 0;
+  }
+
+  .incision-workbench .quality-top span:last-child {
+    max-width: 62%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: right;
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .incision-workbench .stage-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .incision-workbench .controlled-marker-scan-control {
+    display: grid;
+    grid-template-columns: auto 96px;
+    align-items: center;
+    gap: 8px;
+    min-width: 178px;
+    color: #dbeafe;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .incision-workbench .controlled-marker-scan-control[hidden] {
+    display: none;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter {
+    --scan-progress: 16.6667%;
+    --scan-thumb-offset: -4.6667px;
+    appearance: none;
+    width: 96px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: linear-gradient(
+      to right,
+      #0f62fe 0,
+      #0f62fe var(--scan-progress),
+      #efefef var(--scan-progress),
+      #efefef 100%
+    ) center / 100% 6px no-repeat;
+    cursor: pointer;
+    overflow: visible;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -4px;
+    border: 0;
+    border-radius: 50%;
+    background: #0f62fe;
+    transform: translateX(var(--scan-thumb-offset));
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+  }
+
+  .incision-workbench #controlledMarkerScanDiameter::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 0;
+    border-radius: 50%;
+    background: #0f62fe;
+    transform: translateX(var(--scan-thumb-offset));
+  }
+
+  .incision-workbench #stageStatus {
+    min-width: 0;
+    max-width: min(760px, 48vw);
+    color: #dbe4ee;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .incision-workbench #stageStatus[data-tone="warning"] {
+    color: #fde68a;
+  }
+
+  .incision-workbench #stageStatus:empty {
+    display: none;
+  }
+
+  .incision-workbench .workbench-note {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+    margin: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .workbench-note.ok {
+    color: var(--green-d);
+    font-weight: 700;
+  }
+
+  .react-surgery-host {
+    min-height: 100dvh;
+  }
+
+  .surgery-workbench.app {
+    grid-template-columns: minmax(340px, 380px) 1fr;
+  }
+
+  .surgery-workbench .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .surgery-workbench .section-title span:last-child {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .surgery-workbench .btn.cut-along {
+    border-color: var(--clinical-accent);
+    color: #d0e2ff;
+    background: rgb(15 98 254 / 0.14);
+  }
+
+  .surgery-workbench .btn.cut-along:hover {
+    background: rgb(15 98 254 / 0.22);
+  }
+
+  .surgery-workbench .btn.cut-along.active {
+    border-color: #78a9ff;
+    background: var(--clinical-accent);
+    color: #fff;
+    box-shadow: none;
+  }
+
+  .surgery-workbench .surgery-action-row {
+    grid-template-columns: 1fr;
+  }
+
+  .surgery-workbench .surgery-highlight-copy {
+    color: #78a9ff;
+  }
+
+  .surgery-workbench .surgery-tension-bar {
+    background: linear-gradient(90deg, #34d399, #fbbf24, #f87171);
+  }
+
+  .surgery-workbench .legend {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 7px;
+  }
+
+  .surgery-workbench .legend-sw {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+
+  .surgery-workbench .surgery-legend-skin {
+    background: #d6aa8f;
+  }
+
+  .surgery-workbench .surgery-legend-red {
+    background: #d65b4a;
+    margin-left: 10px;
+  }
+
+  .surgery-workbench .help-doc {
+    display: block;
+  }
+
+  .surgery-workbench .help-doc summary {
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .surgery-workbench .help-doc ol {
+    margin: 2px 0 0 18px;
+    padding: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .surgery-workbench .help-doc li {
+    margin: 4px 0;
+  }
+
+  .surgery-workbench .stage-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .surgery-workbench .stage-link {
+    border: 1px solid #264439;
+    border-radius: 999px;
+    background: rgba(52, 227, 164, .08);
+    color: #d6f5e7;
+    padding: 6px 12px;
+    text-decoration: none;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .surgery-workbench .stage-link:hover {
+    background: rgba(52, 227, 164, .14);
+  }
+
+  .surgery-workbench #surgeryCanvas {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 14px;
+    display: block;
+    background: radial-gradient(circle at 50% 38%, #222b35 0%, #121821 52%, #0b0f15 100%);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .surgery-workbench .surgery-verdict-ok {
+    color: #0c8460;
+  }
+
+  .surgery-workbench .surgery-verdict-warn {
+    color: #b45309;
+  }
+
+  .surgery-workbench .surgery-verdict-neutral {
+    color: var(--muted);
+  }
+
+  .incision-workbench .workbench-note.warn {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .edit-status {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: #eef0ea;
+    color: #44505d;
+  }
+
+  .incision-workbench .edit-status.active {
+    background: #fff1c8;
+    color: #8a5a00;
+  }
+
+  .incision-workbench .candidate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .incision-workbench .candidate-row {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f8f9f5;
+    padding: 9px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .incision-workbench .candidate-row .top {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .incision-workbench .candidate-row .meta {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .incision-workbench .candidate-row .candidate-overlay-status {
+    border-left: 3px solid var(--green);
+    padding-left: 7px;
+    color: var(--green-d);
+    font-weight: 700;
+  }
+
+  .incision-workbench .candidate-row .candidate-overlay-status.warning {
+    border-left-color: #b7791f;
+    color: #8a5a00;
+  }
+
+  .incision-workbench .text-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .incision-workbench .text-area {
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--ink);
+    font-family: inherit;
+    line-height: 1.45;
+  }
+
+  .incision-workbench .boundary-status,
+  .incision-workbench .anatomy-preview {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .incision-workbench .boundary-status.warn,
+  .incision-workbench .anatomy-preview.warn {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .review-state {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: #eef0ea;
+    color: #44505d;
+  }
+
+  .incision-workbench .review-state.approved {
+    background: #d9f2e7;
+    color: var(--green-d);
+  }
+
+  .incision-workbench .review-state.rejected {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .incision-workbench .review-state.revision {
+    background: #fff1c8;
+    color: #8a5a00;
+  }
+
+  .incision-workbench .hint {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .guardrail-details {
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 8px 0 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .incision-workbench .guardrail-details.warn {
+    color: #8a5a00;
+    font-weight: 700;
+  }
+
+  .incision-workbench .guardrail-details.danger {
+    color: #991b1b;
+    font-weight: 700;
+  }
+
+  .incision-workbench .canvas-legend,
+  .workflow-workbench .canvas-legend {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    max-width: min(520px, calc(100% - 32px));
+    padding: 9px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(10, 15, 22, 0.72);
+    backdrop-filter: blur(8px);
+    color: #dbe4ee;
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    pointer-events: none;
+  }
+
+  .incision-workbench .asset-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 11px;
+    border-radius: 14px;
+    background: rgba(12, 15, 20, 0.82);
+    backdrop-filter: blur(8px);
+    color: #eef7f3;
+    text-align: center;
+    padding: 24px;
+  }
+
+  .incision-workbench .asset-loading.hidden {
+    display: none;
+  }
+
+  .incision-workbench .asset-loading strong {
+    font-size: 15px;
+  }
+
+  .incision-workbench .asset-loading p {
+    margin: 0;
+    max-width: 360px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #b9c5d0;
+  }
+
+  .incision-workbench .asset-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #34d399;
+    animation: asset-spin 0.9s linear infinite;
+  }
+
+  .incision-workbench .legend-item,
+  .workflow-workbench .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .incision-workbench .legend-swatch,
+  .workflow-workbench .legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+  }
+
+  .incision-workbench .legend-swatch.lesion-center,
+  .workflow-workbench .legend-swatch.lesion-center {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+    border-color: #ffffff;
+  }
+
+  .incision-workbench .legend-swatch.incision-center,
+  .workflow-workbench .legend-swatch.incision-center {
+    background: #f43f5e;
+    border-color: #0b1118;
+  }
+
+  .incision-workbench .legend-swatch.ring,
+  .workflow-workbench .legend-swatch.ring {
+    background: transparent;
+    border-color: #facc15;
+  }
+
+  .incision-workbench .legend-swatch.line,
+  .workflow-workbench .legend-swatch.line {
+    width: 18px;
+    height: 3px;
+    border-radius: 999px;
+    background: #34d399;
+    border: 0;
+  }
+
+  .incision-workbench .legend-swatch.handle,
+  .workflow-workbench .legend-swatch.handle {
+    background: #34d399;
+  }
+
+  .incision-workbench .btn-row.two-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incision-workbench .btn-row.three-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .incision-workbench .candidate-actions.three-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .incision-workbench .candidate-actions.three-cols .btn {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: clamp(10px, 2.8vw, 12px);
+    white-space: nowrap;
+  }
+
+  .incision-workbench #incisionCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    background: #111820;
+  }
+
+  .incision-workbench #incisionPhotoCanvas {
+    --incision-photo-zoom: 1;
+    --incision-photo-pan-x: 0px;
+    --incision-photo-pan-y: 0px;
+    --incision-photo-mirror: 1;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 1;
+    display: block;
+    max-width: none;
+    max-height: none;
+    transform: translate(-50%, -50%)
+      translate(var(--incision-photo-pan-x), var(--incision-photo-pan-y))
+      scale(var(--incision-photo-zoom))
+      scaleX(var(--incision-photo-mirror));
+    transform-origin: center;
+    background: #090d12;
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .incision-workbench #incisionPhotoCanvas:active {
+    cursor: grabbing;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"],
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"]:active {
+    cursor: crosshair;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker-repair="true"],
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker-repair="true"]:active {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 20l4.2-1 10.7-10.7-3.2-3.2L5 15.8z' fill='%2322d3ee' stroke='%23070a0f' stroke-width='1.5'/%3E%3C/svg%3E") 3 21, crosshair;
+  }
+
+  @keyframes controlled-marker-recovery-attention {
+    0%, 100% {
+      border-color: rgb(71 85 105 / 0.85);
+      box-shadow: none;
+    }
+    50% {
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28), 0 0 12px rgb(250 204 21 / 0.32);
+    }
+  }
+
+  .incision-workbench .controlled-marker-scan-control.controlled-marker-recovery-attention,
+  .incision-workbench #controlledMarkerRepairBtn.controlled-marker-recovery-attention:not(:disabled) {
+    border-radius: 6px;
+    animation: controlled-marker-recovery-attention 1s ease-in-out 2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .incision-workbench .controlled-marker-scan-control.controlled-marker-recovery-attention,
+    .incision-workbench #controlledMarkerRepairBtn.controlled-marker-recovery-attention:not(:disabled) {
+      animation: none;
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.28);
+    }
+  }
+
+  @keyframes workflow-review-attention {
+    0%, 100% {
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgb(250 204 21 / 0.24);
+    }
+    50% {
+      border-color: #facc15;
+      box-shadow: 0 0 0 3px rgb(250 204 21 / 0.32), 0 0 16px rgb(250 204 21 / 0.4);
+    }
+  }
+
+  .incision-workbench .workflow-review-attention,
+  .workflow-workbench .workflow-review-attention {
+    border-color: #facc15;
+    box-shadow: 0 0 0 2px rgb(250 204 21 / 0.24);
+    animation: workflow-review-attention 0.85s ease-in-out 2;
+  }
+
+  .incision-workbench .workflow-review-feedback,
+  .workflow-workbench .workflow-review-feedback {
+    margin: 0;
+    padding: 9px 11px;
+    border: 1px solid rgb(250 204 21 / 0.72);
+    border-radius: 10px;
+    background: rgb(250 204 21 / 0.1);
+    color: #facc15;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .incision-workbench .workflow-review-attention,
+    .workflow-workbench .workflow-review-attention {
+      animation: none;
+      border-color: #facc15;
+      box-shadow: 0 0 0 3px rgb(250 204 21 / 0.3);
+    }
+  }
+
+  .incision-workbench #incisionPhotoCanvas[aria-busy="true"],
+  .incision-workbench #incisionPhotoCanvas[aria-busy="true"]:active {
+    cursor: progress;
+  }
+
+  .incision-workbench #incisionPhotoCanvas:not([data-active="true"]) {
+    display: none;
+  }
+
+  .incision-workbench #incisionCandidateCanvas {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay {
+    position: absolute;
+    z-index: 4;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgb(56 189 248 / 0.92);
+    border-radius: 50%;
+    background: rgb(56 189 248 / 0.08);
+    box-shadow: 0 0 0 1px rgb(8 15 24 / 0.9), inset 0 0 0 1px rgb(255 255 255 / 0.18);
+    pointer-events: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay[hidden] {
+    display: none;
+  }
+
+  .incision-workbench .controlled-marker-scan-overlay > span {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: rgb(8 15 24 / 0.88);
+    color: #e0f2fe;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-active="true"] ~ .incision-stage-boundary {
+    display: none;
+  }
+
+  .incision-workbench .incision-photo-endpoint-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    transform: translate(-50%, -50%);
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    cursor: grab;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  .incision-workbench #incisionPhotoCanvas[data-controlled-marker="true"]
+    ~ .incision-photo-endpoint-layer .incision-photo-endpoint-handle {
+    pointer-events: none;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    transform: translate(-50%, -50%);
+    border: 1.5px solid #0f172a;
+    border-radius: 50%;
+    background: #f8fafc;
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.9);
+    box-sizing: border-box;
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle:focus-visible::after,
+  .incision-workbench .incision-photo-endpoint-handle:hover::after {
+    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.95);
+  }
+
+  .incision-workbench .incision-photo-endpoint-handle:active {
+    cursor: grabbing;
+  }
+
+  .incision-workbench .photo-planning-status {
+    position: absolute;
+    z-index: 4;
+    top: 16px;
+    left: 16px;
+    max-width: min(560px, calc(100% - 32px));
+    padding: 8px 10px;
+    border: 1px solid rgb(255 255 255 / 0.16);
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.86);
+    color: #dbe4ee;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.4;
+    pointer-events: none;
+  }
+
+  .incision-workbench .photo-planning-status[data-tone="ready"] {
+    border-color: rgb(52 211 153 / 0.55);
+    color: #a7f3d0;
+  }
+
+  .incision-workbench .photo-planning-status[data-tone="loading"] {
+    border-color: rgb(103 232 249 / 0.55);
+    color: #a5f3fc;
+  }
+
+  .incision-workbench .photo-planning-status[data-tone="warning"] {
+    border-color: rgb(250 204 21 / 0.65);
+    color: #fde68a;
+  }
+
+  .clinical-compat-workbench {
+    --bg: var(--clinical-dark-bg);
+    --side: var(--clinical-dark-sidebar);
+    --card: var(--clinical-dark-panel);
+    --line: var(--clinical-dark-border);
+    --ink: var(--clinical-text-primary);
+    --muted: var(--clinical-dark-muted);
+    --green: var(--clinical-accent);
+    --green-d: #a6c8ff;
+    --green-soft: rgb(15 98 254 / 0.14);
+    --stage: #070a0f;
+    --stage-bar: #0d1117;
+    background: var(--clinical-dark-bg);
+    color: var(--clinical-text-primary);
+    font-family: var(--font-clinical-sans);
+  }
+
+  .clinical-compat-workbench .sidebar {
+    border-right-color: var(--clinical-dark-border);
+    background: var(--clinical-dark-sidebar);
+    gap: 12px;
+    padding-top: 44px;
+  }
+
+  .clinical-compat-workbench .brand {
+    border-bottom: 1px solid var(--clinical-dark-border);
+    padding-bottom: 15px;
+  }
+
+  .clinical-compat-workbench .brand .eyebrow {
+    color: var(--clinical-dark-faint);
+    letter-spacing: .08em;
+  }
+
+  .clinical-compat-workbench .brand h1 {
+    color: var(--clinical-text-primary);
+    font-size: 21px;
+    line-height: 1.22;
+    letter-spacing: 0;
+  }
+
+  .clinical-compat-workbench .card,
+  .clinical-compat-workbench .workbench-grid,
+  .clinical-compat-workbench .scan-panel,
+  .clinical-compat-workbench .overlay-qa,
+  .clinical-compat-workbench .candidate-row,
+  .clinical-compat-workbench .metric,
+  .clinical-compat-workbench .incision-state-grid > div,
+  .clinical-compat-workbench .annotate-state-grid > div,
+  .clinical-compat-workbench .live-state-grid > div,
+  .clinical-compat-workbench .annotate-line-row {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: var(--clinical-dark-panel);
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench .quality-top {
+    align-items: center;
+    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    line-height: 1.25;
+    padding-bottom: 8px;
+  }
+
+  .clinical-compat-workbench .quality-top span:last-child {
+    color: var(--clinical-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: normal;
+  }
+
+  .clinical-compat-workbench .badge {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: #111821;
+    color: #d0e2ff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 8px;
+  }
+
+  .clinical-compat-workbench .badge.loading {
+    border-color: rgb(178 134 0 / 0.55);
+    background: rgb(178 134 0 / 0.14);
+    color: #f1c21b;
+  }
+
+  .clinical-compat-workbench .btn {
+    border-color: var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #151b23;
+    color: var(--clinical-text-primary);
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench .btn:hover {
+    border-color: var(--clinical-dark-border-strong);
+    background: #1c2530;
+  }
+
+  .clinical-compat-workbench .btn-primary {
+    border-color: var(--clinical-accent);
+    background: var(--clinical-accent);
+    color: #f4f7fb;
+  }
+
+  .clinical-compat-workbench .btn-primary:hover {
+    border-color: var(--clinical-accent-hover);
+    background: var(--clinical-accent-hover);
+  }
+
+  .clinical-compat-workbench .btn[aria-pressed="true"] {
+    border-color: #78a9ff;
+    background: rgb(15 98 254 / 0.16);
+    color: #d0e2ff;
+  }
+
+  .clinical-compat-workbench input,
+  .clinical-compat-workbench select,
+  .clinical-compat-workbench textarea,
+  .clinical-compat-workbench .select,
+  .clinical-compat-workbench .text-input,
+  .clinical-compat-workbench .text-area {
+    border-color: var(--clinical-dark-border);
+    border-radius: 4px;
+    background-color: #0f141b;
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench input:focus,
+  .clinical-compat-workbench select:focus,
+  .clinical-compat-workbench textarea:focus,
+  .clinical-compat-workbench .select:focus,
+  .clinical-compat-workbench .text-input:focus,
+  .clinical-compat-workbench .text-area:focus {
+    border-color: var(--clinical-accent);
+    box-shadow: 0 0 0 2px rgb(15 98 254 / 0.16);
+    outline: none;
+  }
+
+  .clinical-compat-workbench input[type=range],
+  .clinical-compat-workbench input[type=checkbox],
+  .clinical-compat-workbench .check input {
+    accent-color: var(--clinical-accent);
+  }
+
+  .clinical-compat-workbench .field-label,
+  .clinical-compat-workbench .hint,
+  .clinical-compat-workbench .workbench-note,
+  .clinical-compat-workbench .disclaimer,
+  .clinical-compat-workbench .candidate-row .meta,
+  .clinical-compat-workbench .guardrail-details,
+  .clinical-compat-workbench .boundary-status,
+  .clinical-compat-workbench .anatomy-preview,
+  .clinical-compat-workbench .help-doc ol,
+  .clinical-compat-workbench .help-doc p,
+  .clinical-compat-workbench .legend,
+  .clinical-compat-workbench .scan-row,
+  .clinical-compat-workbench .overlay-qa p,
+  .clinical-compat-workbench .annotate-state-grid .k,
+  .clinical-compat-workbench .incision-state-grid .k,
+  .clinical-compat-workbench .live-state-grid .k,
+  .clinical-compat-workbench .metric .k {
+    color: var(--clinical-dark-muted);
+  }
+
+  .clinical-compat-workbench .field-label .val,
+  .clinical-compat-workbench .scan-row span:last-child,
+  .clinical-compat-workbench .section-title,
+  .clinical-compat-workbench .help-doc summary,
+  .clinical-compat-workbench .candidate-row .top,
+  .clinical-compat-workbench .annotate-state-grid .v,
+  .clinical-compat-workbench .incision-state-grid .v,
+  .clinical-compat-workbench .live-state-grid .v,
+  .clinical-compat-workbench .metric .v {
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench .disclaimer {
+    border-top: 1px solid var(--clinical-dark-border);
+    padding-top: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .clinical-compat-workbench .stage {
+    background: #070a0f;
+  }
+
+  .clinical-compat-workbench .stage-top {
+    border-bottom-color: var(--clinical-dark-border);
+    background: var(--clinical-dark-sidebar);
+  }
+
+  .clinical-compat-workbench .stage-body {
+    background:
+      linear-gradient(180deg, rgb(15 98 254 / 0.05), transparent 240px),
+      #070a0f;
+  }
+
+  .clinical-compat-workbench .main-wrap,
+  .clinical-compat-workbench #incisionCanvas,
+  .clinical-compat-workbench #surgeryCanvas,
+  .clinical-compat-workbench #stage,
+  .clinical-compat-workbench #three,
+  .clinical-compat-workbench #canvas {
+    border-radius: 4px;
+  }
+
+  .clinical-compat-workbench .live {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #111821;
+    color: var(--clinical-dark-muted);
+  }
+
+  .clinical-compat-workbench .live.on {
+    border-color: rgb(120 169 255 / 0.45);
+    color: #d0e2ff;
+  }
+
+  .clinical-compat-workbench .live.on .dot {
+    background: var(--clinical-accent);
+    box-shadow: 0 0 0 4px rgb(15 98 254 / 0.16);
+  }
+
+  .clinical-compat-workbench .fps,
+  .clinical-compat-workbench .stage-link {
+    color: #a6c8ff;
+  }
+
+  .clinical-compat-workbench .stage-link {
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: rgb(15 98 254 / 0.12);
+    padding: 6px 10px;
+    text-decoration: none;
+  }
+
+  .clinical-compat-workbench .stage-link:hover {
+    background: rgb(15 98 254 / 0.2);
+  }
+
+  .clinical-compat-workbench .bar {
+    background: #1b242f;
+  }
+
+  .clinical-compat-workbench .bar-fill {
+    background: linear-gradient(90deg, #78a9ff, var(--clinical-accent));
+  }
+
+  .clinical-compat-workbench .yaw-meter span {
+    border-color: var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #111821;
+  }
+
+  .clinical-compat-workbench .yaw-meter span.active {
+    border-color: #78a9ff;
+    background: rgb(15 98 254 / 0.22);
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench .overlay-qa.ok {
+    border-color: rgb(66 190 101 / 0.45);
+    background: rgb(66 190 101 / 0.08);
+  }
+
+  .clinical-compat-workbench .overlay-qa.warn,
+  .clinical-compat-workbench .boundary-status.warn,
+  .clinical-compat-workbench .anatomy-preview.warn,
+  .clinical-compat-workbench .workbench-note.warn,
+  .clinical-compat-workbench .guardrail-details.warn,
+  .clinical-compat-workbench .annotate-state-warning,
+  .clinical-compat-workbench .edit-status.active,
+  .clinical-compat-workbench .review-state.revision {
+    color: #f1c21b;
+  }
+
+  .clinical-compat-workbench .guardrail-details.danger,
+  .clinical-compat-workbench .review-state.rejected {
+    color: #ff8389;
+  }
+
+  .clinical-compat-workbench .workbench-note.ok,
+  .clinical-compat-workbench .review-state.approved,
+  .clinical-compat-workbench .surgery-verdict-ok {
+    color: #42be65;
+  }
+
+  .clinical-compat-workbench .review-state,
+  .clinical-compat-workbench .edit-status {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #111821;
+    color: var(--clinical-text-primary);
+  }
+
+  .incision-workbench.clinical-compat-workbench .edit-status.active,
+  .incision-workbench.clinical-compat-workbench .review-state.revision {
+    border-color: rgb(241 194 27 / 0.65);
+    background: #111821;
+    color: #f1c21b;
+  }
+
+  .incision-workbench.clinical-compat-workbench .review-state.approved {
+    border-color: rgb(66 190 101 / 0.65);
+    background: #111821;
+    color: #42be65;
+  }
+
+  .incision-workbench.clinical-compat-workbench .review-state.rejected {
+    border-color: rgb(255 131 137 / 0.65);
+    background: #111821;
+    color: #ff8389;
+  }
+
+  .clinical-compat-workbench .candidate-row.active {
+    border-color: #78a9ff;
+    background: rgb(15 98 254 / 0.12);
+    box-shadow: inset 3px 0 0 #78a9ff;
+  }
+
+  .incision-stage-boundary {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 4;
+    max-width: min(320px, calc(100% - 24px));
+    padding: 6px 8px;
+    border: 1px solid var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.88);
+    color: var(--clinical-text-secondary);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .clinical-compat-workbench .candidate-list {
+    gap: 8px;
+  }
+
+  .clinical-compat-workbench .canvas-legend {
+    border-color: var(--clinical-dark-border-strong);
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.86);
+    backdrop-filter: none;
+    color: var(--clinical-text-primary);
+  }
+
+  .clinical-compat-workbench .asset-loading {
+    border-radius: 4px;
+    background: rgb(7 10 15 / 0.9);
+    backdrop-filter: none;
+  }
+
+  .clinical-compat-workbench .asset-spinner {
+    border-color: rgb(255 255 255 / 0.18);
+    border-top-color: #78a9ff;
+  }
+
+  .clinical-compat-workbench .legend-swatch.line,
+  .clinical-compat-workbench .legend-swatch.handle {
+    background: #78a9ff;
+  }
+
+  .clinical-compat-workbench .surgery-highlight-copy {
+    color: #78a9ff;
+  }
+
+  .clinical-compat-workbench .surgery-tension-bar {
+    background: linear-gradient(90deg, #78a9ff, #f1c21b, #ff8389);
+  }
+
+  .clinical-compat-workbench .surgery-workbench .btn.cut-along,
+  .surgery-workbench.clinical-compat-workbench .btn.cut-along {
+    border-color: var(--clinical-accent);
+    background: rgb(15 98 254 / 0.14);
+    color: #d0e2ff;
+  }
+
+  .clinical-compat-workbench .surgery-workbench .btn.cut-along:hover,
+  .surgery-workbench.clinical-compat-workbench .btn.cut-along:hover {
+    background: rgb(15 98 254 / 0.22);
+  }
+
+  .clinical-compat-workbench .surgery-workbench .btn.cut-along.active,
+  .surgery-workbench.clinical-compat-workbench .btn.cut-along.active {
+    border-color: #78a9ff;
+    background: var(--clinical-accent);
+    color: #f4f7fb;
+    box-shadow: none;
+  }
+
+  .clinical-compat-workbench #surgeryCanvas,
+  .clinical-compat-workbench #incisionCanvas {
+    background: radial-gradient(circle at 50% 38%, #1b2531 0%, #101820 52%, #070a0f 100%);
+  }
+
+  .clinical-developer-disclosure {
+    border: 1px solid var(--clinical-dark-border);
+    border-radius: 4px;
+    background: #0f141b;
+  }
+
+  .clinical-developer-disclosure summary {
+    cursor: pointer;
+    color: var(--clinical-dark-muted);
+    font-size: 12px;
+    font-weight: 700;
+    list-style: none;
+    padding: 10px 12px;
+  }
+
+  .clinical-developer-disclosure summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .clinical-developer-disclosure summary::after {
+    content: "展开";
+    float: right;
+    color: var(--clinical-dark-faint);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .clinical-developer-disclosure[open] summary::after {
+    content: "收起";
+  }
+
+  .clinical-developer-disclosure .card,
+  .clinical-developer-disclosure .workbench-grid {
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
+/* Critical, unlayered overrides: legacy style.css is unlayered and would
+   otherwise win over the clinical workbench theme defined in @layer. */
+.dark-workbench-page {
+  --green: var(--clinical-accent);
+  --green-d: #a6c8ff;
+  --green-soft: rgb(15 98 254 / 0.14);
+  background: var(--clinical-dark-bg);
+  color: var(--clinical-text-primary);
+  font-family: var(--font-clinical-sans);
+}
+
+.dark-workbench-page .react-shell-sidebar {
+  border-right-color: var(--clinical-dark-border);
+  background: var(--clinical-dark-sidebar);
+}
+
+.dark-workbench-page .brand {
+  border-bottom: 1px solid var(--clinical-dark-border);
+}
+
+.dark-workbench-page .brand .eyebrow {
+  color: var(--clinical-dark-faint);
+}
+
+.dark-workbench-page .brand h1 {
+  color: var(--clinical-text-primary);
+}
+
+.dark-workbench-page .card {
+  border: 1px solid var(--clinical-dark-border);
+  border-radius: 4px;
+  background: var(--clinical-dark-panel);
+  color: var(--clinical-text-primary);
+  box-shadow: none;
+}
+
+.dark-workbench-page .quality-top {
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+  color: var(--clinical-dark-muted);
+}
+
+.dark-workbench-page .quality-top span,
+.dark-workbench-page .quality-top b,
+.dark-workbench-page .quality-top svg {
+  color: inherit;
+}
+
+.dark-workbench-page .quality-top span:last-child {
+  color: var(--clinical-text-primary);
+}
+
+.dark-workbench-page .hint,
+.dark-workbench-page p,
+.dark-workbench-page small,
+.dark-workbench-page label {
+  color: var(--clinical-dark-muted);
+}
+
+.dark-workbench-page .badge[data-tone="warning"],
+.dark-workbench-page .candidate-overlay-blocked-hint {
+  color: #f1c21b;
+}
+
+.dark-workbench-page .react-nav-link,
+.dark-workbench-page .btn {
+  border-color: var(--clinical-dark-border);
+  border-radius: 4px;
+  background: #151b23;
+  color: var(--clinical-text-primary);
+  box-shadow: none;
+}
+
+.dark-workbench-page .react-nav-link:hover,
+.dark-workbench-page .btn:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1c2530;
+}
+
+.dark-workbench-page .btn-primary {
+  border-color: var(--clinical-accent);
+  background: var(--clinical-accent);
+  color: #f4f7fb;
+}
+
+.dark-workbench-page .btn-primary:hover {
+  border-color: var(--clinical-accent-hover);
+  background: var(--clinical-accent-hover);
+}
+
+.dark-workbench-page input,
+.dark-workbench-page select,
+.dark-workbench-page textarea {
+  border-color: var(--clinical-dark-border);
+  border-radius: 4px;
+  background: #0f141b;
+  color: var(--clinical-text-primary);
+}
+
+.dark-workbench-page input[type=range],
+.dark-workbench-page input[type=checkbox],
+.dark-workbench-page .check input {
+  accent-color: var(--clinical-accent);
+}
+
+.workflow-workbench .diameter-field-disabled {
+  position: relative;
+  color: #7f8b99;
+  opacity: 0.72;
+}
+
+.workflow-workbench .diameter-disabled-hint-target {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.workflow-workbench .diameter-disabled-hint-target:focus-visible {
+  outline: 2px solid rgb(56 189 248 / 88%);
+  outline-offset: 2px;
+}
+
+.persistent-disabled-tooltip {
+  position: fixed;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 8px 10px;
+  color: #7f1d1d;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  background: #fff7f6;
+  border: 1px solid #f0a6a0;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+}
+
+.workflow-workbench .ellipse-ratio-field-disabled {
+  color: #7f8b99;
+  opacity: 0.72;
+}
+
+.persistent-disabled-tooltip.upload-source-tooltip {
+  color: #e5eaf0;
+  background: #151b23;
+  border-color: #5b6b7a;
+}
+
+.workflow-workbench .diameter-field-disabled .field-label,
+.workflow-workbench .diameter-field-disabled output {
+  color: #7f8b99;
+}
+
+.workflow-workbench #diameterMm:disabled {
+  cursor: not-allowed;
+  accent-color: #6b7280;
+  filter: grayscale(1);
+}
+
+/* Keep the controlled-marker scan rail on its compact established style.
+   This unlayered override must follow the generic dark input background. */
+.incision-workbench #controlledMarkerScanDiameter {
+  width: 96px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background-color: transparent;
+  background-image: linear-gradient(
+    to right,
+    #0f62fe 0,
+    #0f62fe var(--scan-progress),
+    #efefef var(--scan-progress),
+    #efefef 100%
+  );
+  background-position: center;
+  background-size: 100% 6px;
+  background-repeat: no-repeat;
+}
+
+/* These unlayered overrides intentionally follow legacy style imports.
+   They keep active clinical controls visually distinct from disabled controls. */
+.clinical-compat-workbench input:not([type="range"]):not([type="checkbox"]),
+.clinical-compat-workbench select,
+.clinical-compat-workbench textarea,
+.clinical-compat-workbench .select,
+.clinical-compat-workbench .text-input,
+.clinical-compat-workbench .text-area {
+  border-color: var(--clinical-dark-border);
+  background: #0f141b;
+  color: var(--clinical-text-primary);
+  color-scheme: dark;
+}
+
+.clinical-compat-workbench input::placeholder,
+.clinical-compat-workbench textarea::placeholder {
+  color: #98a6b5;
+  opacity: 1;
+}
+
+.clinical-compat-workbench .btn {
+  border-color: var(--clinical-dark-border);
+  background: #151b23;
+  color: var(--clinical-text-primary);
+}
+
+.clinical-compat-workbench .btn:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1c2530;
+}
+
+.clinical-compat-workbench .btn-primary {
+  border-color: var(--clinical-accent);
+  background: var(--clinical-accent);
+  color: #f4f7fb;
+}
+
+.clinical-compat-workbench .btn:disabled {
+  opacity: 0.45;
+}
+
+.workflow-workbench .workflow-disabled-field .field-label {
+  color: #7f8b99;
+}
+
+.workflow-workbench .select:disabled,
+.workflow-workbench .text-input:disabled {
+  cursor: not-allowed;
+  border-color: #3e4b59;
+  background: #20262d;
+  color: #7f8b99;
+  opacity: 0.68;
+  -webkit-text-fill-color: #7f8b99;
+}
+
+/* Keep the active manual-refinement mode obvious after the legacy button
+   imports and the unlayered clinical overrides have both been applied. */
+.clinical-compat-workbench .live-refine-modes .btn[aria-pressed="true"]:not(:disabled) {
+  border-color: #78a9ff;
+  background: var(--clinical-accent);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18) !important;
+}
+
+.clinical-compat-workbench .live-refine-modes .btn[aria-pressed="true"]:not(:disabled):hover {
+  border-color: #a6c8ff;
+  background: var(--clinical-accent-hover);
+}
+
+.clinical-compat-workbench .live-refine-zoom,
+.clinical-compat-workbench .live-refine-point-count {
+  border-color: var(--clinical-dark-border);
+  background: #0f141b;
+  color: var(--clinical-text-primary);
+}
+
+.clinical-compat-workbench .live-refine-zoom .live-refine-range output,
+.clinical-compat-workbench .live-refine-point-count .live-refine-range output {
+  color: var(--clinical-text-primary);
+}
+
+.clinical-compat-workbench .live-refine-point-count input[type="range"] {
+  min-width: 0;
+  margin-inline: 0;
+}
+
+.workflow-workbench.app {
+  grid-template-columns: clamp(320px, 21.25vw, 340px) minmax(640px, 1fr) clamp(320px, 21.25vw, 340px);
+}
+
+.workflow-workbench #ellipseRatio:disabled {
+  cursor: not-allowed;
+  accent-color: #6b7280;
+  filter: grayscale(1);
+}
+
+.workflow-workbench .candidate-review-condition.warning {
+  padding-left: 9px;
+  border-left: 2px solid #f1c21b;
+  color: #fde68a;
+}
+
+.workflow-mobile-recovery-slot {
+  display: contents;
+}
+
+.workflow-mobile-operation-pane {
+  /* Keep focused portal children visible until the layout effect moves them.
+     Outside phone mode this container is empty and creates no layout box. */
+  display: contents;
+}
+
+.workflow-workbench .stage-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+  min-height: 56px;
+  height: auto;
+  padding-block: 6px;
+}
+
+/* This must remain outside @layer so the warning tone wins over the imported
+   clinical workbench's generic .fps color. */
+.workflow-workbench .workflow-stage-status[data-tone="warning"] {
+  color: #fde68a;
+}
+
+.workflow-workbench .workflow-stage-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.workflow-workbench .workflow-stage-status > span:last-child {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.workflow-workbench .workflow-stage-status .workflow-developer-detail {
+  flex: 1 1 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Keep desktop diagnostic paragraphs readable without changing normal/mobile feedback. */
+.workflow-workbench .stage-top > #workflowStageStatus[data-developer-details="true"] {
+  flex-direction: column;
+  align-items: flex-start;
+  max-height: min(320px, 40vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.workflow-workbench .workflow-stage-status[data-developer-details="true"] > .workflow-stage-status-copy,
+.workflow-workbench .workflow-stage-status[data-developer-details="true"] > .workflow-developer-detail {
+  flex: 0 0 auto;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.workflow-workbench .workflow-stage-spinner {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 2px solid rgb(226 232 240 / 36%);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: workflow-stage-spin 0.8s linear infinite;
+}
+
+/* 瞬时识别反馈不参与工具栏排版：显隐不能移动图片或改动按钮的锚点。 */
+.workflow-workbench .stage-top {
+  position: relative;
+}
+
+.workflow-workbench .stage-top > .workflow-stage-status:not([hidden]) {
+  position: absolute;
+  inset: calc(100% + 6px) auto auto 12px;
+  z-index: 10;
+  max-width: calc(100% - 24px);
+  max-height: 96px;
+  padding: 6px 10px;
+  margin: 0;
+  overflow: auto;
+  background: rgb(12 19 27 / 94%);
+  border: 1px solid rgb(190 205 218 / 32%);
+  border-radius: 6px;
+  box-sizing: border-box;
+  grid-area: auto;
+  align-self: auto;
+  pointer-events: none;
+}
+
+.clinical-compat-workbench .overlay-msg.image-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #f4f7fb;
+}
+
+.clinical-compat-workbench .overlay-msg.image-loading::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 2px solid rgb(226 232 240 / 36%);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: workflow-stage-spin 0.8s linear infinite;
+}
+
+@keyframes workflow-stage-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-workbench .workflow-stage-spinner,
+  .clinical-compat-workbench .overlay-msg.image-loading::before {
+    animation: none;
+  }
+}
+
+.workflow-workbench > .workflow-live-rail {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.workflow-workbench > .stage {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.workflow-workbench > .workflow-incision-rail {
+  grid-column: 3;
+  grid-row: 1;
+  border-right: 0;
+  border-left: 1px solid var(--clinical-dark-border);
+}
+
+.incision-workbench > .sidebar {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.incision-workbench > .stage {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.incision-workbench .incision-rule-warning {
+  border-left: 3px solid #f59e0b;
+  color: #fbbf24;
+  padding-left: 9px;
+  font-weight: 700;
+}
+
+.incision-workbench .incision-technical-details {
+  margin-top: 10px;
+  padding: 10px;
+  background: #0f141b;
+}
+
+.incision-workbench .incision-technical-details summary {
+  cursor: pointer;
+  color: #c8d2dc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+html:has(.dark-workbench-page),
+body:has(.dark-workbench-page) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.dark-workbench-page {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dark-workbench-page .react-shell {
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-workbench-page .react-shell.dashboard-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dark-workbench-page .react-shell-sidebar {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px;
+}
+
+.dark-workbench-page .card {
+  border-radius: 2px;
+  padding: 0;
+  box-shadow: none !important;
+}
+
+.dark-workbench-page .card > .quality-top {
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.dark-workbench-page .card > .space-y-3 {
+  margin: 0;
+  padding: 10px;
+}
+
+.dark-workbench-page .react-nav-link,
+.dark-workbench-page .btn,
+.dark-workbench-page .badge,
+.dark-workbench-page .react-route-status,
+.dark-workbench-page input,
+.dark-workbench-page select,
+.dark-workbench-page textarea {
+  border-radius: 2px;
+  box-shadow: none !important;
+}
+
+.dark-workbench-page .btn {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+@keyframes asset-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 880px) {
+  .react-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .react-shell-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--clinical-border);
+  }
+
+  .dark-workbench-page .react-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-hero,
+  .settings-panel-grid,
+  .settings-panel-grid-wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1281px) and (max-width: 1760px) {
+  .workflow-workbench .stage-top {
+    display: grid;
+    grid-template-areas:
+      "live-status incision-status fps"
+      "workflow-actions workflow-actions workflow-actions";
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    height: auto;
+    min-height: 92px;
+    padding-block: 6px;
+    row-gap: 6px;
+  }
+
+  .workflow-workbench .stage-top > #livePill {
+    grid-area: live-status;
+  }
+
+  .workflow-workbench .workflow-stage-status {
+    grid-area: incision-status;
+  }
+
+  .workflow-workbench .workflow-stage-actions {
+    grid-area: workflow-actions;
+    width: 100%;
+    justify-content: flex-end;
+    overflow: visible;
+  }
+
+  .workflow-workbench .stage-top > #fps {
+    grid-area: fps;
+  }
+}
+
+@media (max-width: 1280px) {
+  .workflow-workbench.app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(520px, 72dvh) auto auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .workflow-workbench > .stage {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 520px;
+  }
+
+  .workflow-workbench > .workflow-live-rail {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .workflow-workbench > .workflow-incision-rail {
+    grid-column: 1;
+    grid-row: 3;
+    border-top: 1px solid var(--clinical-dark-border);
+    border-left: 0;
+  }
+}
+
+@media (min-width: 561px) and (max-width: 880px) {
+  .workflow-workbench.app {
+    grid-template-rows: minmax(max-content, 72dvh) auto auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .incision-workbench.app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(480px, 72dvh) auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .incision-workbench > .stage {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 480px;
+  }
+
+  .incision-workbench > .sidebar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .incision-workbench #incisionCanvas,
+  .incision-workbench #incisionPhotoCanvas {
+    position: absolute;
+    min-height: 0;
+  }
+
+  .incision-workbench .photo-action-label {
+    display: none;
+  }
+
+  .incision-workbench .stage-top {
+    gap: 8px;
+    padding-inline: 12px;
+    height: auto;
+    min-height: 56px;
+    align-items: flex-start;
+  }
+
+  .incision-workbench .stage-actions {
+    min-width: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .incision-workbench .stage-top {
+    flex-wrap: wrap;
+  }
+
+  .incision-workbench #stageStatus {
+    display: block;
+    order: -1;
+    flex: 1 0 100%;
+    max-width: none;
+    padding: 2px 0 0;
+  }
+
+  .incision-workbench .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+
+  /* Keep the original stage geometry when the touch-only operation pane is absent. */
+  .workflow-workbench.app:not([data-workflow-mobile="true"]) {
+    grid-template-rows: var(--workflow-mobile-stage-height) auto auto;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-top: var(--workflow-mobile-stage-height);
+    scrollbar-width: none;
+  }
+
+  .workflow-workbench.app:not([data-workflow-mobile="true"])::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workflow-workbench.app:not([data-workflow-mobile="true"]) > .stage {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .workflow-workbench.app {
+    --workflow-mobile-stage-height: max(
+      320px,
+      min(calc(100dvh - 136px), calc(100vw + 134px))
+    );
+    grid-template-rows: var(--workflow-mobile-stage-height) minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+
+  /* 工具栏已恒定预留标记行，视野不再随标记状态补偿高度。 */
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) > .workflow-mobile-operation-pane {
+    display: flex;
+    grid-column: 1;
+    grid-row: 2;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    max-height: 100%;
+    padding-block: 10px max(12px, env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) > .workflow-mobile-operation-pane::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workflow-workbench .workflow-mobile-recovery-slot {
+    display: contents;
+  }
+
+  .incision-workbench.clinical-compat-workbench .candidate-row .candidate-overlay-status {
+    border-left-color: #42be65;
+    color: #42be65;
+  }
+
+  .incision-workbench.clinical-compat-workbench .candidate-row .candidate-overlay-status.warning {
+    border-left-color: #f1c21b;
+    color: #f1c21b;
+  }
+
+  .workflow-workbench .workflow-live-rail,
+  .workflow-workbench #liveWrinkleCard {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workflow-workbench > .stage {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workflow-workbench .stage-top {
+    grid-template-areas:
+      "incision-status"
+      "workflow-actions";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    height: auto;
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 4px 10px 2px;
+    gap: 4px 8px;
+    align-items: center;
+  }
+
+  .workflow-workbench .stage-top > #livePill {
+    display: none;
+  }
+
+  .workflow-workbench .workflow-stage-status {
+    grid-area: incision-status;
+    align-self: stretch;
+  }
+
+  .workflow-workbench .workflow-stage-actions {
+    grid-area: workflow-actions;
+    width: 100%;
+    justify-self: stretch;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .workflow-workbench .stage-top > #fps {
+    display: none;
+  }
+
+  .workflow-workbench .stage-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 8px;
+    padding: 4px 0 8px;
+    overflow: hidden;
+  }
+
+  .workflow-workbench .main-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .workflow-workbench .main-wrap.image-viewer {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
+  .workflow-workbench .main-wrap.refining {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
+  .workflow-workbench .workflow-draft-recovery {
+    align-items: stretch;
+    flex-direction: column;
+    margin: 0 10px;
+  }
+
+  .workflow-workbench .workflow-draft-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflow-workbench .workflow-draft-actions > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  .workflow-workbench .canvas-legend {
+    left: 8px;
+    bottom: 8px;
+    max-width: calc(100% - 16px);
+    padding: 8px 9px;
+    gap: 7px 10px;
+  }
+
+  .workflow-workbench .zoom-strip {
+    /* Phone users zoom the shared canvas directly; retain the card rail for desktop and rollback. */
+    display: none;
+    width: 100%;
+    max-height: none;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 2px 12px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 12px;
+    scroll-snap-type: x mandatory;
+  }
+
+  .workflow-workbench .zoom-card {
+    flex: 0 0 clamp(152px, 44vw, 184px);
+    min-width: clamp(152px, 44vw, 184px);
+    max-width: none;
+    scroll-snap-align: start;
+  }
+
+  .settings-boundary-list p {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workflow-workbench[data-workflow-marker-busy="true"] .workflow-incision-rail,
+.workflow-workbench[data-workflow-marker-busy="true"] .zoom-strip {
+  pointer-events: none;
+}
+
+.mobile-workflow-dock {
+  display: none;
+}
+
+.workflow-workbench .workflow-developer-source-name {
+  min-width: 0;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid rgb(148 163 184 / 38%);
+  border-radius: 4px;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-workbench .workflow-developer-source-name[title="尚未载入图片"] {
+  color: #94a3b8;
+}
+
+.desktop-layer-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-layer-controls-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desktop-layer-controls-heading > span {
+  font-weight: 650;
+}
+
+.desktop-layer-controls-heading > small {
+  color: var(--muted);
+  text-align: right;
+}
+
+.workflow-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.workflow-layer-toggle[aria-pressed="true"] {
+  border-color: var(--clinical-accent);
+  color: var(--clinical-accent);
+  background: color-mix(in srgb, var(--clinical-accent) 12%, transparent);
+}
+
+.workflow-workbench .mobile-candidate-adjust {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  color: #e5eaf0;
+  background: #0f141b;
+  border: 1px solid #34404d;
+  border-left: 3px solid var(--clinical-accent);
+  border-radius: 8px;
+}
+
+.workflow-workbench .mobile-candidate-adjust > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #a6c8ff;
+}
+
+.workflow-workbench .mobile-candidate-adjust > header div,
+.workflow-workbench .mobile-adjust-field {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-workbench .mobile-candidate-adjust > header span {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workflow-workbench .mobile-candidate-adjust small,
+.workflow-workbench .mobile-candidate-adjust p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.workflow-workbench .mobile-candidate-adjust input[type="range"] {
+  width: 100%;
+  min-height: 30px;
+  accent-color: var(--clinical-accent);
+}
+
+@media (max-width: 560px) {
+  .workflow-workbench:where([data-workflow-mobile="true"]) .desktop-layer-controls {
+    display: none;
+  }
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-tumor-transfer-actions,
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-recalculate-action {
+    display: none;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-status {
+    min-block-size: 34px;
+    max-block-size: 96px;
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-status.is-collapsed {
+    visibility: hidden;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-status::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .zoom-strip {
+    --workflow-mobile-zoom-card-size: calc((100vw - 44px) / 3);
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .zoom-card {
+    flex: 0 0 var(--workflow-mobile-zoom-card-size);
+    min-width: var(--workflow-mobile-zoom-card-size);
+    max-width: var(--workflow-mobile-zoom-card-size);
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-mobile-marker-confirm {
+    display: inline-flex;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-stage-actions {
+    block-size: auto;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: 40px 32px;
+    gap: 6px;
+    width: 100%;
+    /* 保留标记操作的第二行：进入/退出标记也不改变图片可用高度。 */
+    block-size: 76px;
+    padding: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools[data-marker-mode="true"] {
+    grid-template-rows: 40px 32px;
+    gap: 4px 6px;
+    block-size: 76px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools > button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 6px;
+    gap: 3px;
+    font-size: 11px;
+    line-height: 1.15;
+    white-space: nowrap;
+    order: initial;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-toggle {
+    grid-area: 1 / 1;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-repair-toggle {
+    grid-area: 1 / 2;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-clear-repair {
+    grid-area: 1 / 3;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-mobile-marker-confirm {
+    grid-area: 2 / 1;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-scan {
+    grid-area: 2 / 2 / 3 / 4;
+    grid-template-columns: max-content minmax(108px, 1fr);
+    width: 100%;
+    min-width: 0;
+    padding-inline: 6px;
+    border: 0;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-scan input {
+    width: 100%;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools .workflow-marker-cancel {
+    grid-area: 2 / 1;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools[data-marker-busy="true"] .workflow-mobile-marker-confirm {
+    grid-area: 2 / 2;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-canvas-tools[data-marker-busy="true"] .workflow-marker-scan {
+    grid-area: 2 / 3 / 3 / 4;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) #liveInputCard {
+    display: none;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) #wrinkleDisplayMode {
+    display: none;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-dock {
+    display: grid;
+    gap: 10px;
+    margin: 0 10px;
+    padding: 11px;
+    color: #e5eaf0;
+    background: #0f141b;
+    border: 1px solid #34404d;
+    border-radius: 8px;
+    box-shadow: 0 8px 22px rgb(0 0 0 / 26%);
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-section {
+    display: grid;
+    gap: 8px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-section + .mobile-workflow-section {
+    padding-top: 10px;
+    border-top: 1px solid #2c3743;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-workflow-heading small {
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-source-grid,
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid {
+    display: grid;
+    gap: 7px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-source-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-selection {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-selection select {
+    min-width: 0;
+    min-height: 42px;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-mirror {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 42px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-mirror:has(input:disabled) {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-camera-error {
+    color: #fcd34d;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-source-grid .btn,
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-grid .btn {
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .mobile-layer-toggle[aria-pressed="true"] {
+    color: #e0f2fe;
+    background: rgb(8 145 178 / 18%);
+    border-color: #67e8f9;
+    box-shadow: inset 0 0 0 1px rgb(103 232 249 / 24%);
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .workflow-incision-overlay [data-workflow-marker-scan-label] {
+    display: none;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
+    .workflow-incision-overlay [data-workflow-candidate],
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
+    .workflow-incision-overlay [data-workflow-candidate-halo],
+  .workflow-workbench:where([data-workflow-mobile="true"])[data-mobile-incision-candidate-visible="false"]
+    .workflow-incision-overlay [data-workflow-diagnostic-candidate] {
+    display: none;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .canvas-legend {
+    color: #f8fafc;
+    background: rgb(8 15 24 / 88%);
+    border-color: rgb(226 232 240 / 24%);
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.lesion-center {
+    background: transparent;
+    border-color: #ffffff;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.incision-center {
+    background: #f43f5e;
+    border-color: #0b1118;
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.ring {
+    border-color: #fde047;
+    box-shadow: 0 0 5px rgb(253 224 71 / 62%);
+  }
+
+  .workflow-workbench:where([data-workflow-mobile="true"]) .legend-swatch.line {
+    height: 2px;
+    background: #67e8f9;
+    box-shadow: 0 0 5px rgb(103 232 249 / 74%);
+  }
+}
+
+/*
+ * style.css is intentionally imported outside a cascade layer, so its legacy
+ * .btn rules outrank the layered surgery rules above. Keep these overrides
+ * unlayered and surgery-scoped so the rendered controls use the dark workbench
+ * palette without changing /live, /incision, or other compatibility pages.
+ */
+.surgery-workbench.clinical-compat-workbench .btn {
+  border-color: var(--clinical-dark-border);
+  background: #151b23;
+  color: var(--clinical-text-primary);
+}
+
+.surgery-workbench.clinical-compat-workbench .btn:hover {
+  border-color: var(--clinical-dark-border-strong);
+  background: #1c2530;
+}
+
+.surgery-workbench.clinical-compat-workbench .btn.cut-along {
+  border-color: var(--clinical-accent);
+  background: rgb(15 98 254 / 0.14);
+  color: #d0e2ff;
+}
+
+.surgery-workbench.clinical-compat-workbench .btn.cut-along:hover {
+  background: rgb(15 98 254 / 0.22);
+}
+
+.surgery-workbench.clinical-compat-workbench .btn.cut-along.active {
+  border-color: #78a9ff;
+  background: var(--clinical-accent);
+  color: #f4f7fb;
+  box-shadow: none;
+}
+
+.clinical-compat-workbench.incision-workbench #stageStatus {
+  color: #dbe4ee;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.clinical-compat-workbench.incision-workbench #stageStatus[data-tone="warning"] {
+  color: #fde68a;
+}
+
+@media (max-width: 680px) {
+  .clinical-compat-workbench.incision-workbench .stage-top {
+    height: auto;
+    flex: 0 0 auto;
+    min-height: 56px;
+    align-items: flex-start;
+  }
+}

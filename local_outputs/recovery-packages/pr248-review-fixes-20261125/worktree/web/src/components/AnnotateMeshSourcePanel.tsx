@@ -1,0 +1,42 @@
+import { Link } from "react-router-dom";
+
+import { useAnnotateControllerCommands } from "../hooks/useControllerCommands";
+import { useAnnotateStore } from "../stores/annotateStore";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { Hint } from "./ui/hint";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+
+export function AnnotateMeshSourcePanel() {
+  const commands = useAnnotateControllerCommands();
+  const snapshot = useAnnotateStore((state) => state.snapshot);
+  const meshActions = snapshot?.meshActions;
+  const showFlame = meshActions?.canLoadFlame ?? true;
+  const showFittedFlame = meshActions?.canLoadFittedFlame ?? true;
+
+  return (
+    <Card>
+      <Hint id="hint">{snapshot?.hint || "加载网格后开始标注。"}</Hint>
+      <Button variant="workbenchPrimary" id="btnLoadCanonical" type="button" onClick={() => commands.mesh("load_canonical")}>加载标准脸</Button>
+      <Button variant="workbench" visible={showFlame} id="btnLoadFlame" type="button" onClick={() => commands.mesh("load_flame")}>加载头模资产</Button>
+      <Button variant="workbench" visible={showFittedFlame} id="btnLoadFittedFlame" type="button" onClick={() => commands.mesh("load_fitted_flame")}>加载个体头模（拟合）</Button>
+      <Button asChild variant="workbench">
+        <label htmlFor="meshFile">上传头模（JSON / OBJ / PLY）</label>
+      </Button>
+      <Input type="file" id="meshFile" accept="application/json,.json,.obj,.ply,model/obj,model/ply" hidden />
+      <Label className="annotate-spacing-label" htmlFor="resampleSpacing">Slicer 曲线重采样间距</Label>
+      <Input id="resampleSpacing" type="number" min="0.2" step="0.2" defaultValue="2" />
+      <Button asChild variant="workbench">
+        <label htmlFor="slicerFile">导入 Slicer 曲线（.mrk.json）</label>
+      </Button>
+      <Input type="file" id="slicerFile" accept=".mrk.json,application/json,.json" hidden />
+      <Button asChild variant="workbench">
+        <Link to="/surgery">张力闭合模拟</Link>
+      </Button>
+      <Button asChild variant="workbench">
+<Link to="/app">返回工具入口</Link>
+      </Button>
+    </Card>
+  );
+}

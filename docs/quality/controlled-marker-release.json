@@ -12,7 +12,7 @@
       "可恢复"
     ],
     "status": "candidate",
-    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
+    "sourceDigest": "a0e5a326034a68e4735fe3095d63500d5345e568538fb93437bf95235f64f046",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "changeSlug": "public-static-refinement-runtime-recovery",
     "previous": {
@@ -306,32 +306,28 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
-    "manifestPath": "local_outputs/recovery-packages/pr248-cbe8f55/manifest.json",
-    "manifestSha256": "37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad",
+    "sourceDigest": "a0e5a326034a68e4735fe3095d63500d5345e568538fb93437bf95235f64f046",
+    "manifestPath": "local_outputs/recovery-packages/pr248-review-fixes-20261125/manifest.json",
+    "manifestSha256": "2c9085d367d4e9ce2a1558eb40047cc2471226ecad2e385fc9c550d99d3a6aeb",
     "scopeConfigSha256": "81e074193fada64bb8ac1aafc6a47d379be58fd174945484d88a3df77e480ce8",
     "verifiedAt": "2026-11-25",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-workflow-recovery-20261125",
-    "note": "Verified source-scope archive for cbe8f55; Git is needed for files outside this scope. The earlier RSTL integration archive remains frozen."
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-review-fixes-20261125",
+    "note": "Verified source-scope archive for a2809a4. Git is needed for files outside this scope. Previous archives remain frozen."
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "scope": "PR #248 changes shared photo/camera, rendering, model loading, and browser test code outside the default scope.",
-    "manifestSha256": "37e58ecfee28253a1a58798c1fb317aa971a98181fa56f1366ea9fee210781ad",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-operator-confirmation-20261125",
-    "confirmedAt": "2026-11-25T08:50:05Z"
+    "scope": "The operator requested both PR #248 review fixes, including the shared photo-camera RSTL display integration. The previously accepted shared workflow scope is otherwise unchanged.",
+    "manifestSha256": "2c9085d367d4e9ce2a1558eb40047cc2471226ecad2e385fc9c550d99d3a6aeb",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-review-fixes-20261125",
+    "confirmedAt": "2026-11-25T12:58:22Z"
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-operator-confirmation-20261125",
-    "confirmedAt": "2026-11-25T08:50:05Z"
+    "status": "pending",
+    "sourceDigest": "a0e5a326034a68e4735fe3095d63500d5345e568538fb93437bf95235f64f046"
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "7e07e4687cd9ce30bc5a101cb0a879dd6610d85e1608b2277795b335c72d5b9b",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-operator-confirmation-20261125",
-    "confirmedAt": "2026-11-25T08:50:05Z"
+    "status": "pending",
+    "sourceDigest": "a0e5a326034a68e4735fe3095d63500d5345e568538fb93437bf95235f64f046"
   },
   "history": [
     {
