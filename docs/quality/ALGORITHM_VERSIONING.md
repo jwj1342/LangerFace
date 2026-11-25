@@ -4,7 +4,9 @@
 
 The operator requested that the combined workflow preload YOLO weights on entry. The page requests the versioned model chunks at low priority and stores them in the browser cache; a manual detection reuses the in-progress download and starts inference once it settles. Failed prefetch falls back to the existing on-demand loader. The shared changes concern delivery and Worker request timing. The model, inference algorithm, and clinical boundaries are unchanged.
 
-The previous operator evaluation applies to its recorded source digest. The latest source still needs its own operator evaluation and editor save confirmation.
+<a id="pr248-wrinkle-prefetch-operator-evaluation-20261125"></a>
+
+On 2026-11-25, the operator reported “皱纹检测符合预期” after testing the local preview for commit `931f3fc`, then confirmed that all editor changes for this PR had been saved (“已保存”). Both records apply to source digest `dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0`. The evaluation covers wrinkle detection in the preview.
 
 <a id="pr248-review-fixes-20261125"></a>
 

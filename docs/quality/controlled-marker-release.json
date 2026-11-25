@@ -322,12 +322,16 @@
     "confirmedAt": "2026-11-25"
   },
   "operatorEvaluation": {
-    "status": "pending",
-    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0"
+    "status": "accepted",
+    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-wrinkle-prefetch-operator-evaluation-20261125",
+    "confirmedAt": "2026-11-25"
   },
   "editorSaveConfirmation": {
-    "status": "pending",
-    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0"
+    "status": "confirmed",
+    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-wrinkle-prefetch-operator-evaluation-20261125",
+    "confirmedAt": "2026-11-25"
   },
   "history": [
     {
