@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 test("site root opens the workflow and the launcher retains all three tools", async ({ page }) => {
   await page.goto("/?entry=demo#preview");
   await expect(page).toHaveURL(/\/app\/workflow\?entry=demo#preview$/);
-  await page.getByRole("link", { name: "返回工具入口", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "面部评估与张力线映射" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "返回工具入口", exact: true })).toHaveCount(0);
+  await page.goto("/app");
   await expect(page).toHaveURL(/\/app$/);
   const links = page.getByRole("region", { name: "研究工具" }).getByRole("link");
   expect(await links.evaluateAll(items => items.map(item => item.getAttribute("href"))))
