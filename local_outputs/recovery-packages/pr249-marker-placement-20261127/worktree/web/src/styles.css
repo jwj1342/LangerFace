@@ -3798,3 +3798,37 @@ body:has(.dark-workbench-page) {
     color: var(--workflow-phone-control-text);
   }
 }
+
+/* During phone marker placement, move the original tools below the photo. */
+.workflow-mobile-marker-tools { display: none; }
+@media (max-width: 560px) {
+  .workflow-workbench[data-workflow-mobile="true"][data-mobile-marker-active="true"] .mobile-workflow-dock {
+    display: none;
+  }
+  .workflow-workbench[data-workflow-mobile="true"][data-mobile-marker-active="true"] .workflow-mobile-marker-tools {
+    display: block;
+    height: var(--workflow-phone-dock-height);
+    padding: 4px 12px env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-canvas-tools[data-marker-mode="true"] {
+    grid-template-rows: 44px 44px;
+    grid-auto-rows: 44px;
+    block-size: auto;
+    gap: 4px 6px;
+    overflow: visible;
+  }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-marker-cancel {
+    grid-area: 3 / 1 / auto / -1;
+  }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-developer-source-name {
+    display: none;
+  }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .btn {
+    min-height: 44px;
+    color: #e5eaf0;
+    background: #222932;
+    border-color: #53606e;
+    box-shadow: none;
+  }
+}

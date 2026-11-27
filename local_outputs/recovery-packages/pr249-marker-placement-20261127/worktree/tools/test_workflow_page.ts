@@ -552,6 +552,7 @@ const loadLayout = (source: string, phone: boolean, shared?: unknown) => {
     };
     if (name === "../lib/cn") return { cn: (...values: unknown[]) => twMerge(clsx(values)) };
     if (name === "./WorkbenchLayout") return shared;
+    if (name === "../stores/incisionStore") return { useIncisionStore: (select: (state: unknown) => unknown) => select({ snapshot: null }) };
     if (name === "./WorkflowMobilePanels") return { WorkflowMobilePanelContext: react.createContext(null) };
     if (name === "lucide-react") return requireWeb(name);
     throw new Error(`Unexpected layout dependency: ${name}`);
@@ -585,7 +586,7 @@ for (const phone of [false, true]) {
     const { WorkflowLayout } = loadLayout(layout, phone, layoutExports) as Record<string, typeof react.Component>;
     const actual = h(WorkflowLayout, { stage: stageFixture, liveRail: liveFixture, incisionRail: incisionFixture, mobileOperations: operations });
     const expected = h("div", { className: "app clinical-compat-workbench workflow-workbench",
-      "data-workflow-mobile": String(phone), "data-mobile-panel": phone ? "closed" : undefined }, stageFixture,
+      "data-workflow-mobile": String(phone), "data-mobile-marker-active": "false", "data-mobile-panel": phone ? "closed" : undefined }, stageFixture,
         h("div", { className: "workflow-mobile-operation-pane", "aria-label": "移动端操作台" },
           h("div", { className: "workflow-mobile-recovery-slot" }),
           h("section", { className: "workflow-mobile-sheet", hidden: true, "aria-label": "更多" },
@@ -593,6 +594,7 @@ for (const phone of [false, true]) {
               h("strong", null, "更多"), h("button", { type: "button", "aria-label": "收起操作面板" }, h(requireWeb("lucide-react").ChevronDown, { size: 18, "aria-hidden": true }))),
             h("div", { className: "workflow-mobile-sheet-scroll" },
               ...["texture", "incision", "more"].map(name => h("div", { "data-mobile-panel-slot": name, hidden: true })))),
+          h("div", { className: "workflow-mobile-marker-tools", "aria-label": "标记操作" }),
           phone ? operations : null),
         h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
         h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture));
@@ -679,7 +681,7 @@ assert.match(workflowDraftSession, /globalThis\.sessionStorage/,
   "workflow recovery stays within the current browser-tab session");
 assert.doesNotMatch(workflowDraftSession, /indexedDB|localStorage/,
   "workflow recovery cannot grow into a persistent browser case database");
-assert.match(workbench, /workflowActions={<WorkflowMobileSection panel="incision"><WorkflowCanvasTools\s*\/><\/WorkflowMobileSection>}/,
+assert.match(workbench, /workflowActions={<WorkflowMobileSection panel="incision" canvasTools><WorkflowCanvasTools\s*\/><\/WorkflowMobileSection>}/,
   "workflow retains the desktop stage tools and places those same controls in the phone incision panel");
 assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workflow keeps only the incision drawing layer over the shared canvas");
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");

@@ -99,6 +99,10 @@ async function preparePr226PhotoCandidate(page: Page) {
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
   await canvas.click({ position: point });
   await expect(page.locator("#workflowStageStatus")).toContainText("候选已生成并等待审阅", { timeout: 45_000 });
+  if (await page.locator('[data-workflow-mobile="true"]').count() > 0) {
+    await markerButton.click();
+    await page.getByRole("button", { name: "切口设计", exact: true }).click();
+  }
 }
 
 async function prepareControlledMarkerCandidateAt(

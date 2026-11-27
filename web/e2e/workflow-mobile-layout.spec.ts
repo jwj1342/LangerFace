@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { uploadGeneratedPhoto } from "./support/incisionPhoto";
+import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
 
 test.describe("phone workflow layout", () => {
   test.use({ viewport: { width: 393, height: 852 }, hasTouch: true, isMobile: true });
@@ -113,4 +113,48 @@ test.describe("phone workflow layout", () => {
     await expect(page.locator("#wrinkleDetectBtn")).toHaveCount(1);
     expect(errors).toEqual([]);
   });
+
+  test("lower photo marker placement stays reachable and confirms recognition", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/app/workflow");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+    await uploadGeneratedPhotoWithControlledMarkers(page,
+      [{ xRatio: 0.72, yRatio: 0.75, radiusRatio: 0.02, filled: true }], "#fileInput");
+    await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+    await page.getByRole("button", { name: "切口设计", exact: true }).tap();
+    const toggle = page.locator(".workflow-marker-toggle");
+    const canvas = page.locator("#canvas");
+    const before = await canvas.boundingBox();
+    await toggle.tap();
+    await expect(page.locator(".workflow-mobile-sheet")).toBeHidden();
+    const tools = page.locator(".workflow-mobile-marker-tools");
+    await expect(tools.locator(".workflow-marker-toggle")).toHaveText("退出标记");
+    const confirm = tools.getByRole("button", { name: "识别已放置圆圈内的肿物" });
+    await expect(confirm).toBeDisabled();
+    expect(await canvas.boundingBox()).toEqual(before);
+    // This is the exact lower-photo touch that the former sheet intercepted.
+    expect(await canvas.evaluate(el => {
+      const box = el.getBoundingClientRect();
+      return document.elementFromPoint(box.left + box.width * 0.5, box.top + box.height * 0.75) === el;
+    })).toBe(true);
+    const box = await canvas.boundingBox();
+    await canvas.tap({ position: { x: box!.width * 0.5, y: box!.height * 0.75 } });
+    await expect(confirm).toBeEnabled();
+    // Also place on the actual cheek marker, at the same lower-photo height.
+    await canvas.tap({ position: { x: box!.width * 0.72, y: box!.height * 0.75 } });
+    await expect(page.locator("[data-workflow-marker-scan]")).toBeVisible();
+    const toolBox = await tools.boundingBox();
+    expect(toolBox!.y).toBeGreaterThanOrEqual(box!.y + box!.height);
+    await page.screenshot({ path: test.info().outputPath("lower-photo-marker-ready.png") });
+    await confirm.tap();
+    await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", /^M /, { timeout: 45_000 });
+    await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", /^M /, { timeout: 45_000 });
+    await page.screenshot({ path: test.info().outputPath("lower-photo-marker-recognized.png") });
+    await toggle.tap();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".mobile-upload-action")).toBeVisible();
+    await page.getByRole("button", { name: "切口设计", exact: true }).tap();
+    await expect(page.locator('[data-mobile-panel-slot="incision"] .workflow-marker-toggle')).toBeVisible();
+  });
+
 });

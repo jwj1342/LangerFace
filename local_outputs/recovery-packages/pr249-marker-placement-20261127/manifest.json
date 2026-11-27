@@ -1,13 +1,13 @@
 {
   "schema": "skin-texture-algorithm-recovery/2",
-  "name": "mobile-workflow-ui-20261127-final-tests",
-  "createdAt": "2026-11-27T09:55:40.137Z",
+  "name": "pr249-marker-placement-20261127",
+  "createdAt": "2026-11-27T10:41:47.316Z",
   "source": {
     "branch": "codex/mobile-workflow-ui-20261127",
-    "head": "0a2a4335cf1afa93c24d020abb9e7d6ad8a639b7",
-    "tree": "c1c6873930742f3a4d5a927b9ed7bd95fa5a2766",
+    "head": "c98b1662bc24b11534cc43eb00157eb734cadb8b",
+    "tree": "88fa6b397c86b17ed6c41de8a6233c1d01e802e8",
     "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
-    "status": " M web/e2e/zoom-cap-current.spec.ts\n"
+    "status": " M .gitattributes\n M docs/quality/MOBILE_WORKFLOW_UI_20261127.md\n M docs/quality/controlled-marker-release.json\n M tools/run_browser_contract_suites.mjs\n M tools/test_workflow_page.ts\n M web/e2e/freehand-mobile-regression.spec.ts\n M web/e2e/support/incisionPhoto.ts\n M web/e2e/workflow-mobile-layout.spec.ts\n M web/e2e/workflow-regressions.spec.ts\n M web/src/components/WorkflowLayout.tsx\n M web/src/components/WorkflowMobilePanels.tsx\n M web/src/routes/WorkflowWorkbench.tsx\n M web/src/styles.css\n"
   },
   "archiveScope": {
     "schema": "langerface-algorithm-archive-scope/1",
@@ -45,7 +45,10 @@
     ],
     "configPath": "docs/quality/algorithm-archive-scope.json",
     "configSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
-    "changedOutsideScope": []
+    "changedOutsideScope": [
+      ".gitattributes",
+      "docs/quality/MOBILE_WORKFLOW_UI_20261127.md"
+    ]
   },
   "algorithmIdentity": {
     "schema": 1,
@@ -55,9 +58,9 @@
     "profile": "small-lesion-boundary-candidate",
     "implementationVersion": "0.104.2-candidate.4",
     "branch": "codex/mobile-workflow-ui-20261127",
-    "head": "0a2a4335cf1afa93c24d020abb9e7d6ad8a639b7",
+    "head": "c98b1662bc24b11534cc43eb00157eb734cadb8b",
     "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
-    "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
+    "sourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "assetDigest": "59c6b3d59e05f3142985b4efae782707c268f0611b34ea8670d0a444f9b28c4b",
     "sourceFileCount": 293,
@@ -94,8 +97,8 @@
     },
     {
       "relativePath": "docs/quality/ALGORITHM_VERSIONING.md",
-      "bytes": 147473,
-      "sha256": "7beff44e8f5c2c9413f91dfa95af06081873d48c4cd3c38106b8f48529bedc0f"
+      "bytes": 147658,
+      "sha256": "25dd2c0ae83d586acddd8d7a9a1faa18f86973525411afece0351a4f81c5d51f"
     },
     {
       "relativePath": "docs/quality/LESION_CANDIDATE_REVIEW.md",
@@ -119,8 +122,8 @@
     },
     {
       "relativePath": "docs/quality/controlled-marker-release.json",
-      "bytes": 349809,
-      "sha256": "f31ce439c9f58c9978bbb99b0710840dcafa69f3d0f5c23b352732b756181500"
+      "bytes": 349728,
+      "sha256": "ea4dc6f072c927a8034a3a5690db9b44a6e64190ece47ae0c73122130af35871"
     },
     {
       "relativePath": "docs/tracks/INCISION_WORKFLOW.md",
@@ -199,8 +202,8 @@
     },
     {
       "relativePath": "tools/run_browser_contract_suites.mjs",
-      "bytes": 45964,
-      "sha256": "e43a1ef942a14ae6d88b5cf421c81099fb866bbb72f6640f980bf2dbdb4251fd"
+      "bytes": 46176,
+      "sha256": "ec3ff5358fd02bf9ee3121351abc98e4a19f2935cf97660d60f360575038190c"
     },
     {
       "relativePath": "tools/run_controlled_marker_v035_build.mjs",
@@ -494,8 +497,8 @@
     },
     {
       "relativePath": "tools/test_workflow_page.ts",
-      "bytes": 153380,
-      "sha256": "f29b7141b276264e6bf3b6c0083b29e0014809cc51a5bd3b565c159ed77b30e8"
+      "bytes": 153669,
+      "sha256": "eaf4d3dc6cde845941a39504089be00d20dd56b023bfa48301bddc158c1c9422"
     },
     {
       "relativePath": "tools/test_workflow_photo_boundary_independence.ts",
@@ -589,8 +592,8 @@
     },
     {
       "relativePath": "web/e2e/freehand-mobile-regression.spec.ts",
-      "bytes": 34962,
-      "sha256": "972356bfa4e1bc6ad196a5a22675579e0c63ccc2ae6d7e7d0ad6df3ec87a91d2"
+      "bytes": 35159,
+      "sha256": "5c97b14973e7f993c24b3ffef0fb06dca39a1d89314366c4f2696c4fef6c6bc6"
     },
     {
       "relativePath": "web/e2e/incision-controlled-marker.spec.ts",
@@ -629,8 +632,8 @@
     },
     {
       "relativePath": "web/e2e/support/incisionPhoto.ts",
-      "bytes": 9189,
-      "sha256": "66fe81bfa9f1315ce489ac1cedc6812444b3e8531fc3957d45457217ca91a22f"
+      "bytes": 9307,
+      "sha256": "d3a75c0eef22345dd3e0ade9f89372cd6cc2cc0cb47782d0892d86c320199af5"
     },
     {
       "relativePath": "web/e2e/support/markerRuntimeSetup.ts",
@@ -659,13 +662,13 @@
     },
     {
       "relativePath": "web/e2e/workflow-mobile-layout.spec.ts",
-      "bytes": 7295,
-      "sha256": "78cbafeeffd9e39f98541f258fe6ed3feaa80c1d9bbeaef793038dfd602ccfe8"
+      "bytes": 10146,
+      "sha256": "4014389b8e3bd82aad741a6fd2add92949096ef8b14e8cd4405b98f58e2726eb"
     },
     {
       "relativePath": "web/e2e/workflow-regressions.spec.ts",
-      "bytes": 50019,
-      "sha256": "e9e8f6ea189c8955fbb0e456dceaf7f45aab65813b9e407960521f9d8aedc34c"
+      "bytes": 50211,
+      "sha256": "242fb29d2818f9cf0e3c59eb0d0e8b42e37e09bec117cf8add86d7db8d77a0f9"
     },
     {
       "relativePath": "web/e2e/zoom-cap-current.spec.ts",
@@ -884,13 +887,13 @@
     },
     {
       "relativePath": "web/src/components/WorkflowLayout.tsx",
-      "bytes": 5018,
-      "sha256": "3ddd22dec8bb91af14c175222faa2d6e08513e197df88079e15c2a8f5f38a166"
+      "bytes": 5704,
+      "sha256": "c822daa00cc8cdd2496e1c75a8ec276ceecc5e5944930017bfdab75f8a0c1b85"
     },
     {
       "relativePath": "web/src/components/WorkflowMobilePanels.tsx",
-      "bytes": 2330,
-      "sha256": "327067568ac054651504c0b3acc947a4eea2b2fda4efe077ce442e04fb828a7e"
+      "bytes": 2602,
+      "sha256": "c06e186f700a8d1cc4f4565e235da9322531d62de4147b50102e2032e5660945"
     },
     {
       "relativePath": "web/src/components/WorkflowStageStatus.tsx",
@@ -1129,8 +1132,8 @@
     },
     {
       "relativePath": "web/src/routes/WorkflowWorkbench.tsx",
-      "bytes": 1309,
-      "sha256": "ad55f5a7bce8fdf4d049c18c8a01bbb58fb18cd28efef0004a2d7c0c07231d8e"
+      "bytes": 1321,
+      "sha256": "055af54a765f0cfff5b081702860b22bbb3ca3c5c3e0df38407b90e93a454a8d"
     },
     {
       "relativePath": "web/src/services/canvasRecording.ts",
@@ -1429,8 +1432,8 @@
     },
     {
       "relativePath": "web/src/styles.css",
-      "bytes": 102898,
-      "sha256": "123c06c496f0cd8195d88f6ddf3a230516d02a1208d7014313eeecca36c09314"
+      "bytes": 104210,
+      "sha256": "e732075dabc3cd1c3423c68b1c70d28d44e406a74168b4fd36aba87f31cfd55d"
     },
     {
       "relativePath": "web/src/workers/workflow.worker.ts",

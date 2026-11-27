@@ -8,6 +8,8 @@ export interface WorkflowMobilePanelLayout {
   selected: WorkflowMobilePanel | null;
   select: (panel: WorkflowMobilePanel | null) => void;
   slots: Record<WorkflowMobilePanel, HTMLDivElement>;
+  markerActive: boolean;
+  markerSlot: HTMLDivElement;
 }
 
 export const WorkflowMobilePanelContext = createContext<WorkflowMobilePanelLayout | null>(null);
@@ -34,16 +36,17 @@ export function WorkflowMobileDisclosure({ title, children, initialOpen = false 
 }
 
 /** Move a stable portal host, keeping the original controls and bindings alive. */
-export function WorkflowMobileSection({ panel, children }: { panel: WorkflowMobilePanel; children: ReactNode }) {
+export function WorkflowMobileSection({ panel, children, canvasTools = false }: { panel: WorkflowMobilePanel; children: ReactNode; canvasTools?: boolean }) {
   const layout = useWorkflowMobilePanels();
   if (!layout) return children;
-  return <PlacedSection panel={panel} layout={layout}>{children}</PlacedSection>;
+  return <PlacedSection panel={panel} layout={layout} canvasTools={canvasTools}>{children}</PlacedSection>;
 }
 
-function PlacedSection({ panel, children, layout }: {
+function PlacedSection({ panel, children, layout, canvasTools }: {
   panel: WorkflowMobilePanel;
   children: ReactNode;
   layout: WorkflowMobilePanelLayout;
+  canvasTools: boolean;
 }) {
   const anchor = useRef<HTMLDivElement>(null);
   const [host] = useState(() => {
@@ -51,11 +54,11 @@ function PlacedSection({ panel, children, layout }: {
     node.className = "workflow-mobile-section-host";
     return node;
   });
-  const { mobile, slots } = layout;
+  const { mobile, slots, markerActive, markerSlot } = layout;
   useLayoutEffect(() => {
-    const target = mobile ? slots[panel] : anchor.current;
+    const target = mobile ? (canvasTools && markerActive ? markerSlot : slots[panel]) : anchor.current;
     target?.append(host);
-  }, [host, mobile, panel, slots]);
+  }, [host, mobile, panel, slots, canvasTools, markerActive, markerSlot]);
   useLayoutEffect(() => () => host.remove(), [host]);
   return <><div ref={anchor} className="workflow-mobile-section-anchor" />{createPortal(children, host)}</>;
 }

@@ -17,6 +17,7 @@ export interface ControlledMarkerFixture {
   yRatio: number;
   radiusRatio?: number;
   interiorRetrace?: boolean;
+  filled?: boolean;
   strokeOpacity?: number;
 }
 
@@ -115,6 +116,10 @@ export async function uploadGeneratedPhotoWithControlledMarkers(
       context.lineJoin = "round";
       context.globalAlpha = marker.strokeOpacity ?? 1;
       context.stroke();
+      if (marker.filled) {
+        context.fillStyle = "#160d0a";
+        context.fill();
+      }
       if (marker.interiorRetrace) {
         const chordAngle = 0.7;
         const endpoint = (angle: number) => ({

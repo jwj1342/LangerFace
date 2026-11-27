@@ -595,6 +595,8 @@ test("a visibility-limited candidate prompts for a reviewer before confirmation"
   await clickCanvasRatio(page, marker.xRatio, marker.yRatio);
   await expect(page.locator("#workflowStageStatus")).toContainText("视野受限参考", { timeout: 45_000 });
 
+  await markerButton.click();
+  await openPhoneIncision(page);
   await page.locator("#saveReviewBtn").click();
   await expect(page.locator("#reviewSaveFeedback")).toContainText("请填写审阅人后确认");
   await expect(page.locator("#reviewerName")).toHaveAttribute("aria-invalid", "true");
@@ -706,9 +708,12 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await page.setViewportSize({ width: 390, height: 844 });
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "false");
+  await openPhoneIncision(page);
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
 
+  await markerButton.click();
+  await expect(markerButton).toHaveAttribute("aria-pressed", "false");
   await openPhoneIncision(page, "切口规划");
   const boundaryMode = page.getByLabel("肿物边界");
   const boundaryButton = page.locator("#startBoundaryBtn");

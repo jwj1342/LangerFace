@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 
 import { WorkbenchFrame } from "./WorkbenchLayout";
 import { narrowTouchWorkflowViewportActive, subscribeWorkflowViewport } from "../services/workflowViewport";
+import { useIncisionStore } from "../stores/incisionStore";
 import { WorkflowMobilePanelContext, type WorkflowMobilePanel } from "./WorkflowMobilePanels";
 
 interface WorkflowLayoutProps {
@@ -15,6 +16,9 @@ interface WorkflowLayoutProps {
 
 export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail }: WorkflowLayoutProps) {
   const [mobileViewport, setMobileViewport] = useState(narrowTouchWorkflowViewportActive);
+  const markerActive = useIncisionStore(state => Boolean(state.snapshot?.workflowTools?.controlledMarkerMode));
+  const markerSlotRef = useRef<HTMLDivElement>(null);
+  const [markerSlot] = useState(() => document.createElement("div"));
   const paneRef = useRef<HTMLDivElement>(null);
   const incisionSlotRef = useRef<HTMLDivElement>(null);
   const [selected, select] = useState<WorkflowMobilePanel | null>(null);
@@ -45,6 +49,10 @@ export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail
   }, []);
 
   useLayoutEffect(() => {
+    if (mobileViewport && markerActive) select(null);
+  }, [mobileViewport, markerActive]);
+
+  useLayoutEffect(() => {
     const pane = paneRef.current;
     const root = pane?.parentElement;
     const stageNode = root?.querySelector(":scope > .stage");
@@ -66,10 +74,11 @@ export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail
   useLayoutEffect(() => {
     const pane = paneRef.current;
     if (!pane) return;
+    markerSlotRef.current?.append(markerSlot);
     for (const name of ["texture", "incision", "more"] as const) {
       pane.querySelector(`[data-mobile-panel-slot="${name}"]`)?.prepend(slots[name]);
     }
-  }, [slots]);
+  }, [slots, markerSlot]);
 
   useLayoutEffect(() => () => {
     rails.live.remove();
@@ -77,12 +86,12 @@ export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail
   }, [rails]);
 
   return (
-    <WorkflowMobilePanelContext.Provider value={{ mobile: mobileViewport, selected, select, slots }}>
-    <WorkbenchFrame workspace="workflow" data-workflow-mobile={String(mobileViewport)} data-mobile-panel={mobileViewport ? selected || "closed" : undefined}>
+    <WorkflowMobilePanelContext.Provider value={{ mobile: mobileViewport, selected, select, slots, markerActive, markerSlot }}>
+    <WorkbenchFrame workspace="workflow" data-workflow-mobile={String(mobileViewport)} data-mobile-marker-active={String(mobileViewport && markerActive)} data-mobile-panel={mobileViewport ? selected || "closed" : undefined}>
       {stage}
       <div ref={paneRef} className="workflow-mobile-operation-pane" aria-label="移动端操作台">
         <div className="workflow-mobile-recovery-slot" />
-        <section className="workflow-mobile-sheet" hidden={!mobileViewport || !selected} aria-label={selected === "texture" ? "皮肤纹理" : selected === "incision" ? "切口设计" : "更多"}>
+        <section className="workflow-mobile-sheet" hidden={!mobileViewport || !selected || markerActive} aria-label={selected === "texture" ? "皮肤纹理" : selected === "incision" ? "切口设计" : "更多"}>
           <header className="workflow-mobile-sheet-heading">
             <strong>{selected === "texture" ? "皮肤纹理" : selected === "incision" ? "切口设计" : "更多"}</strong>
             <button type="button" onClick={() => select(null)} aria-label="收起操作面板"><ChevronDown size={18} aria-hidden="true" /></button>
@@ -93,6 +102,7 @@ export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail
             <div data-mobile-panel-slot="more" hidden={selected !== "more"} />
           </div>
         </section>
+        <div ref={markerSlotRef} className="workflow-mobile-marker-tools" aria-label="标记操作" />
         {mobileViewport ? mobileOperations : null}
       </div>
       {createPortal(liveRail, rails.live, "workflow-live")}

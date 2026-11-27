@@ -21,7 +21,7 @@ export function WorkflowWorkbench() {
       stage={(
         <LiveStagePanel
           compactWorkflowChrome
-          workflowActions={<WorkflowMobileSection panel="incision"><WorkflowCanvasTools /></WorkflowMobileSection>}
+          workflowActions={<WorkflowMobileSection panel="incision" canvasTools><WorkflowCanvasTools /></WorkflowMobileSection>}
           workflowOverlay={<WorkflowCanvasOverlay />}
           workflowStatus={<WorkflowStageStatus />}
         />
