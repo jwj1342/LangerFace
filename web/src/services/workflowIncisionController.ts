@@ -119,6 +119,7 @@ import {
   importedTumorFormState,
   withControlledMarkerProvenance,
 } from "./tumorInput";
+import { finishRefine2d } from "./liveRefine2d";
 import { modelState, renderState, sourceState, type EditableRefineLine } from "./liveState";
 import { rememberWorkflowOverlayPhoto, workflowOverlayMatchesPhoto } from "./workflowPhotoCamera.ts";
 import { resetImageView } from "./liveCanvasFit";
@@ -4065,6 +4066,7 @@ function handleToolCommand(state: WorkflowIncisionState, event: Event) {
         publish(state, "controlled_marker_no_photo");
         return;
       }
+      if (!state.markerMode) finishRefine2d();
       state.pendingClick = null;
       state.markerMode = !state.markerMode;
       if (state.markerMode) {

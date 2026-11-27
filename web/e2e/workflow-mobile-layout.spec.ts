@@ -121,11 +121,16 @@ test.describe("phone workflow layout", () => {
     await uploadGeneratedPhotoWithControlledMarkers(page,
       [{ xRatio: 0.72, yRatio: 0.75, radiusRatio: 0.02, filled: true }], "#fileInput");
     await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+    await page.getByRole("button", { name: "皮肤纹理", exact: true }).tap();
+    const refine = page.locator("#refine2dBtn");
+    await refine.tap();
+    await expect(refine).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "切口设计", exact: true }).tap();
     const toggle = page.locator(".workflow-marker-toggle");
     const canvas = page.locator("#canvas");
     const before = await canvas.boundingBox();
     await toggle.tap();
+    await expect(refine).toHaveAttribute("aria-pressed", "false");
     await expect(page.locator(".workflow-mobile-sheet")).toBeHidden();
     const tools = page.locator(".workflow-mobile-marker-tools");
     await expect(tools.locator(".workflow-marker-toggle")).toHaveText("退出标记");
@@ -152,6 +157,7 @@ test.describe("phone workflow layout", () => {
     await page.screenshot({ path: test.info().outputPath("lower-photo-marker-recognized.png") });
     await toggle.tap();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(refine).toHaveAttribute("aria-pressed", "false");
     await expect(page.locator(".mobile-upload-action")).toBeVisible();
     await page.getByRole("button", { name: "切口设计", exact: true }).tap();
     await expect(page.locator('[data-mobile-panel-slot="incision"] .workflow-marker-toggle')).toBeVisible();
