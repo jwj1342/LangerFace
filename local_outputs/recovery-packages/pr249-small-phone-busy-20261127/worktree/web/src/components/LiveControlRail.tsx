@@ -1,0 +1,66 @@
+import { Link } from "react-router-dom";
+
+import { LiveIncisionOverlayPanel } from "./LiveIncisionOverlayPanel";
+import { LiveQualityPanel } from "./LiveQualityPanel";
+import { LiveRefinePanel } from "./LiveRefinePanel";
+import { LiveRenderControlsPanel } from "./LiveRenderControlsPanel";
+import { LiveRouteControlsPanel } from "./LiveRouteControlsPanel";
+import { LiveSourceControlsPanel } from "./LiveSourceControlsPanel";
+import { LiveStagePanel } from "./LiveStagePanel";
+import { LiveStatePanel } from "./LiveStatePanel";
+import { LiveWrinklePanel } from "./LiveWrinklePanel";
+import { WorkbenchBrand } from "./WorkbenchBrand";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { Hint } from "./ui/hint";
+import { Label } from "./ui/label";
+import { StatusBadge } from "./ui/status-badge";
+import { WorkflowMobileSection } from "./WorkflowMobilePanels";
+
+interface LiveControlRailProps {
+  showIncisionEntry?: boolean;
+  showStatusOverview?: boolean;
+  requireCameraPhoto?: boolean;
+}
+
+export function LiveControlRail({
+  showIncisionEntry = true,
+  showStatusOverview = true,
+  requireCameraPhoto = false,
+}: LiveControlRailProps) {
+  return (
+    <>
+      <WorkbenchBrand
+        eyebrow="实时 2D 研究工具"
+        title="面部评估与张力线映射"
+        action={<StatusBadge className="loading" id="modelBadge">模型加载中...</StatusBadge>}
+      />
+      <Link to="/app" className="text-sm underline">返回工具入口</Link>
+
+      {showStatusOverview ? <LiveRouteControlsPanel /> : null}
+
+      <Card id="incisionWorkflowCard" visible={showIncisionEntry}>
+        <div>
+          <Label>病灶与切口规划</Label>
+          <Hint className="live-inline-top">记录皮下 / 皮表病灶，生成线性或梭形候选切口，并查看规划依据、审阅记录和导出状态。</Hint>
+        </div>
+        <Button asChild variant="workbenchPrimary">
+          <Link to="/incision">进入切口规划</Link>
+        </Button>
+      </Card>
+
+      {showStatusOverview ? <LiveStatePanel /> : null}
+      <WorkflowMobileSection panel="incision"><LiveIncisionOverlayPanel /></WorkflowMobileSection>
+      <LiveSourceControlsPanel requireCameraPhoto={requireCameraPhoto} />
+      <WorkflowMobileSection panel="texture">
+        <LiveWrinklePanel />
+        <LiveRefinePanel />
+      </WorkflowMobileSection>
+      <LiveRenderControlsPanel />
+      <LiveQualityPanel />
+
+    </>
+  );
+}
+
+export { LiveStagePanel };

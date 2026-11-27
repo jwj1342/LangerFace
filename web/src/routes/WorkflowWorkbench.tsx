@@ -5,6 +5,7 @@ import { MobileWorkflowControls } from "../components/MobileWorkflowControls";
 import { WorkflowCanvasOverlay, WorkflowCanvasTools } from "../components/WorkflowCanvasTools";
 import { WorkflowStageStatus } from "../components/WorkflowStageStatus";
 import { workflowPhotoCameraEnabled } from "../services/workflowPhotoCamera";
+import { WorkflowMobileSection } from "../components/WorkflowMobilePanels";
 
 export function WorkflowWorkbench() {
   return (
@@ -20,7 +21,7 @@ export function WorkflowWorkbench() {
       stage={(
         <LiveStagePanel
           compactWorkflowChrome
-          workflowActions={<WorkflowCanvasTools />}
+          workflowActions={<WorkflowMobileSection panel="incision" canvasTools><WorkflowCanvasTools /></WorkflowMobileSection>}
           workflowOverlay={<WorkflowCanvasOverlay />}
           workflowStatus={<WorkflowStageStatus />}
         />

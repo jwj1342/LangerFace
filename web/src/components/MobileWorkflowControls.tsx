@@ -1,4 +1,4 @@
-import { Camera, Download, ImagePlus, Pause, Play, ScanLine } from "lucide-react";
+import { Camera, Download, Ellipsis, ImagePlus, Pause, Play, ScanLine } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useIncisionControllerCommands, useLiveControllerCommands } from "../hooks/useControllerCommands";
@@ -19,6 +19,7 @@ import { Checkbox } from "./ui/checkbox";
 import { FieldValue, Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { RangeInput } from "./ui/slider";
+import { WorkflowMobileSection, useWorkflowMobilePanels, type WorkflowMobilePanel } from "./WorkflowMobilePanels";
 
 type WrinkleDisplayMode = "rstl" | "wrinkles" | "both";
 
@@ -43,6 +44,8 @@ function writeWrinkleDisplayMode(mode: WrinkleDisplayMode) {
 }
 
 export function MobileWorkflowControls() {
+  const panels = useWorkflowMobilePanels();
+  const togglePanel = (name: WorkflowMobilePanel) => panels?.select(panels.selected === name ? null : name);
   const liveCommands = useLiveControllerCommands();
   const liveSnapshot = useLiveStore((state) => state.snapshot);
   const sourceControlsReady = liveSnapshot !== null;
@@ -68,53 +71,22 @@ export function MobileWorkflowControls() {
   }, [cameraActive]);
 
   return (
-    <section className="mobile-workflow-dock" aria-label="移动端常用操作">
-      <div className="mobile-workflow-section">
-        <div className="mobile-workflow-heading">
-          <span>输入</span>
-          <small>{liveSnapshot?.source.liveLabel || "待机"}</small>
-        </div>
+    <>
+      <WorkflowMobileSection panel="texture">
+        <WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile layers={["rstl", "wrinkles"]} />
+      </WorkflowMobileSection>
+      <WorkflowMobileSection panel="incision">
+        <WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile layers={["incision"]} />
+      </WorkflowMobileSection>
+      <WorkflowMobileSection panel="more">
         <div className="mobile-source-grid">
-          <Button
-            variant="workbenchPrimary"
-            type="button"
-            disabled={!sourceControlsReady || cameraPending}
-            title={sourceControlsReady ? undefined : "工作台正在初始化，请稍候"}
-            onClick={() => liveCommands.source("upload_source")}
-          >
-            <ImagePlus size={15} /> 上传照片
-          </Button>
-          <Button
-            variant="workbench"
-            type="button"
-            aria-pressed={cameraActive}
-            disabled={cameraBlocked || cameraPending}
-            title={cameraBlocked ? workflowCameraPhotoRequired : undefined}
-            onClick={() => liveCommands.source("camera_toggle",
-              workflowPhotoCameraEnabled && !cameraActive ? { facing: selectedFacing } : undefined)}
-          >
-            <Camera size={15} /> {cameraPending ? "摄像头准备中…" : cameraActive
-              ? (workflowPhotoCameraEnabled ? "关闭摄像头" : "关闭后置摄像头")
-              : (workflowPhotoCameraEnabled && selectedFacing === "user" ? "开启前置摄像头" : "开启后置摄像头")}
-          </Button>
           <Button variant="workbench" type="button" disabled={!running} onClick={() => liveCommands.source("pause_toggle")}>
             {paused ? <Play size={15} /> : <Pause size={15} />} {paused ? "继续" : "暂停"}
           </Button>
-          <Button
-            variant="workbench"
-            type="button"
-            disabled={!hasSource}
-            aria-pressed={recording || undefined}
-            onClick={() => liveCommands.source("recording_toggle")}
-          >
+          <Button variant="workbench" type="button" disabled={!hasSource} aria-pressed={recording || undefined} onClick={() => liveCommands.source("recording_toggle")}>
             <Download size={15} /> {recording ? "停止视频" : "导出视频"}
           </Button>
-          <Button
-            variant="workbench"
-            type="button"
-            disabled={!hasSource}
-            onClick={() => liveCommands.source("image_export")}
-          >
+          <Button variant="workbench" type="button" disabled={!hasSource} onClick={() => liveCommands.source("image_export")}>
             <ImagePlus size={15} /> 导出图片
           </Button>
         </div>
@@ -148,19 +120,41 @@ export function MobileWorkflowControls() {
         {workflowPhotoCameraEnabled && liveSnapshot?.source.cameraError && (
           <small className="mobile-camera-error" role="status">{liveSnapshot.source.cameraError}</small>
         )}
-      </div>
-      <div className="mobile-workflow-section">
-        <div className="mobile-workflow-heading">
-          <span>叠加图层</span>
-          <small>可全部隐藏，结果仍会保留</small>
+      </WorkflowMobileSection>
+      <section className="mobile-workflow-dock" aria-label="移动端常用操作">
+        <nav className="mobile-workflow-tabs" aria-label="工具分组">
+          <button type="button" aria-expanded={panels?.selected === "texture"} onClick={() => togglePanel("texture")}>皮肤纹理</button>
+          <button type="button" aria-expanded={panels?.selected === "incision"} onClick={() => togglePanel("incision")}>切口设计</button>
+        </nav>
+        <div className="mobile-camera-actions">
+          <Button variant="workbench" type="button" className="mobile-camera-action" aria-pressed={cameraActive}
+            disabled={cameraBlocked || cameraPending}
+            title={cameraBlocked ? workflowCameraPhotoRequired : undefined}
+            onClick={() => liveCommands.source("camera_toggle",
+              workflowPhotoCameraEnabled && !cameraActive ? { facing: selectedFacing } : undefined)}>
+            <Camera size={24} /><span>{cameraPending ? "摄像头准备中…" : cameraActive
+              ? (workflowPhotoCameraEnabled ? "关闭摄像头" : "关闭后置摄像头")
+              : (workflowPhotoCameraEnabled && selectedFacing === "user" ? "开启前置摄像头" : "开启后置摄像头")}</span>
+          </Button>
+          <Button variant="workbenchPrimary" type="button" className="mobile-upload-action" disabled={!sourceControlsReady || cameraPending}
+            title={sourceControlsReady ? undefined : "工作台正在初始化，请稍候"}
+            onClick={() => liveCommands.source("upload_source")}>
+            <span className="mobile-upload-ring"><ImagePlus size={26} /></span><span>上传照片</span>
+          </Button>
+          <Button variant="workbench" type="button" className="mobile-more-action" aria-expanded={panels?.selected === "more"} onClick={() => togglePanel("more")}>
+            <Ellipsis size={25} /><span>更多</span>
+          </Button>
         </div>
-        <WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile />
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
-export function WorkflowLayerVisibilityButtons({ className = "", mobile = false }: { className?: string; mobile?: boolean }) {
+export function WorkflowLayerVisibilityButtons({ className = "", mobile = false, layers = ["rstl", "wrinkles", "incision"] }: {
+  className?: string;
+  mobile?: boolean;
+  layers?: readonly ("rstl" | "wrinkles" | "incision")[];
+}) {
   const visibility = useSyncExternalStore(
     subscribeWorkflowLayerVisibility,
     workflowLayerVisibilitySnapshot,
@@ -190,9 +184,9 @@ export function WorkflowLayerVisibilityButtons({ className = "", mobile = false 
 
   return (
     <div className={`workflow-layer-grid ${className}`.trim()} role="group" aria-label="叠加图层显示开关">
-      <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.rstl} onClick={() => toggleWrinkleLayer("rstl")}>RSTL</Button>
-      <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.wrinkles} onClick={() => toggleWrinkleLayer("wrinkles")}>皱纹</Button>
-      <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.incision} onClick={() => setMobileIncisionCandidateVisible(!visibility.incision)}>切口线</Button>
+      {layers.includes("rstl") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.rstl} onClick={() => toggleWrinkleLayer("rstl")}>RSTL</Button>}
+      {layers.includes("wrinkles") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.wrinkles} onClick={() => toggleWrinkleLayer("wrinkles")}>皱纹</Button>}
+      {layers.includes("incision") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.incision} onClick={() => setMobileIncisionCandidateVisible(!visibility.incision)}>切口线</Button>}
     </div>
   );
 }

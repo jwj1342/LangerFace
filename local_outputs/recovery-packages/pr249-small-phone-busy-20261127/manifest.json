@@ -1,0 +1,1471 @@
+{
+  "schema": "skin-texture-algorithm-recovery/2",
+  "name": "pr249-small-phone-busy-20261127",
+  "createdAt": "2026-11-27T13:00:42.240Z",
+  "source": {
+    "branch": "codex/mobile-workflow-ui-20261127",
+    "head": "bc76e8ea70b61ed9d0fef61f581ac1d1647e7529",
+    "tree": "9740e897165eccf0c0297c20eb30f939ba225de6",
+    "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
+    "status": " M .gitattributes\n M docs/quality/MOBILE_WORKFLOW_UI_20261127.md\n M docs/quality/controlled-marker-release.json\n M tools/run_browser_contract_suites.mjs\n M web/e2e/workflow-mobile-layout.spec.ts\n M web/src/styles.css\n"
+  },
+  "archiveScope": {
+    "schema": "langerface-algorithm-archive-scope/1",
+    "owner": "荣念欣",
+    "defaultComponents": [
+      "lesion-recognition",
+      "incision-generation",
+      "incision-refinement",
+      "ui-design"
+    ],
+    "excludedTeamAlgorithms": [
+      "standard-rstl-generation",
+      "wrinkle-detection",
+      "doctor-manual-rstl-refinement",
+      "wrinkle-guided-automatic-rstl-refinement",
+      "rstl-density-opacity",
+      "tracking-quality"
+    ],
+    "externalDependencies": [
+      "tools/fixtures/forehead-attraction/yellow-geometry.json",
+      "tools/test_forehead_curve_distance.ts",
+      "tools/test_forehead_trajectory_attraction.ts",
+      "tools/test_live_canvas_interaction.ts",
+      "tools/test_live_wrinkle_refinement.ts",
+      "tools/test_rstl_endpoint_smoothing.ts",
+      "tools/test_rstl_performance_recovery.mjs",
+      "web/src/components/LiveRefinePanel.tsx",
+      "web/src/services/incisionRuntime.ts",
+      "web/src/services/liveCanvasInteraction.ts",
+      "web/src/services/liveRefine2d.ts",
+      "web/src/services/liveRuntime.ts",
+      "web/src/services/liveState.ts",
+      "web/src/services/personalized/foreheadTrajectoryAttraction.ts",
+      "web/src/services/render2d.ts"
+    ],
+    "configPath": "docs/quality/algorithm-archive-scope.json",
+    "configSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
+    "changedOutsideScope": [
+      ".gitattributes",
+      "docs/quality/MOBILE_WORKFLOW_UI_20261127.md"
+    ]
+  },
+  "algorithmIdentity": {
+    "schema": 1,
+    "algorithmName": "小肿物边界候选算法",
+    "releaseName": "肿物边界识别：公开静态复核运行时可恢复",
+    "changeSlug": "public-static-refinement-runtime-recovery",
+    "profile": "small-lesion-boundary-candidate",
+    "implementationVersion": "0.104.2-candidate.4",
+    "branch": "codex/mobile-workflow-ui-20261127",
+    "head": "bc76e8ea70b61ed9d0fef61f581ac1d1647e7529",
+    "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
+    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+    "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
+    "assetDigest": "59c6b3d59e05f3142985b4efae782707c268f0611b34ea8670d0a444f9b28c4b",
+    "sourceFileCount": 293,
+    "assetHashes": {
+      "face_landmarker.task": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "atlas_rstl.json": "948e42956ced9b34b1e738c8bc41e70e354076b3176f3473733346f185bb2972",
+      "atlas_langer.json": "477cbb2c6a3054368532588923b00e2b0a13a4e48cf8a646422951187eb40fc6",
+      "canonical_vertices.json": "3e338b2b407c9c6c7fac66aa45ac5d2e9b637f61766c1b8d50b41e1657b6111d",
+      "triangles.json": "b43e2584038e84345eb9f8579718ef258fa3538123798a720e5a424f0e300e5c",
+      "topology_mediapipe_468.json": "fc89084fcdaf1e4b0b453a87965c8a8c0331ee1c9338e8bc4c1308d198c7cca3"
+    }
+  },
+  "baseArchive": null,
+  "copied": [
+    {
+      "relativePath": ".github/pull_request_template.md",
+      "bytes": 1797,
+      "sha256": "43446febff4fba1dfdbb920e42f850e8714f74aab279127a41febed61d28d722"
+    },
+    {
+      "relativePath": ".github/workflows/ci.yml",
+      "bytes": 4304,
+      "sha256": "c343bc5559e98ed0d536c19fc32d63194997d5a17d080cef0d3477eb209bad01"
+    },
+    {
+      "relativePath": "README.md",
+      "bytes": 40885,
+      "sha256": "940fcb06fed891f4a6243e1d0295f71a3840a2bf0cb7afe2de289abe9934b6d8"
+    },
+    {
+      "relativePath": "docs/README.md",
+      "bytes": 8089,
+      "sha256": "ac9c2c9ee756a880ab3c2cb1800c77ecd01166650af920ee8df7a46820a343f1"
+    },
+    {
+      "relativePath": "docs/quality/ALGORITHM_VERSIONING.md",
+      "bytes": 149686,
+      "sha256": "23758b158b9485e2546bed0fd8f096da40fbe853f0846bb7d7562d7f00aedc4b"
+    },
+    {
+      "relativePath": "docs/quality/LESION_CANDIDATE_REVIEW.md",
+      "bytes": 4519,
+      "sha256": "4fbef33d3c1b2b40f6340bb9ca206787ea57bcf52a1da27fefbaad65a56f3afb"
+    },
+    {
+      "relativePath": "docs/quality/MARKER_RUNTIME_ACCEPTANCE.md",
+      "bytes": 6428,
+      "sha256": "731be447fad8eb937d628ade4494b5564003f769e592617472b8d64f8894d6bd"
+    },
+    {
+      "relativePath": "docs/quality/UI_RSTL_BOUNDARY_REVIEW.md",
+      "bytes": 4412,
+      "sha256": "284eb958c2e048b21881cef020151ac194dabb2eaec15462f8e36b89fce9019d"
+    },
+    {
+      "relativePath": "docs/quality/algorithm-archive-scope.json",
+      "bytes": 4177,
+      "sha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada"
+    },
+    {
+      "relativePath": "docs/quality/controlled-marker-release.json",
+      "bytes": 349513,
+      "sha256": "62c45a763dcfdd76d76642d85c5662ccac6d2473407ea48ffaf586629077115d"
+    },
+    {
+      "relativePath": "docs/tracks/INCISION_WORKFLOW.md",
+      "bytes": 22364,
+      "sha256": "ff355ee10d82aefb0d6eea8437fc8709940710fc0b6ba1217da5cf7516d9d31e"
+    },
+    {
+      "relativePath": "tests/fixtures/fusiform_candidates.json",
+      "bytes": 13300,
+      "sha256": "5b2162f8b50f92af4f04fcaf486380f82d5d057b199ff9cc8cde2ece8cdf2313"
+    },
+    {
+      "relativePath": "tests/test_fusiform_incision.py",
+      "bytes": 6630,
+      "sha256": "e483e775d0e11df9a8ad9923078515c9130cab2d430e83635e70de2068f2e1a9"
+    },
+    {
+      "relativePath": "tools/audit_incision_overlay_acceptance.ts",
+      "bytes": 14336,
+      "sha256": "a00b3de4f543d41d213e05feb0ba2b9ee6969ec6f40fc7d5554fcd71467f1770"
+    },
+    {
+      "relativePath": "tools/audit_incision_overlay_device_matrix.ts",
+      "bytes": 6264,
+      "sha256": "dd8e997b9a1cc9938427fc8f1aba3c28136818a584815f9d7513c575fcd7dec6"
+    },
+    {
+      "relativePath": "tools/audit_incision_overlay_replay.ts",
+      "bytes": 12970,
+      "sha256": "d79274fad20f6a1832dc88a180b0a60ecdabf1d23a91d465dc164416091d889c"
+    },
+    {
+      "relativePath": "tools/build_incision_overlay_acceptance_evidence.ts",
+      "bytes": 17122,
+      "sha256": "fe4e3ca106a73b688e512a0fbe702cf7db0a5b0efc305121bbb20f1e086f4967"
+    },
+    {
+      "relativePath": "tools/check_algorithm_release_gate.mjs",
+      "bytes": 11563,
+      "sha256": "5cc265faf8ea2229a41e4864c8b8ff76cd704ec152bcdce0f93a4bb091f94b4d"
+    },
+    {
+      "relativePath": "tools/create_algorithm_recovery_archive.mjs",
+      "bytes": 8536,
+      "sha256": "5b6de812019bbb5cc9db9bc40987436355dde1c97fd058f26eb3e3afa34a4aad"
+    },
+    {
+      "relativePath": "tools/fixtures/forehead-attraction/yellow-geometry.json",
+      "bytes": 765918,
+      "sha256": "ab70f833170dfe5b5301b0c5f96e174b1500786e1b8bcbe0283da84f7558b1c8"
+    },
+    {
+      "relativePath": "tools/generate_small_lesion_calibration_set.ps1",
+      "bytes": 4180,
+      "sha256": "8dc7ce561241fce848a3072d77b1372a81208cc1a38c043b0cddf5b86a642181"
+    },
+    {
+      "relativePath": "tools/marker_runtime_identity.mts",
+      "bytes": 4655,
+      "sha256": "42c94432042285427b5afc2627f9529677a088a9632d9ac123771bd6dc7b24bb"
+    },
+    {
+      "relativePath": "tools/probe_marker_browser.mjs",
+      "bytes": 9416,
+      "sha256": "9575ec8caabfbd44e9bae13f7a9a20b8b42388a603c4ee41e12e07288698e8b2"
+    },
+    {
+      "relativePath": "tools/probe_marker_delivery.mjs",
+      "bytes": 2734,
+      "sha256": "8c2126890d935f3e31611cd114f1107be922d7ee0613ccc56140717d04528e9f"
+    },
+    {
+      "relativePath": "tools/report_default_marker_profile.mjs",
+      "bytes": 594,
+      "sha256": "e1528e72ea0a7f08bb044da075666aa4915088c57e11dbba54b71452bcc96819"
+    },
+    {
+      "relativePath": "tools/run_browser_contract_suites.mjs",
+      "bytes": 46391,
+      "sha256": "cb89b2a7184d3c2aa1f4a55121fdcdc9e8bbe5916f18a5a186cde251eb4e385e"
+    },
+    {
+      "relativePath": "tools/run_controlled_marker_v035_build.mjs",
+      "bytes": 3538,
+      "sha256": "f493cbb4d11ad2a93a4bb46be6613816e66cc5fcc75e7cda6e0790322dab4f7e"
+    },
+    {
+      "relativePath": "tools/run_controlled_marker_v035_dev.mjs",
+      "bytes": 5170,
+      "sha256": "673d3fec88a9d323f715e19267b252fdfcf6e2cd0fd9515445bda9b91de945d7"
+    },
+    {
+      "relativePath": "tools/test_algorithm_release_gate.mjs",
+      "bytes": 13750,
+      "sha256": "b69e9f27aad5aeec4988577b3fd4460d4d96ccb4126b54a7290bd0ce3696c285"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_appearance.ts",
+      "bytes": 26422,
+      "sha256": "b88c626226c1ac30c57234e0143e4720f176dfd381da5140aa23e6d648e23f98"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_candidate_completeness.ts",
+      "bytes": 3469,
+      "sha256": "152a91a8ed06b8082e62a327838d3d45c0039f7f9dc7cba3b937da6c5092e936"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_color_difference.ts",
+      "bytes": 24555,
+      "sha256": "d64e1de29291f156f9fc4748d6332adc6c59c9a81c3f1a54a4e8339149ca5b2b"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_color_difference_real_sample.ts",
+      "bytes": 10303,
+      "sha256": "93a908290af515e14f5e1a1d613e30a388274a727027f14efa8a97e58b383809"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_detection.ts",
+      "bytes": 83540,
+      "sha256": "bcdf4236d376c8b928be88adb7bea1a59f59b358c593750fe531667959c2ea4c"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_detection_profile.ts",
+      "bytes": 6003,
+      "sha256": "ce6c117c5fa67aa063ffb64b5dc9c851d44bc762555ca80767a279917e2e7aaa"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_edge_recovery.ts",
+      "bytes": 2093,
+      "sha256": "35d0aea20440bfbdbe3d8edd69452ffcecff76d388ec76f8f145e1a4cc660434"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_filled_candidate.ts",
+      "bytes": 5804,
+      "sha256": "d4a5d0830de383e652ffcacfc7ee8f735300232aaf91f94d01912bb35c011c01"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_image10.ts",
+      "bytes": 2688,
+      "sha256": "2cde5324b8705b36d32bfe91adabb2a6ec96c4c18e0595014b4520b439da8ba1"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_image13.ts",
+      "bytes": 5859,
+      "sha256": "6481425662a2bdeb6d33c66077a9b04c1afd0ba839e9c4fb40ccdbed7025715a"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_recovered_boundary_evidence.ts",
+      "bytes": 2999,
+      "sha256": "9c7193bde70ef009d639b44947bffed4a9e7ead9a5738c86723d409deab9116c"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_run_diagnostics.ts",
+      "bytes": 42086,
+      "sha256": "df8ee7e39de32553216aec607d76104f4bf0ffbe46abcce5bdd28f7b1ec3d0e0"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_scan_coverage.ts",
+      "bytes": 2161,
+      "sha256": "910cc0476f345d2f093bde2b5190863139ead10fe4d3b25bcfa466a7291e6062"
+    },
+    {
+      "relativePath": "tools/test_controlled_marker_scan_owned_candidate.ts",
+      "bytes": 5003,
+      "sha256": "23589d392f8760bf38503ae713e001a1ff8eb6522893d97b72028c817df06966"
+    },
+    {
+      "relativePath": "tools/test_export_canvas.ts",
+      "bytes": 14534,
+      "sha256": "502f7e755b3e1652fc04bb4eb4ba02342f7353773bcbe0872f69b68a8049e7f0"
+    },
+    {
+      "relativePath": "tools/test_forehead_curve_distance.ts",
+      "bytes": 1942,
+      "sha256": "b7a0c23c7b668c58569f4b6de8531c2678139c15e2b63bf98a5161e2f36fbfcf"
+    },
+    {
+      "relativePath": "tools/test_forehead_trajectory_attraction.ts",
+      "bytes": 8052,
+      "sha256": "743c5747429adddf9b0607e24de2044aff3233fbbee2596febf674c2520a15e8"
+    },
+    {
+      "relativePath": "tools/test_incision_atlas_source.ts",
+      "bytes": 3424,
+      "sha256": "db2260fbc79c7f23f10435498270501e51029934da7731e6e0027abfff34d581"
+    },
+    {
+      "relativePath": "tools/test_incision_command_router.ts",
+      "bytes": 8091,
+      "sha256": "efe311b40e5befa5b6e55f19969324a0f0748411d5b92f5c5e653c7fd3de8458"
+    },
+    {
+      "relativePath": "tools/test_incision_command_schemas.ts",
+      "bytes": 3465,
+      "sha256": "c7b415cff589de4ea6ff9acf19b078a4dfa8a10b8c2530d02d4a2afbe6720813"
+    },
+    {
+      "relativePath": "tools/test_incision_edit_history.ts",
+      "bytes": 3762,
+      "sha256": "6bc4a9c37248b70a89a0316919a502d3ca85f82ed02bcb6c18cdb0fc7ff0440d"
+    },
+    {
+      "relativePath": "tools/test_incision_export.ts",
+      "bytes": 2052,
+      "sha256": "6c0e153bf2f172659f31387dc5da10a2932c842e888519710d28805406ed416c"
+    },
+    {
+      "relativePath": "tools/test_incision_lesion_normalization.ts",
+      "bytes": 3453,
+      "sha256": "391fa9cbfcd5e5749603d2ba2c9f493ee1e16f88c2aa15973456f483dded6a10"
+    },
+    {
+      "relativePath": "tools/test_incision_local_rstl_direction.ts",
+      "bytes": 2951,
+      "sha256": "da2cb04c2a2328947f06f5f23483d4cffbc953b3b34d2437656cd56714246b8b"
+    },
+    {
+      "relativePath": "tools/test_incision_mobile_overlay_scale.ts",
+      "bytes": 1301,
+      "sha256": "b8a258d9656177a13d8bd6e3b148df677a6c6988029d2fd1c4636100e9261812"
+    },
+    {
+      "relativePath": "tools/test_incision_overlay.ts",
+      "bytes": 12655,
+      "sha256": "fa33684950011c41487d2b44ca4b6f55e277bce0ea19cdda11e70967540624e2"
+    },
+    {
+      "relativePath": "tools/test_incision_overlay_acceptance_audit.ts",
+      "bytes": 8459,
+      "sha256": "c1d7ea3ea0c53ba80253f191f5ae5b6e88a058b43ec7e74ab5eaf713613a2a60"
+    },
+    {
+      "relativePath": "tools/test_incision_overlay_acceptance_evidence.ts",
+      "bytes": 6388,
+      "sha256": "bcaf7f725eeb51367c81bd6ad3c3b7b82a9d7777d3000831c3a2467b3db9e1dd"
+    },
+    {
+      "relativePath": "tools/test_incision_overlay_device_matrix.ts",
+      "bytes": 2904,
+      "sha256": "68bd71897f3748e3a91ab111438c572f5fec296cce867bdc4e5f2de6973d5719"
+    },
+    {
+      "relativePath": "tools/test_incision_overlay_replay_qa.ts",
+      "bytes": 5359,
+      "sha256": "5aad7a34ba1219cecd71c9e750b0262deb9431f9e1a2f476d6ee8d89dcffd829"
+    },
+    {
+      "relativePath": "tools/test_incision_path_guardrails.ts",
+      "bytes": 14934,
+      "sha256": "e61a720cf9a9bd1e990f430b7f4a2c16a65b8879fa223c27f7cae3127feee086"
+    },
+    {
+      "relativePath": "tools/test_incision_photo_overlay_scale.ts",
+      "bytes": 4400,
+      "sha256": "bff9e8d84a5bef032f332f7adc5c9c50672b3dd8ef38bfa30f6cfcf266f2c2d3"
+    },
+    {
+      "relativePath": "tools/test_incision_photo_planning.ts",
+      "bytes": 75897,
+      "sha256": "7503adf672126680458947f91b8f4eed8fdcc7e6ecfad3022c6ad562c4703900"
+    },
+    {
+      "relativePath": "tools/test_incision_photo_zoom.ts",
+      "bytes": 1473,
+      "sha256": "b2efa9516fdfa9fd05d7963cbda46da87b0d4cc8ebdafb93ff1f5cfd4f0ead54"
+    },
+    {
+      "relativePath": "tools/test_incision_picking.ts",
+      "bytes": 3112,
+      "sha256": "ff501351b9c3564813889e06f57b03af5b301bc4bfa374018f0be938e47037ce"
+    },
+    {
+      "relativePath": "tools/test_incision_presenter.ts",
+      "bytes": 10104,
+      "sha256": "7b3014900af34a630369e5e4e63fb4829eb20ec56585da1b17e6fe807cb03a1b"
+    },
+    {
+      "relativePath": "tools/test_incision_review_records.ts",
+      "bytes": 8419,
+      "sha256": "a324732b2a28f12318dbc5b3e53fe47362753d0cac5bf8c73355746ef37048e6"
+    },
+    {
+      "relativePath": "tools/test_incision_scene_geometry.ts",
+      "bytes": 2219,
+      "sha256": "4201088f6f6b97786f0c37a676ac959f83113d89785e2531b7e6d51753ceaf0a"
+    },
+    {
+      "relativePath": "tools/test_incision_session.ts",
+      "bytes": 2750,
+      "sha256": "b02dff79ecc28a82c9e0b7edac2ea1c5a116c4c41dc12d08853213623b543759"
+    },
+    {
+      "relativePath": "tools/test_incision_tools.ts",
+      "bytes": 56429,
+      "sha256": "aed1c8fa36a5906597559e948d2a83c78825a259696137fc70f1a645198dbd6e"
+    },
+    {
+      "relativePath": "tools/test_incision_workflow_ui.ts",
+      "bytes": 28321,
+      "sha256": "2f46d479b587df7b88e17f08286c6e28eb4f6862963d3b4a826571e03dbd2f1c"
+    },
+    {
+      "relativePath": "tools/test_incision_workspace_session.ts",
+      "bytes": 7369,
+      "sha256": "e6575c98c587f6b7bd2066999b3e7ae6930d8447c786a6fe9eeac847156a6fd0"
+    },
+    {
+      "relativePath": "tools/test_lesion_detection_adapter.ts",
+      "bytes": 4647,
+      "sha256": "4c1c936e0fc36abac27614ef92e3b4341a80c610941361548641234c063b6010"
+    },
+    {
+      "relativePath": "tools/test_live_canvas_interaction.ts",
+      "bytes": 13402,
+      "sha256": "5ee0aa2b1ee1cdc9b21381b692437c6522e25cd08d9fb3449b44e8ca796a909c"
+    },
+    {
+      "relativePath": "tools/test_live_command_router.ts",
+      "bytes": 3186,
+      "sha256": "186b456a235fa69d4f8c2c3e126c6e56731f7733c2a88e6ba6147e52d3cd189d"
+    },
+    {
+      "relativePath": "tools/test_live_incision_overlay_ui.ts",
+      "bytes": 14839,
+      "sha256": "a6900bf87537db80a2b5a5b41aa5f07bd430d1bca1e12ccec00b3bdab062f5aa"
+    },
+    {
+      "relativePath": "tools/test_live_wrinkle_refinement.ts",
+      "bytes": 44767,
+      "sha256": "fa9f7bc799d73c1cfcb5aa6b15d661786f78b48280726a0059d632d6e57ed292"
+    },
+    {
+      "relativePath": "tools/test_local_export_download.ts",
+      "bytes": 2745,
+      "sha256": "86c18b9fd6f030947e46e1fc7e744a77174a0a710eb99f44e0a1b22ccd06dc52"
+    },
+    {
+      "relativePath": "tools/test_marker_runtime_identity.ts",
+      "bytes": 4126,
+      "sha256": "1c1c742d382bf2fa4dfe9c4414364266de4ea5ee4bf0db7e502b9d2d37b27fea"
+    },
+    {
+      "relativePath": "tools/test_probe_marker_delivery.mjs",
+      "bytes": 1845,
+      "sha256": "f99fea5046086906110152d5affbec8dd87a5bf322cb8808987c015c29ef5da1"
+    },
+    {
+      "relativePath": "tools/test_rstl_endpoint_smoothing.ts",
+      "bytes": 3353,
+      "sha256": "d43f41b153855d3555a47ff96fda30b1fb8343e710cba2b0ad21d037b7e587e7"
+    },
+    {
+      "relativePath": "tools/test_rstl_performance_recovery.mjs",
+      "bytes": 3504,
+      "sha256": "473eab726ca841d8a9bbd705696231bb5a8ce89c5a8c66a283989050eb5e10dd"
+    },
+    {
+      "relativePath": "tools/test_workflow_draft_session.ts",
+      "bytes": 3537,
+      "sha256": "2f19fc40ce036e2745eb97e47d9552990ff946818900c2df1515e5c49fc987b5"
+    },
+    {
+      "relativePath": "tools/test_workflow_export_browser.mjs",
+      "bytes": 7989,
+      "sha256": "c9a7fd7f6571c141ea42753e14cba7d2950015f3224f27234cca5a403c8261e1"
+    },
+    {
+      "relativePath": "tools/test_workflow_lesion_direction_anchor.ts",
+      "bytes": 809,
+      "sha256": "e185c9f63a0bd0c905be4cd7154b80401af4e162aa9a053cfec344d219569765"
+    },
+    {
+      "relativePath": "tools/test_workflow_page.ts",
+      "bytes": 153669,
+      "sha256": "eaf4d3dc6cde845941a39504089be00d20dd56b023bfa48301bddc158c1c9422"
+    },
+    {
+      "relativePath": "tools/test_workflow_photo_boundary_independence.ts",
+      "bytes": 4792,
+      "sha256": "cda94f2d881a6d4823dc551030a3e78a1d5372710ae53b5d4e5d848cdf4bff5f"
+    },
+    {
+      "relativePath": "tools/test_workflow_photo_detection_feedback.ts",
+      "bytes": 3636,
+      "sha256": "1177377b3ac99ce23ecb557c6d5679eb0882c2144eff76f728bcdc3b1c49d58a"
+    },
+    {
+      "relativePath": "tools/test_workflow_photo_opening_projection.ts",
+      "bytes": 4452,
+      "sha256": "ee003a8300a02f6036e624b96c5296d36636da0a63d7565bdd9e2df0f6f23f24"
+    },
+    {
+      "relativePath": "tools/test_workflow_photo_overlay_browser.mjs",
+      "bytes": 5797,
+      "sha256": "ddf4e6202510f382ddb98c40948829b196f5b5e86cfa7deac0c6e901ff77dc4a"
+    },
+    {
+      "relativePath": "tools/test_workflow_rejected_fusiform.ts",
+      "bytes": 5281,
+      "sha256": "9d4c0f01c95006dcbccda9f7deb541fb18dcf9f8662bd74f05a21ee7ff553777"
+    },
+    {
+      "relativePath": "tools/test_workflow_risk_candidate_display.ts",
+      "bytes": 5439,
+      "sha256": "578d8e2fdb99d8496e0df3acc34e952accfe616fd423ba010b04c554e5113bf4"
+    },
+    {
+      "relativePath": "tools/test_workflow_stage_status_browser.mjs",
+      "bytes": 14101,
+      "sha256": "204168012c1991cfcf17f911217c640bba01b6d833a43a632001c03b030d4b91"
+    },
+    {
+      "relativePath": "tools/test_workflow_status_contract.mjs",
+      "bytes": 16284,
+      "sha256": "98bd7c9a1a4210a1650865ae41bf837e19ee2c453f176aa461cc4e523d789344"
+    },
+    {
+      "relativePath": "tools/test_workflow_touch_browser.mjs",
+      "bytes": 12476,
+      "sha256": "26b962ad69ce45d763574f1aec7127e5ad258fc67c985d6d989e54c5f56d30f8"
+    },
+    {
+      "relativePath": "tools/test_workflow_viewport.ts",
+      "bytes": 2728,
+      "sha256": "a4353882fe4a737aa272012482aeb04e3cd48da4a8a2a7e8486dea1be9bf8eb7"
+    },
+    {
+      "relativePath": "tools/test_workflow_wrinkle_threshold_routes.mjs",
+      "bytes": 989,
+      "sha256": "abf4745e429df49b3ea69121406f4ae1a7337b8e26f54a98fd121ad528a49a6e"
+    },
+    {
+      "relativePath": "web/dev/localExportDownloadPlugin.ts",
+      "bytes": 3238,
+      "sha256": "83b10b44dbb4c69fe4ca18cac6b35d2617c4d4c72f761e75b2fd1ea1dc9638f4"
+    },
+    {
+      "relativePath": "web/dev/markerRuntimeIdentityPlugin.ts",
+      "bytes": 5577,
+      "sha256": "61fafc222949c25b88c4faf08f4eb6b37d910bbc0317de5af86357b66229adf5"
+    },
+    {
+      "relativePath": "web/e2e/clinical-theme.spec.ts",
+      "bytes": 2346,
+      "sha256": "5e681038ce7cfd8ef90ee8002950bd5e06608b0ae65f5f07913a179709a02f73"
+    },
+    {
+      "relativePath": "web/e2e/contrast.ts",
+      "bytes": 3083,
+      "sha256": "d16ea0b0d456fc10e1211917d784de49fc674247307ef87d3daafb9b2653b15e"
+    },
+    {
+      "relativePath": "web/e2e/controlled-marker-color-difference-real-sample.spec.ts",
+      "bytes": 13003,
+      "sha256": "327024fdf9b59126ca29c13675b465eb58e1adfbddfba221db23ebe60a9ad69d"
+    },
+    {
+      "relativePath": "web/e2e/controlled-marker-image10.spec.ts",
+      "bytes": 6866,
+      "sha256": "da63a7974d9d48c0f2a41955bb3bc4deaea3bcd0c192130dfeef8005e79abb06"
+    },
+    {
+      "relativePath": "web/e2e/controlled-marker-image13.spec.ts",
+      "bytes": 5647,
+      "sha256": "42ad71fab1671f1609f37ae0af1491dc65c71ecbee3bff452c4eba1b7fc092c3"
+    },
+    {
+      "relativePath": "web/e2e/freehand-mobile-regression.spec.ts",
+      "bytes": 35159,
+      "sha256": "5c97b14973e7f993c24b3ffef0fb06dca39a1d89314366c4f2696c4fef6c6bc6"
+    },
+    {
+      "relativePath": "web/e2e/incision-controlled-marker.spec.ts",
+      "bytes": 7771,
+      "sha256": "6ff879f30ce345e167b55f3ddadcabf8bf23cc1ea92c4093e6704ea89a36f64b"
+    },
+    {
+      "relativePath": "web/e2e/incision-interactions.spec.ts",
+      "bytes": 6909,
+      "sha256": "aa7da550fcd68c60890bf6e8b300f9746145122d5af2aabd82170282fc39b1cd"
+    },
+    {
+      "relativePath": "web/e2e/incision-photo-planning.spec.ts",
+      "bytes": 7820,
+      "sha256": "0ea400ef97d8d2d8430ad6515a0a92de039f36b707fa960c73f52a6114fa39f0"
+    },
+    {
+      "relativePath": "web/e2e/incision-rstl-deviation.spec.ts",
+      "bytes": 842,
+      "sha256": "0633031ff49fe0fcd1735336bf98468565366e2a14321a076e479f9545843c29"
+    },
+    {
+      "relativePath": "web/e2e/incision-workbench.spec.ts",
+      "bytes": 14756,
+      "sha256": "257612c7e65d7080252fa3fa2dde18e6868f08650eb8208fe416f93e0bcb5962"
+    },
+    {
+      "relativePath": "web/e2e/live-incision-overlay.spec.ts",
+      "bytes": 9048,
+      "sha256": "533a9686e11ee5f883f93b73cffc8f5ccdc3f48b475712565cc6d65126876c3a"
+    },
+    {
+      "relativePath": "web/e2e/mobile-workflow-ui.spec.ts",
+      "bytes": 8958,
+      "sha256": "c3a43c57bd4bbe3ab01c3c80c39f09f7aa16a85eb8eb0e065401de32f71909fb"
+    },
+    {
+      "relativePath": "web/e2e/support/incisionPhoto.ts",
+      "bytes": 9307,
+      "sha256": "d3a75c0eef22345dd3e0ade9f89372cd6cc2cc0cb47782d0892d86c320199af5"
+    },
+    {
+      "relativePath": "web/e2e/support/markerRuntimeSetup.ts",
+      "bytes": 2113,
+      "sha256": "5058c6c64a47a942552ab2804e42e53de36e0c5b4fb4fd00b8667894da3d874c"
+    },
+    {
+      "relativePath": "web/e2e/support/verifyMarkerRuntime.ts",
+      "bytes": 2030,
+      "sha256": "7c43186075679b1c0d8d225256062808a51f3ad1eb2c7aa7cbd686e469785d0a"
+    },
+    {
+      "relativePath": "web/e2e/surgery-contrast.spec.ts",
+      "bytes": 3316,
+      "sha256": "7fd9b5d0e233fd13f6d6af61dee2385030d4708c558cbcb80f331a0fa275bce5"
+    },
+    {
+      "relativePath": "web/e2e/workflow-entry.spec.ts",
+      "bytes": 708,
+      "sha256": "1a844fab7e9a6f57efcbc196b9b16f40bdc3d5ffd525134aa769c8ac34d09035"
+    },
+    {
+      "relativePath": "web/e2e/workflow-header-grid.spec.ts",
+      "bytes": 1141,
+      "sha256": "6455d3ca8c1fca4c16a1936093660062d6b49cace091a1dc028c46c1190a8872"
+    },
+    {
+      "relativePath": "web/e2e/workflow-mobile-layout.spec.ts",
+      "bytes": 14350,
+      "sha256": "805f6b90ff340cce7e5adf8931ef990e7644af50345e93e405825eb18cd76187"
+    },
+    {
+      "relativePath": "web/e2e/workflow-regressions.spec.ts",
+      "bytes": 50211,
+      "sha256": "242fb29d2818f9cf0e3c59eb0d0e8b42e37e09bec117cf8add86d7db8d77a0f9"
+    },
+    {
+      "relativePath": "web/e2e/zoom-cap-current.spec.ts",
+      "bytes": 4391,
+      "sha256": "cb5ced162f659cff97a15cba91083b171f5f4e8198e401125c47428826a4883f"
+    },
+    {
+      "relativePath": "web/package-lock.json",
+      "bytes": 84310,
+      "sha256": "b836eaf46404145008f888a215dc91794613b8891c6fd8ec903fa760d852b93c"
+    },
+    {
+      "relativePath": "web/package.json",
+      "bytes": 10416,
+      "sha256": "33a6e147a0226cc8bc09cc540f164aa041006e2e518c0b96f0c01e88a3a7768c"
+    },
+    {
+      "relativePath": "web/src/components/AnnotateDrawPanel.tsx",
+      "bytes": 2944,
+      "sha256": "55cd1a583fcb78fd229545c2d6634068943c4e1da7f4972f067d9f745da3a90d"
+    },
+    {
+      "relativePath": "web/src/components/AnnotateHelpPanel.tsx",
+      "bytes": 1011,
+      "sha256": "c3f3ce4130140f479e6310cbd0b1ec0154b5792cb734b97eb36c67489e2cf892"
+    },
+    {
+      "relativePath": "web/src/components/AnnotateLineLibraryPanel.tsx",
+      "bytes": 3137,
+      "sha256": "0c250a6f5d105a46669f7f56f342665c974ec02644d3b9acf5f5c3363a15a356"
+    },
+    {
+      "relativePath": "web/src/components/AnnotateMeshSourcePanel.tsx",
+      "bytes": 2202,
+      "sha256": "04250c96378fa39c229ee9d8af6a1de4bbddc56b6d57dee037699e8fbb49fa51"
+    },
+    {
+      "relativePath": "web/src/components/AnnotateStagePanel.tsx",
+      "bytes": 565,
+      "sha256": "5e30ab5101c5d0dfb8103ca156cafd66a494f64106a93b97c3535798aaf7ca9f"
+    },
+    {
+      "relativePath": "web/src/components/AnnotateStatePanel.tsx",
+      "bytes": 1699,
+      "sha256": "50916b9478ae38a0018ecd2e3fdc6770d2add37974f9847cafe91c749eb675d0"
+    },
+    {
+      "relativePath": "web/src/components/CandidateLibraryPanel.tsx",
+      "bytes": 7349,
+      "sha256": "15740eb4f7dd25a2fd5808e8c974a2b995f07bb707b68d96a7c1a1aff1e6658b"
+    },
+    {
+      "relativePath": "web/src/components/CandidateResultPanel.tsx",
+      "bytes": 3661,
+      "sha256": "5260403d026c8fdad7957a4e9f00fbd9c7c65329dc9fe86e41cb133520dbf750"
+    },
+    {
+      "relativePath": "web/src/components/EditControlsPanel.tsx",
+      "bytes": 9900,
+      "sha256": "77c1d2864b7a0846eede404058865d2ce7174df76f3be983d31c844e8181aebe"
+    },
+    {
+      "relativePath": "web/src/components/IncisionStagePanel.tsx",
+      "bytes": 6126,
+      "sha256": "860b2f792cee2b86e0a2f7a5002737b077a09b017e4cb391cbc9e3f068404770"
+    },
+    {
+      "relativePath": "web/src/components/IncisionStatePanel.tsx",
+      "bytes": 3233,
+      "sha256": "41fa000ac3b2cd2c9c7e2a640c65adf458e03565e1d9b59f8eb34a7d823b6a67"
+    },
+    {
+      "relativePath": "web/src/components/LiveControlRail.tsx",
+      "bytes": 2472,
+      "sha256": "395f3aedc52954b3b3e23c94183cfcf2e31f8da2bb915665343bf73d80ac694a"
+    },
+    {
+      "relativePath": "web/src/components/LiveIncisionOverlayPanel.tsx",
+      "bytes": 1664,
+      "sha256": "35c17e631606046939b23f07329c28cca1b724956f0dddb75803b1a70d8b7a3e"
+    },
+    {
+      "relativePath": "web/src/components/LiveQualityPanel.tsx",
+      "bytes": 621,
+      "sha256": "8c6f8ac726dba164e858c276448fd95ae7245b3e494370622045fddb226f321d"
+    },
+    {
+      "relativePath": "web/src/components/LiveRefinePanel.tsx",
+      "bytes": 2585,
+      "sha256": "643f4b9ee60c9af0dfcdbcca7192be2088d3eb23e5fb47ce5d68e0d8466cc7d5"
+    },
+    {
+      "relativePath": "web/src/components/LiveRenderControlsPanel.tsx",
+      "bytes": 4810,
+      "sha256": "f24edc4754a02d11b822eb298d5b2be83168680561cfd30e2d8185025822062c"
+    },
+    {
+      "relativePath": "web/src/components/LiveRouteControlsPanel.tsx",
+      "bytes": 375,
+      "sha256": "0bc46d8cb494e75bf66e4d9c22e6e7575a0a359e0f8e31ba3c69905f852ef3d4"
+    },
+    {
+      "relativePath": "web/src/components/LiveSourceControlsPanel.tsx",
+      "bytes": 4571,
+      "sha256": "04073d2facb33216aa847037e462bca6313ed22f03ca322c252e3e0892561e6b"
+    },
+    {
+      "relativePath": "web/src/components/LiveStagePanel.tsx",
+      "bytes": 1602,
+      "sha256": "f5a660fc7aed481716a3cde811a6ea7c3ec22bdd42e173f5120b58ad43a0a560"
+    },
+    {
+      "relativePath": "web/src/components/LiveStatePanel.tsx",
+      "bytes": 1272,
+      "sha256": "9957b5b6fd5b5e63dd0778810a785cf18985a6a425127e62f22ca44bb13659e5"
+    },
+    {
+      "relativePath": "web/src/components/LiveWrinklePanel.tsx",
+      "bytes": 1681,
+      "sha256": "c73ba896ca59205b8112c7b8577d22f298878b5bdc36320cbf0399b99015c745"
+    },
+    {
+      "relativePath": "web/src/components/ManagedWorkbenchRoute.tsx",
+      "bytes": 1330,
+      "sha256": "2e1c138ebabf9ea95e9997d27856cf1a84fd71038fbf71c5ae9b02d06593edca"
+    },
+    {
+      "relativePath": "web/src/components/MobileWorkflowControls.tsx",
+      "bytes": 14814,
+      "sha256": "a60dcf6ef3dec874de918a8cc8cb9007f7ff6f04ffd73b98b49be66ee47feb35"
+    },
+    {
+      "relativePath": "web/src/components/PrivacyAuditPanel.tsx",
+      "bytes": 938,
+      "sha256": "e9bad99cfb9349b4853c8e19d3715b733cbda963aadf21caa84e16e7edea2be0"
+    },
+    {
+      "relativePath": "web/src/components/ReactShell.tsx",
+      "bytes": 1979,
+      "sha256": "34327981437da143424103a7748262c9999cbb8c507a3b730783dc6b9a6d8503"
+    },
+    {
+      "relativePath": "web/src/components/ReviewControlsPanel.tsx",
+      "bytes": 4623,
+      "sha256": "18be776cf151f7e7ffa4561226d9490454099f6f3d4d1ed8f42330d836be6e8d"
+    },
+    {
+      "relativePath": "web/src/components/SecondaryCuePanel.tsx",
+      "bytes": 2177,
+      "sha256": "6bc7c393c4a8171a9e5fff0857f757c45148c682712724666cf0ec3fa35a9689"
+    },
+    {
+      "relativePath": "web/src/components/StageShell.tsx",
+      "bytes": 2782,
+      "sha256": "83405e0017f47e58f494663505a3cbf5fb2e80925af1eba8d9e8aec65113e640"
+    },
+    {
+      "relativePath": "web/src/components/StandaloneReviewControlsPanel.tsx",
+      "bytes": 5434,
+      "sha256": "4740a8a8e32be3027ff63a75f94f5a63011b508400cbdf6ebbf3a8be736418ca"
+    },
+    {
+      "relativePath": "web/src/components/SurgeryControlsPanel.tsx",
+      "bytes": 2426,
+      "sha256": "f280518635d4910f29ee495670436a543583a5e32b4c02dec8bcf6005900ccd8"
+    },
+    {
+      "relativePath": "web/src/components/SurgeryHelpPanel.tsx",
+      "bytes": 828,
+      "sha256": "d1e4653273dcc98391f7d0087c039278e2d2697a9b26f8ad1852b67f9b6308b2"
+    },
+    {
+      "relativePath": "web/src/components/SurgeryMetricsPanel.tsx",
+      "bytes": 1076,
+      "sha256": "49dd5f3bd4636462685e921a8cf30ef7ec0624b8aa2fa2c34a60378367e49bff"
+    },
+    {
+      "relativePath": "web/src/components/SurgeryStagePanel.tsx",
+      "bytes": 705,
+      "sha256": "8749cf5e1b0f8a4a51148e71af89cb16237566c3b5f3ad99965d7a234c693c85"
+    },
+    {
+      "relativePath": "web/src/components/TumorInputPanel.tsx",
+      "bytes": 14345,
+      "sha256": "8488c3e4bceecf36420fabd89d5661463f6b4930fa34fe043234e3a30f828406"
+    },
+    {
+      "relativePath": "web/src/components/WorkbenchBrand.tsx",
+      "bytes": 411,
+      "sha256": "55fac0b0dde532aaf589bbd259c8c191b8b2596dd08923f6032692b73e7e25ca"
+    },
+    {
+      "relativePath": "web/src/components/WorkbenchLayout.tsx",
+      "bytes": 2035,
+      "sha256": "f9d677f4ce026eee7bb25e45cdb60395ba045eea2d9146ce6fdfd8c2846de788"
+    },
+    {
+      "relativePath": "web/src/components/WorkerStatusPanel.tsx",
+      "bytes": 748,
+      "sha256": "6515bdf4ac0c128c0c0e626b399aa8f6545d62f54731ec86a416edbb59e4a92c"
+    },
+    {
+      "relativePath": "web/src/components/WorkflowCanvasTools.tsx",
+      "bytes": 7635,
+      "sha256": "b3d0ae4e66f5e8eee66cce5540e48529c531f535335fee33435213ef2a423b2d"
+    },
+    {
+      "relativePath": "web/src/components/WorkflowDraftRecovery.tsx",
+      "bytes": 3077,
+      "sha256": "5e14ca9cbbcfbe98117c7f8ca6ebebdc80f1067e847c06ad0d8e54bb20682ce3"
+    },
+    {
+      "relativePath": "web/src/components/WorkflowIncisionRail.tsx",
+      "bytes": 1001,
+      "sha256": "d76b7d7bc3ca5a5576fa2c14d871569f96ac85f447daae47e7e3c70f6ef8140e"
+    },
+    {
+      "relativePath": "web/src/components/WorkflowLayout.tsx",
+      "bytes": 5704,
+      "sha256": "c822daa00cc8cdd2496e1c75a8ec276ceecc5e5944930017bfdab75f8a0c1b85"
+    },
+    {
+      "relativePath": "web/src/components/WorkflowMobilePanels.tsx",
+      "bytes": 2602,
+      "sha256": "c06e186f700a8d1cc4f4565e235da9322531d62de4147b50102e2032e5660945"
+    },
+    {
+      "relativePath": "web/src/components/WorkflowStageStatus.tsx",
+      "bytes": 3676,
+      "sha256": "c9998b127b51182a877f1c14f92445f11170fd07e1724e35dbe4a65b13cb88e0"
+    },
+    {
+      "relativePath": "web/src/components/ui/annotate-status.tsx",
+      "bytes": 584,
+      "sha256": "0952828d7296b9648925e2e2dd3bb8c71729c5216ef59ecfef3b458758b1e496"
+    },
+    {
+      "relativePath": "web/src/components/ui/button-row.tsx",
+      "bytes": 538,
+      "sha256": "df44e841db5e9dca26b9be9b56771e35ffba53dd78dd875427f95ad6ee21da29"
+    },
+    {
+      "relativePath": "web/src/components/ui/button.tsx",
+      "bytes": 1779,
+      "sha256": "45d386ca6a2e9ac14a40e6c6308540d536db774fe0e7531ed01314c2063f1605"
+    },
+    {
+      "relativePath": "web/src/components/ui/card.tsx",
+      "bytes": 1657,
+      "sha256": "11f3369f1dc8427062ec000ce8d60551e58f67dd215b35e009be4dae40710b91"
+    },
+    {
+      "relativePath": "web/src/components/ui/checkbox-field.tsx",
+      "bytes": 782,
+      "sha256": "92d9891ef440227e2c69e8cc6bbbefbded85ffd3f5d50e87ba1e3fad7359fd9b"
+    },
+    {
+      "relativePath": "web/src/components/ui/checkbox.tsx",
+      "bytes": 352,
+      "sha256": "98cacebeff654fc395d032fd6b18f6867e522a7dce939a0e8e825970bf45ded0"
+    },
+    {
+      "relativePath": "web/src/components/ui/field-group.tsx",
+      "bytes": 532,
+      "sha256": "600630c9075a56bc8677be0bbb0fa8407146991a7ac72e7c5f8d17d77f49d394"
+    },
+    {
+      "relativePath": "web/src/components/ui/help-disclosure.tsx",
+      "bytes": 557,
+      "sha256": "994613fed4168a2af029bd21883d3f51ddf1f3cea251ef664e6085e7e71fd564"
+    },
+    {
+      "relativePath": "web/src/components/ui/hint.tsx",
+      "bytes": 834,
+      "sha256": "47cd10005416839f6ba16ad6e3fd30c70ac32920618b01a10400efab76fc6dc4"
+    },
+    {
+      "relativePath": "web/src/components/ui/incision-feedback.tsx",
+      "bytes": 1222,
+      "sha256": "81a07093ef9447adb1cb7d1fc54acc134630b6071288cea437ea09b16b954d1b"
+    },
+    {
+      "relativePath": "web/src/components/ui/incision-status.tsx",
+      "bytes": 861,
+      "sha256": "f6b78b8f48d5bc22f5a1fc20f5049af55d194edfc5566733b6d3e896228f2946"
+    },
+    {
+      "relativePath": "web/src/components/ui/input.tsx",
+      "bytes": 363,
+      "sha256": "87cce1497b33890359b79e21cc9250c64fd301a914f00057c58f78ae0077965b"
+    },
+    {
+      "relativePath": "web/src/components/ui/key-value.tsx",
+      "bytes": 2149,
+      "sha256": "04c4d6735fb59102848041cc9089a5a7a00eb7443c3bc8aa992b2646cfb9c145"
+    },
+    {
+      "relativePath": "web/src/components/ui/label.tsx",
+      "bytes": 621,
+      "sha256": "6c032d79f31e2718ee0586d9882d60d15bc4a93640227e926f84dd36fd1121b7"
+    },
+    {
+      "relativePath": "web/src/components/ui/legend.tsx",
+      "bytes": 1244,
+      "sha256": "c2182397ce32433d0a10f3e98e1445d7b76d10283313fc4c28fb38f29de01010"
+    },
+    {
+      "relativePath": "web/src/components/ui/library-list.tsx",
+      "bytes": 3343,
+      "sha256": "598c56e9d79ac241d16151dee72bf68dbf6ed3b50072eb93fab083fe388afc34"
+    },
+    {
+      "relativePath": "web/src/components/ui/live-feedback.tsx",
+      "bytes": 1745,
+      "sha256": "67073c73ae63a7a7f89291a6ea7785e8268f780abc26645b1322febe38f4b876"
+    },
+    {
+      "relativePath": "web/src/components/ui/loading-overlay.tsx",
+      "bytes": 858,
+      "sha256": "b7661d629c0107339b708845d579fd1377e9575f9862fa768dfa255758d29adf"
+    },
+    {
+      "relativePath": "web/src/components/ui/persistent-tooltip.tsx",
+      "bytes": 5677,
+      "sha256": "e368c7ea1164fb3db08cc0db0d313fef4e12a63e3eed8c852605ea3ab5ce5f51"
+    },
+    {
+      "relativePath": "web/src/components/ui/privacy-audit.tsx",
+      "bytes": 863,
+      "sha256": "53bd79910628f415b7949b931055256a96091b98da9df83097f4e4bede117651"
+    },
+    {
+      "relativePath": "web/src/components/ui/progress.tsx",
+      "bytes": 1077,
+      "sha256": "341856c1a4d5c693707634d998bfd8bd89107b15d6dcc11e9b10b5c19363c87f"
+    },
+    {
+      "relativePath": "web/src/components/ui/r3f-loading-card.tsx",
+      "bytes": 503,
+      "sha256": "76c2d38617d0c37e2eded0c8d54e9ffc08852f3cb894a39baa1d120209d39d3e"
+    },
+    {
+      "relativePath": "web/src/components/ui/section-title.tsx",
+      "bytes": 673,
+      "sha256": "0caeeee6d5d3c84cffd0655e7f9c8821b9b24729069ca045d47e72a7e5acedab"
+    },
+    {
+      "relativePath": "web/src/components/ui/select.tsx",
+      "bytes": 367,
+      "sha256": "90bb8b500a0fd7874cf33329e01419feb18eb6aecc7747db35f76ce16b91c5ca"
+    },
+    {
+      "relativePath": "web/src/components/ui/slider.tsx",
+      "bytes": 359,
+      "sha256": "31258c53cebddd4961b30b9617d33323533057afc3b3055e0d281e8e35b0e318"
+    },
+    {
+      "relativePath": "web/src/components/ui/status-badge.tsx",
+      "bytes": 811,
+      "sha256": "243a35b74fb13c6b32834b8da3e2b639c28d13f34006152e941c3fec08975f67"
+    },
+    {
+      "relativePath": "web/src/components/ui/surgery-action.tsx",
+      "bytes": 566,
+      "sha256": "45ab21e2c75aa5980a204070cd0f295b9597816a9418dad0eea6790b68ad3b1a"
+    },
+    {
+      "relativePath": "web/src/components/ui/surgery-feedback.tsx",
+      "bytes": 624,
+      "sha256": "20a051f11d7f43e7053cfa0c029548622528c945e83500a8e5de89a531752cb6"
+    },
+    {
+      "relativePath": "web/src/components/ui/textarea.tsx",
+      "bytes": 386,
+      "sha256": "eda4cc09bb8d315d84fec5d7f4a37512c0f13f612806a0e61e8b06116766a4d0"
+    },
+    {
+      "relativePath": "web/src/hooks/useIncisionControllerBridge.ts",
+      "bytes": 800,
+      "sha256": "7538bfed505a733d14e9351d3cc1848724fc263f6322803fd01e733af7d4a59c"
+    },
+    {
+      "relativePath": "web/src/lib/controllerCommand.ts",
+      "bytes": 7768,
+      "sha256": "e044e2a116e835392cae489698be584c426366b140a22b1bf3af56d0728559f3"
+    },
+    {
+      "relativePath": "web/src/routes/AnnotateRoute.tsx",
+      "bytes": 1035,
+      "sha256": "4ff5b04252d070d323f99aa5175f99652720ed13f1be0a0ba7ecd85953a23fb5"
+    },
+    {
+      "relativePath": "web/src/routes/AnnotateWorkbench.tsx",
+      "bytes": 1496,
+      "sha256": "e50796731f8d25fc3f073cf912a93f68e213ed4781c8195ccc094870b76c3511"
+    },
+    {
+      "relativePath": "web/src/routes/DashboardRoute.tsx",
+      "bytes": 2791,
+      "sha256": "17f050c0cad57ea55c34760fdb3fc6a1cec892c3abf8a8ffdf53ee669b3c9aba"
+    },
+    {
+      "relativePath": "web/src/routes/IncisionRoute.tsx",
+      "bytes": 946,
+      "sha256": "93eeda81372c873d475539a13d9b0b87849fd0bb4521ff9dd94d52fc184acce8"
+    },
+    {
+      "relativePath": "web/src/routes/IncisionWorkbench.tsx",
+      "bytes": 1786,
+      "sha256": "5bee5065a125235cae373907e4c38abdb439fadcba66e4f24eeabfdf2b486d83"
+    },
+    {
+      "relativePath": "web/src/routes/LiveRoute.tsx",
+      "bytes": 1197,
+      "sha256": "61e1cbf4377c134ab32e43084f7e27d1e5c646590fb333798ab298ecb2250341"
+    },
+    {
+      "relativePath": "web/src/routes/LiveWorkbench.tsx",
+      "bytes": 331,
+      "sha256": "1bfa19342d360483641b7f9e5c2c7c5910a9a2bb673329bd8590c7b28513754f"
+    },
+    {
+      "relativePath": "web/src/routes/PersonalizedRoute.tsx",
+      "bytes": 702,
+      "sha256": "c96f5ee4fc0e70d8cb238fca1b841700ee28655f9be6c9fa259cb4d7d5fcaab9"
+    },
+    {
+      "relativePath": "web/src/routes/PersonalizedWorkbench.tsx",
+      "bytes": 7777,
+      "sha256": "fa1ff16c676df220b904648213c69124c3772fc608c697721b9c93d4c088dc18"
+    },
+    {
+      "relativePath": "web/src/routes/SettingsRoute.tsx",
+      "bytes": 8766,
+      "sha256": "98560d53288df9465fe2779d6737bd304ff6d29c9c2319a06ecee5a1dd37179a"
+    },
+    {
+      "relativePath": "web/src/routes/SurgeryR3FScene.tsx",
+      "bytes": 21357,
+      "sha256": "34d58035a59cb41d52037147cd641e4433cd52e1d5ee7be566f0c984cc5a85bd"
+    },
+    {
+      "relativePath": "web/src/routes/SurgeryRoute.tsx",
+      "bytes": 3819,
+      "sha256": "c9900cd8b495fb9f30ca910fad224e819c3a59cf9a8950c98bdd86ab783b4dcd"
+    },
+    {
+      "relativePath": "web/src/routes/SurgeryWorkbench.tsx",
+      "bytes": 2392,
+      "sha256": "66ace557fe49fa1ab898179da725fccb9b61e233bc768360c82f9bf95fdecf3b"
+    },
+    {
+      "relativePath": "web/src/routes/V6ReviewRoute.tsx",
+      "bytes": 6856,
+      "sha256": "f12e744a82b42e94e722a0ef13925ed26ae3e71bf72c705cad43e81cbb9e5fa1"
+    },
+    {
+      "relativePath": "web/src/routes/WorkflowRoute.tsx",
+      "bytes": 1571,
+      "sha256": "65fda853f8853534a555bcad9c8a7545bcb5a2e6771ae7b129c94d60433c119b"
+    },
+    {
+      "relativePath": "web/src/routes/WorkflowWorkbench.tsx",
+      "bytes": 1321,
+      "sha256": "055af54a765f0cfff5b081702860b22bbb3ca3c5c3e0df38407b90e93a454a8d"
+    },
+    {
+      "relativePath": "web/src/services/canvasRecording.ts",
+      "bytes": 22123,
+      "sha256": "ac3501b4a6e4f969b92d8d0c868a7bd285294ab7a5e7900c2832bd00a12ee3b9"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerAppearanceCandidate.ts",
+      "bytes": 94283,
+      "sha256": "4dfdf5a52870e71f8e5a9df7c0588deae9f730e6692dcf958b41cdb96f0153f8"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerDetection.ts",
+      "bytes": 160233,
+      "sha256": "a9eae4da1d40cbf94a1692711159ec269e1023e092998ad5308160dc962fadf8"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerDetectionColorV035.ts",
+      "bytes": 152085,
+      "sha256": "f666e44e685094d125ebd9ff9253b812679a0fadf7f11ddad0bff8175b1fcb6f"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerDetectionLegacyV023.ts",
+      "bytes": 149142,
+      "sha256": "f325dc64a90296320b868c2933a486a10eea4368e3a9a180dcd9197dfca447f5"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerDetectionProfile.ts",
+      "bytes": 5712,
+      "sha256": "c512f913cfbdcfb5debcba26be572f2ad4a80c62f82fa61c0b69b6b2a5f30f40"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerFilledCandidate.ts",
+      "bytes": 48457,
+      "sha256": "32332396c32f1ab3f7b55fb1bb9e41b14f47de3432a049d82732de7f43186796"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerOpenCvRuntime.ts",
+      "bytes": 297,
+      "sha256": "05a1e613a3a5fba8294238915fcdfa3be28be1485c09d70e2f883cd9503d1045"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerRelease.ts",
+      "bytes": 253,
+      "sha256": "ee368aa08c3257fc785229f6d1e4377f3a81f7ac38ece044b67f6c1b72f6a458"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerRunDiagnostics.ts",
+      "bytes": 71007,
+      "sha256": "475415f79394bb7e5a0a05eb0bfb05d993f4596be5422b7723b8c6eb05a27857"
+    },
+    {
+      "relativePath": "web/src/services/controlledMarkerUiConfig.ts",
+      "bytes": 220,
+      "sha256": "df11b07b7f9a7574322f1f1355b0b5d8ed98959f787962510e52bc73609aeb9f"
+    },
+    {
+      "relativePath": "web/src/services/incisionAtlasSource.ts",
+      "bytes": 3198,
+      "sha256": "8ce20a72baccae5a49d54032ed8245b313e22da18f31d2a5c6dc022b7ec4be6c"
+    },
+    {
+      "relativePath": "web/src/services/incisionAuxiliaryEvidence.ts",
+      "bytes": 1954,
+      "sha256": "a640ac7ce302556995d980f51a4506ed3cac7f042a6baff48ea8f1ca32eaf52a"
+    },
+    {
+      "relativePath": "web/src/services/incisionBoundaryState.ts",
+      "bytes": 419,
+      "sha256": "4f4008ac1dada2883775eff971bc80214f5ae79cab8e6c9349f31d7e1674a5fb"
+    },
+    {
+      "relativePath": "web/src/services/incisionCandidateTools.ts",
+      "bytes": 48662,
+      "sha256": "3e07872c7095aecf2508466c6e4e222b76fb4f3179407173297b9f79ffc46a0e"
+    },
+    {
+      "relativePath": "web/src/services/incisionClinicalCopy.ts",
+      "bytes": 14850,
+      "sha256": "ad8c62763a449b0f618af4fa96acd57c531d556a7540d7956075189f2004ad68"
+    },
+    {
+      "relativePath": "web/src/services/incisionCommandRouter.ts",
+      "bytes": 6921,
+      "sha256": "11d77b730cf4febf0c2ac82ebc0fe8757e1a3dae78733d23ce18631ba9f5b4bb"
+    },
+    {
+      "relativePath": "web/src/services/incisionCommandSchemas.ts",
+      "bytes": 4888,
+      "sha256": "fbcce9f118e4f5d7470606bfce4fbe3e7b903a9373c8133effb2461e7ef60810"
+    },
+    {
+      "relativePath": "web/src/services/incisionControllerState.ts",
+      "bytes": 5335,
+      "sha256": "fa42b33edcae97ea33644e5ae9c245b4bc0d82324a0433eb342163005ed0bc9f"
+    },
+    {
+      "relativePath": "web/src/services/incisionDom.ts",
+      "bytes": 9502,
+      "sha256": "c0c4188f6e3e82075be492a2e3ce5399eec09477bf6daeb317799989e7f100a7"
+    },
+    {
+      "relativePath": "web/src/services/incisionDomBindings.ts",
+      "bytes": 16287,
+      "sha256": "f7b88d1e2f649b07157b9b44b6a71391ddeb73e7dc6567bfe3dbb680127018aa"
+    },
+    {
+      "relativePath": "web/src/services/incisionEditHistory.ts",
+      "bytes": 6589,
+      "sha256": "34c5a667037bebf10d6041fb58a0598418267a92865bbedef39ab9d08bf89bcc"
+    },
+    {
+      "relativePath": "web/src/services/incisionExport.ts",
+      "bytes": 6651,
+      "sha256": "751ce4fc5e40c1de56469023884c0e4f95f573f53bd133f4619c8ff39e63fdd0"
+    },
+    {
+      "relativePath": "web/src/services/incisionLesionNormalization.ts",
+      "bytes": 8439,
+      "sha256": "518f0c3846cdb797469ebae72b775bae58359815fdf1ea95fccbf9229231bced"
+    },
+    {
+      "relativePath": "web/src/services/incisionLocalRstlDirection.ts",
+      "bytes": 6511,
+      "sha256": "2b0d9437817e2194116cce412490e60c26d877f2ba9aff559012872e0324e200"
+    },
+    {
+      "relativePath": "web/src/services/incisionOverlay.ts",
+      "bytes": 25020,
+      "sha256": "1c7c0114aa32a541fd6a8af656fbeaa6a0e6a9e87023c179b161ec5bb8762cc3"
+    },
+    {
+      "relativePath": "web/src/services/incisionOverlayStyle.ts",
+      "bytes": 8350,
+      "sha256": "5d69658466779e45265576b9b8c4524fedfa169130453c865e648404b67680d8"
+    },
+    {
+      "relativePath": "web/src/services/incisionPathGeometry.ts",
+      "bytes": 4568,
+      "sha256": "b860184955539922a31e0233dc03c61049c6f2f45aafe58ac9f362c478b80377"
+    },
+    {
+      "relativePath": "web/src/services/incisionPhotoOpeningProjection.ts",
+      "bytes": 4168,
+      "sha256": "fc250a8e1d714f6c9e72ffdaff6f3238461de4bac7eef2db7d6a0f2130bcf7f1"
+    },
+    {
+      "relativePath": "web/src/services/incisionPhotoPlanning.ts",
+      "bytes": 116878,
+      "sha256": "022916bcabd73051e750cfd7d38204c61216d35a1174aad0ba27b352c9f62193"
+    },
+    {
+      "relativePath": "web/src/services/incisionPhotoRuntime.ts",
+      "bytes": 79818,
+      "sha256": "2f5ac7c96d84df413f8dc355bff68cf70a249bd18a7d6d0567b6520662eb6745"
+    },
+    {
+      "relativePath": "web/src/services/incisionPicking.ts",
+      "bytes": 2436,
+      "sha256": "598e8f9c850667123530a8ab78988692756561b2d1b4aa632539b4f0af87e638"
+    },
+    {
+      "relativePath": "web/src/services/incisionPresenter.ts",
+      "bytes": 14656,
+      "sha256": "408b97c115139d966a7f46cdca9471d5b0f938703a679b0cb0c33f498704dad3"
+    },
+    {
+      "relativePath": "web/src/services/incisionReviewPolicy.ts",
+      "bytes": 8026,
+      "sha256": "301b6e93f03098ea1e73fe2b8808ef4a633a0629078dcf086217c8e6117ed206"
+    },
+    {
+      "relativePath": "web/src/services/incisionReviewRecords.ts",
+      "bytes": 18480,
+      "sha256": "709051226fdbcaea3d4b87c9b6207f831c55ff685d5f395f9c29816077b58f44"
+    },
+    {
+      "relativePath": "web/src/services/incisionRuntime.ts",
+      "bytes": 70838,
+      "sha256": "3bfda515f98db2334c27fb82c1200c8a7c88382727c74213c78766f487dfede1"
+    },
+    {
+      "relativePath": "web/src/services/incisionSceneGeometry.ts",
+      "bytes": 3267,
+      "sha256": "204ded6e5663f3a23b9a8dfbb1e814d2b90dcc90216fb0b2e99f68b24f94ab9a"
+    },
+    {
+      "relativePath": "web/src/services/incisionSession.ts",
+      "bytes": 1599,
+      "sha256": "7ab0a8b72ad93594457facc59b3f5185ec38d6b425a1b932e84cdbd61669dae1"
+    },
+    {
+      "relativePath": "web/src/services/incisionSnapshots.ts",
+      "bytes": 18736,
+      "sha256": "7107493a7f44e3eb36ddc3eae72cab3f1c5dc5716c529bc44e0312103659f23a"
+    },
+    {
+      "relativePath": "web/src/services/incisionToolCore.ts",
+      "bytes": 35107,
+      "sha256": "7e21100748425d9713c618b81244ebdd654f348839baf48234493e4618f7b0e8"
+    },
+    {
+      "relativePath": "web/src/services/incisionToolRules.ts",
+      "bytes": 9025,
+      "sha256": "41c2fc4b44b64a20e40bd7aed2e0ccddb214484592605023f5c3a3dcb85c8569"
+    },
+    {
+      "relativePath": "web/src/services/incisionTools.ts",
+      "bytes": 168,
+      "sha256": "1c6537c701cacf17508fafe1f9e4c4174df6eeca7123c82b3db77e367ee322e8"
+    },
+    {
+      "relativePath": "web/src/services/incisionWorkflowTools.ts",
+      "bytes": 47152,
+      "sha256": "8493c8c97a7cedb9f113554bcfd8aeaa8522709d0d25b306a0d27643d9ea6c50"
+    },
+    {
+      "relativePath": "web/src/services/incisionWorkspaceSession.ts",
+      "bytes": 2993,
+      "sha256": "3d018889c5f3a764c83cb35e5691fc882507fcc9a99a22e267e0ab58d692f5d0"
+    },
+    {
+      "relativePath": "web/src/services/lesionDetectionAdapter.ts",
+      "bytes": 10571,
+      "sha256": "0ee8163a6a8de168b62f2350d40ce66d17d6d67cc6441fb429ab9a6acd363def"
+    },
+    {
+      "relativePath": "web/src/services/liveCanvasInteraction.ts",
+      "bytes": 9684,
+      "sha256": "925a17e79702eac930eb6d4a8ac85d426706b08d3f92a23c03f2f47003855b17"
+    },
+    {
+      "relativePath": "web/src/services/liveCommandRouter.ts",
+      "bytes": 3606,
+      "sha256": "9ab8cef792966d1a843b4f49195c56391256bec9fe431200bd32bacbf2dc5f2a"
+    },
+    {
+      "relativePath": "web/src/services/liveRecordingActions.ts",
+      "bytes": 2431,
+      "sha256": "5458f958b00f22f1c0259c698730db3f8cb48e98922cbcd7cb7b415b1e1ad933"
+    },
+    {
+      "relativePath": "web/src/services/liveRefine2d.ts",
+      "bytes": 36853,
+      "sha256": "e630ad7829ea169dee40216823dcdd12c84c64c9e32f7730f017eeba9193f6a8"
+    },
+    {
+      "relativePath": "web/src/services/liveRuntime.ts",
+      "bytes": 23277,
+      "sha256": "a7c63e3981ec765ffa367843c7a262dfa930907923eb8806248177721bc017c9"
+    },
+    {
+      "relativePath": "web/src/services/liveState.ts",
+      "bytes": 7113,
+      "sha256": "1959753832226818b25adac9444a644df22d32e399dceb65117eec959d3fa61c"
+    },
+    {
+      "relativePath": "web/src/services/mobileWorkflowVisibility.ts",
+      "bytes": 3237,
+      "sha256": "6a4a6ccda063b1f52dc7fafd5b4760fd5fd1a847d7fd47869f93499fe744f473"
+    },
+    {
+      "relativePath": "web/src/services/personalized/foreheadTrajectoryAttraction.ts",
+      "bytes": 42863,
+      "sha256": "6765214e7d7071bbd9889891105678110875574407f896e555c5b46e0f47952f"
+    },
+    {
+      "relativePath": "web/src/services/render2d.ts",
+      "bytes": 85829,
+      "sha256": "f999dc780d74c7db887d026d71c87dc5beabce11e86f501791314ef798acb768"
+    },
+    {
+      "relativePath": "web/src/services/tumorInput.ts",
+      "bytes": 6200,
+      "sha256": "857bf17ef46786bb3dd7df659860b4fca8fa690621d6ef25084494db8b4c32f8"
+    },
+    {
+      "relativePath": "web/src/services/workflowControllerUtils.ts",
+      "bytes": 42275,
+      "sha256": "980ab45a859ce85558780932f97f594f339bdee82a4237e9bb8fce15afcc5b95"
+    },
+    {
+      "relativePath": "web/src/services/workflowIncisionController.ts",
+      "bytes": 194213,
+      "sha256": "2a5d819f8658b56b4377e0470e9702bfbe53bbd474de7efb0186d7129e85854a"
+    },
+    {
+      "relativePath": "web/src/services/workflowViewport.ts",
+      "bytes": 1002,
+      "sha256": "0067435408db8c70ed78980bcae781493ef10680171283e1aea108a5a5f97f2a"
+    },
+    {
+      "relativePath": "web/src/stores/incisionStore.ts",
+      "bytes": 1261,
+      "sha256": "18c5ec3f20848ff7d3b715f5e84d64039dfae62facd5fc4a8da66369bf033d3e"
+    },
+    {
+      "relativePath": "web/src/styles.css",
+      "bytes": 104794,
+      "sha256": "d3a0eff8b874c29aa9dc78aaaf850ba0abf70ed7e3abdc90c4e0aa88fccb41f7"
+    },
+    {
+      "relativePath": "web/src/workers/workflow.worker.ts",
+      "bytes": 1306,
+      "sha256": "eee848554106c87d8dc03e021436a2a16cee56f1f6fcba9def46c41a6f739594"
+    },
+    {
+      "relativePath": "web/src/workers/workflowWorkerContract.ts",
+      "bytes": 1754,
+      "sha256": "3656b8ce7748bc54983070c0a85cf86391250b0df30c5a903025dea177b8b9db"
+    },
+    {
+      "relativePath": "web/vite.config.ts",
+      "bytes": 4657,
+      "sha256": "d85d9f7db5efd2587db452e716cf7d587539f6a9ebdf6c3be2f384a4bcbc76a8"
+    }
+  ],
+  "inherited": [],
+  "omitted": [
+    {
+      "relativePath": "web/e2e/fixtures/authorized-demo-face.webm.base64",
+      "bytes": 50713,
+      "sha256": "c7aedf04d67bbee23b1b7a75e26e27a54e29f372e9ffedaca1392913dc2fe2cb",
+      "reason": "sensitive_or_binary_fingerprint_only"
+    }
+  ],
+  "limitations": [
+    "不包含 Git 对象库、node_modules、构建产物、浏览器过程输出或编辑器未保存缓冲。",
+    "媒体、模型、数据库、密钥类文件及大于 10 MiB 的文件只记录原位指纹；原文件丢失时不能仅靠本包完整恢复。",
+    "指纹项是否含真实患者数据不作推断；恢复前必须重新核对数据授权和原文件位置。",
+    "只复制项目责任范围配置列出的肿物识别、切口生成、切口微调和 UI 设计材料；范围外工作区改动不在本包内。",
+    "外部依赖文件仅为当前运行恢复而保存，不改变其团队责任归属，也不代表其效果已验收。",
+    "存档和运行身份不代表算法效果、真机效果、医学结论或临床验收通过。"
+  ]
+}
