@@ -11,6 +11,7 @@ import { captureMarkerIdentity } from "./marker_runtime_identity.mts";
 // Fixed inventory approved with the routing change. Adding/removing a test
 // requires an explicit inventory update, rather than silently reducing coverage.
 export const EXPECTED = [
+  {"file":"web/e2e/workflow-mobile-layout.spec.ts","full_title_parts":["phone workflow layout","small phone pending marker controls fit and cancellation preserves retry"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-mobile-layout.spec.ts","full_title_parts":["phone workflow layout","lower photo marker placement stays reachable and confirms recognition"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-mobile-layout.spec.ts","full_title_parts":["phone workflow layout","original controls remain bound while phone panels switch and resize"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-entry.spec.ts","full_title_parts":["site root opens the workflow and the launcher retains all three tools"],"project":"chromium","suite":"production"},
@@ -652,7 +653,7 @@ export async function main(args = process.argv.slice(2)) {
   const npmCli = process.env.npm_execpath;
   const ci = { prepared: false, attached: false };
   try {
-    assert.equal(EXPECTED.length, 50);
+    assert.equal(EXPECTED.length, 51);
     assertInventory(EXPECTED, EXPECTED);
     assert.equal(SOURCE.length, 2);
     await assertPortsClosed();

@@ -12,7 +12,7 @@
       "可恢复"
     ],
     "status": "candidate",
-    "sourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
+    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "changeSlug": "public-static-refinement-runtime-recovery",
     "previous": {
@@ -306,31 +306,28 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
-    "manifestPath": "local_outputs/recovery-packages/mobile-workflow-ui-20261127-final-tests/manifest.json",
-    "manifestSha256": "25a4d60e2a3057aa96419407f6069f8e624d5acea15469460fc5b6b089757444",
+    "sourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
+    "manifestPath": "local_outputs/recovery-packages/pr249-marker-placement-20261127/manifest.json",
+    "manifestSha256": "981e1a27ee2808c974b6c8c353f5189ba738bbd487718ceca7f60c63b9de0d0b",
     "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
     "verifiedAt": "2026-11-27",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-marker-placement-20261127",
     "note": "Self-contained source-only recovery archive included for clean CI verification. No patient media, models or browser output included."
   },
   "scopeBoundaryReview": {
     "status": "not_required",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-marker-placement-20261127",
-    "note": "Only scoped phone UI and required tests changed; product algorithms unchanged."
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
+    "note": "Only phone CSS and required tests; no algorithm changes."
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-marker-placement-20261127",
-    "confirmedAt": "2026-11-27",
-    "note": "本轮修复后用户明确答复：已查看并接受，文件均已保存。仅为手机 UI 验收。"
+    "status": "pending",
+    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127"
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-marker-placement-20261127",
-    "confirmedAt": "2026-11-27"
+    "status": "pending",
+    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127"
   },
   "history": [
     {
@@ -2558,8 +2555,8 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.38-candidate.1",
-    "name": "手机标记：收起面板并保留完整照片触摸区域",
+    "version": "0.1.39-candidate.1",
+    "name": "手机标记：小屏等待状态滑条完整显示",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
@@ -2589,12 +2586,12 @@
       "web/src/services/workflowViewport.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "290516ba0bb52da199c0d59d14b16f710459831782d0415945b25fd321ce2a23",
+    "sourceDigest": "716eb289553094581275ff6757cdd44912bd65406e32ab11ac0c8b63d0f78d25",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
+    "runtimeSourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
     "algorithmVersion": "0.104.2-candidate.4",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
-    "note": "Phone-only marker tools placement. Original controls, commands and algorithms retained."
+    "note": "CSS-only phone pending-state layout correction. Existing controls and all algorithms unchanged."
   },
   "uiHistory": [
     {

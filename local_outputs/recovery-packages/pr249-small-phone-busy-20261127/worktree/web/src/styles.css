@@ -3818,6 +3818,16 @@ body:has(.dark-workbench-page) {
     gap: 4px 6px;
     overflow: visible;
   }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-canvas-tools[data-marker-busy="true"] {
+    row-gap: 2px;
+  }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-canvas-tools[data-marker-busy="true"] .workflow-mobile-marker-confirm {
+    grid-area: 2 / 1;
+  }
+  .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-canvas-tools[data-marker-busy="true"] .workflow-marker-scan {
+    grid-area: 2 / 2 / 3 / 4;
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
   .workflow-workbench[data-workflow-mobile="true"] .workflow-mobile-marker-tools .workflow-marker-cancel {
     grid-area: 3 / 1 / auto / -1;
   }

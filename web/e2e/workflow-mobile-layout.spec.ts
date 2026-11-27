@@ -157,4 +157,76 @@ test.describe("phone workflow layout", () => {
     await expect(page.locator('[data-mobile-panel-slot="incision"] .workflow-marker-toggle')).toBeVisible();
   });
 
+
+  test("small phone pending marker controls fit and cancellation preserves retry", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.addInitScript(() => {
+      Reflect.set(window, "holdMarkerRecognition", true);
+      Reflect.set(window, "heldMarkerRequests", 0);
+      const OriginalWorker = window.Worker;
+      Object.defineProperty(window, "Worker", { value: class extends OriginalWorker {
+        postMessage(message: unknown, transfer: Transferable[] = []) {
+          const call = message as { type?: string; path?: string[] };
+          // Hold only this real detector request; diagnostics and all other work run normally.
+          if (call.type === "APPLY" && call.path?.[0] === "detectControlledMarker"
+            && Reflect.get(window, "holdMarkerRecognition")) {
+            Reflect.set(window, "heldMarkerRequests", Reflect.get(window, "heldMarkerRequests") + 1);
+            return;
+          }
+          super.postMessage(message, transfer);
+        }
+      } });
+    });
+    await page.goto("/app/workflow");
+    await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
+    await uploadGeneratedPhotoWithControlledMarkers(page,
+      [{ xRatio: 0.72, yRatio: 0.75, radiusRatio: 0.02, filled: true }], "#fileInput");
+    await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+    await page.getByRole("button", { name: "切口设计", exact: true }).tap();
+    await page.locator(".workflow-marker-toggle").tap();
+    const canvas = page.locator("#canvas");
+    const box = await canvas.boundingBox();
+    await canvas.tap({ position: { x: box!.width * 0.72, y: box!.height * 0.75 } });
+    const tools = page.locator(".workflow-mobile-marker-tools");
+    const confirm = tools.getByRole("button", { name: "识别已放置圆圈内的肿物" });
+    await expect(confirm).toBeEnabled();
+    await confirm.tap();
+    await expect(tools.locator(".workflow-canvas-tools")).toHaveAttribute("data-marker-busy", "true");
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, "heldMarkerRequests"))).toBe(1);
+    const slider = tools.locator(".workflow-marker-scan input");
+    const cancel = tools.getByRole("button", { name: "取消当前肿物识别" });
+    await expect(slider).toBeDisabled();
+    await expect(confirm).toBeDisabled();
+    for (const width of [320, 393, 560, 320]) {
+      await page.setViewportSize({ width, height: 640 });
+      const bounds = await tools.evaluate(el => {
+        const rect = (selector: string) => {
+          const box = el.querySelector(selector)!.getBoundingClientRect();
+          return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+        };
+        return { scan: rect(".workflow-marker-scan"), slider: rect(".workflow-marker-scan input"),
+          confirm: rect(".workflow-mobile-marker-confirm"), cancel: rect(".workflow-marker-cancel") };
+      });
+      for (const rect of Object.values(bounds)) {
+        expect(rect.left).toBeGreaterThanOrEqual(0);
+        expect(rect.right).toBeLessThanOrEqual(width);
+        expect(rect.bottom).toBeLessThanOrEqual(640);
+      }
+      expect(bounds.confirm.right).toBeLessThanOrEqual(bounds.scan.left);
+      expect(bounds.slider.right).toBeLessThanOrEqual(bounds.scan.right);
+    }
+    await page.screenshot({ path: test.info().outputPath("phone-320-pending-marker.png") });
+    await cancel.tap();
+    await expect(tools.locator(".workflow-canvas-tools")).toHaveAttribute("data-marker-busy", "false");
+    await expect(page.locator("[data-workflow-marker-scan]")).toBeVisible();
+    await expect(confirm).toBeEnabled();
+    await expect(slider).toBeEnabled();
+    await page.evaluate(() => Reflect.set(window, "holdMarkerRecognition", false));
+    await confirm.tap();
+    await expect(page.locator("[data-workflow-boundary]")).toHaveAttribute("d", /^M /, { timeout: 45_000 });
+    await expect(page.locator("[data-workflow-candidate]")).toHaveAttribute("d", /^M /, { timeout: 45_000 });
+    await page.screenshot({ path: test.info().outputPath("phone-320-marker-retry.png") });
+  });
+
 });

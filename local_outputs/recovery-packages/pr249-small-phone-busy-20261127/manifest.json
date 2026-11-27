@@ -1,13 +1,13 @@
 {
   "schema": "skin-texture-algorithm-recovery/2",
-  "name": "pr249-marker-placement-20261127",
-  "createdAt": "2026-11-27T10:41:47.316Z",
+  "name": "pr249-small-phone-busy-20261127",
+  "createdAt": "2026-11-27T13:00:42.240Z",
   "source": {
     "branch": "codex/mobile-workflow-ui-20261127",
-    "head": "c98b1662bc24b11534cc43eb00157eb734cadb8b",
-    "tree": "88fa6b397c86b17ed6c41de8a6233c1d01e802e8",
+    "head": "bc76e8ea70b61ed9d0fef61f581ac1d1647e7529",
+    "tree": "9740e897165eccf0c0297c20eb30f939ba225de6",
     "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
-    "status": " M .gitattributes\n M docs/quality/MOBILE_WORKFLOW_UI_20261127.md\n M docs/quality/controlled-marker-release.json\n M tools/run_browser_contract_suites.mjs\n M tools/test_workflow_page.ts\n M web/e2e/freehand-mobile-regression.spec.ts\n M web/e2e/support/incisionPhoto.ts\n M web/e2e/workflow-mobile-layout.spec.ts\n M web/e2e/workflow-regressions.spec.ts\n M web/src/components/WorkflowLayout.tsx\n M web/src/components/WorkflowMobilePanels.tsx\n M web/src/routes/WorkflowWorkbench.tsx\n M web/src/styles.css\n"
+    "status": " M .gitattributes\n M docs/quality/MOBILE_WORKFLOW_UI_20261127.md\n M docs/quality/controlled-marker-release.json\n M tools/run_browser_contract_suites.mjs\n M web/e2e/workflow-mobile-layout.spec.ts\n M web/src/styles.css\n"
   },
   "archiveScope": {
     "schema": "langerface-algorithm-archive-scope/1",
@@ -58,9 +58,9 @@
     "profile": "small-lesion-boundary-candidate",
     "implementationVersion": "0.104.2-candidate.4",
     "branch": "codex/mobile-workflow-ui-20261127",
-    "head": "c98b1662bc24b11534cc43eb00157eb734cadb8b",
+    "head": "bc76e8ea70b61ed9d0fef61f581ac1d1647e7529",
     "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
-    "sourceDigest": "7d242c23691d5f6dbe67bfa54e638308d51aff5d9cd6cbb2ab0a9c5891ac74a3",
+    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "assetDigest": "59c6b3d59e05f3142985b4efae782707c268f0611b34ea8670d0a444f9b28c4b",
     "sourceFileCount": 293,
@@ -97,8 +97,8 @@
     },
     {
       "relativePath": "docs/quality/ALGORITHM_VERSIONING.md",
-      "bytes": 147658,
-      "sha256": "25dd2c0ae83d586acddd8d7a9a1faa18f86973525411afece0351a4f81c5d51f"
+      "bytes": 149686,
+      "sha256": "23758b158b9485e2546bed0fd8f096da40fbe853f0846bb7d7562d7f00aedc4b"
     },
     {
       "relativePath": "docs/quality/LESION_CANDIDATE_REVIEW.md",
@@ -122,8 +122,8 @@
     },
     {
       "relativePath": "docs/quality/controlled-marker-release.json",
-      "bytes": 349728,
-      "sha256": "ea4dc6f072c927a8034a3a5690db9b44a6e64190ece47ae0c73122130af35871"
+      "bytes": 349513,
+      "sha256": "62c45a763dcfdd76d76642d85c5662ccac6d2473407ea48ffaf586629077115d"
     },
     {
       "relativePath": "docs/tracks/INCISION_WORKFLOW.md",
@@ -202,8 +202,8 @@
     },
     {
       "relativePath": "tools/run_browser_contract_suites.mjs",
-      "bytes": 46176,
-      "sha256": "ec3ff5358fd02bf9ee3121351abc98e4a19f2935cf97660d60f360575038190c"
+      "bytes": 46391,
+      "sha256": "cb89b2a7184d3c2aa1f4a55121fdcdc9e8bbe5916f18a5a186cde251eb4e385e"
     },
     {
       "relativePath": "tools/run_controlled_marker_v035_build.mjs",
@@ -662,8 +662,8 @@
     },
     {
       "relativePath": "web/e2e/workflow-mobile-layout.spec.ts",
-      "bytes": 10146,
-      "sha256": "4014389b8e3bd82aad741a6fd2add92949096ef8b14e8cd4405b98f58e2726eb"
+      "bytes": 14350,
+      "sha256": "805f6b90ff340cce7e5adf8931ef990e7644af50345e93e405825eb18cd76187"
     },
     {
       "relativePath": "web/e2e/workflow-regressions.spec.ts",
@@ -1432,8 +1432,8 @@
     },
     {
       "relativePath": "web/src/styles.css",
-      "bytes": 104210,
-      "sha256": "e732075dabc3cd1c3423c68b1c70d28d44e406a74168b4fd36aba87f31cfd55d"
+      "bytes": 104794,
+      "sha256": "d3a0eff8b874c29aa9dc78aaaf850ba0abf70ed7e3abdc90c4e0aa88fccb41f7"
     },
     {
       "relativePath": "web/src/workers/workflow.worker.ts",
