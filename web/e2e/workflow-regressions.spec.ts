@@ -90,6 +90,10 @@ async function preparePr226PhotoCandidate(page: Page) {
   await test.info().attach("photo-click-input", { body: Buffer.from(JSON.stringify({
     source: "single-face.jpg", sourceSize: { width: 768, height: 768 }, box, point,
   }, null, 2)), contentType: "application/json" });
+  if (await page.locator('[data-workflow-mobile="true"]').count() > 0
+    && !await page.locator('[data-mobile-panel-slot="incision"]').isVisible()) {
+    await page.getByRole("button", { name: "切口设计", exact: true }).click();
+  }
   const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
@@ -107,6 +111,10 @@ async function prepareControlledMarkerCandidateAt(
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "__pr226Incision")?.workflowTools?.photoReady),
     { timeout: 45_000 }).toBe(true);
   await page.locator("#tumorKind").selectOption(kind);
+  if (await page.locator('[data-workflow-mobile="true"]').count() > 0
+    && !await page.locator('[data-mobile-panel-slot="incision"]').isVisible()) {
+    await page.getByRole("button", { name: "切口设计", exact: true }).click();
+  }
   const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
@@ -682,6 +690,10 @@ test("merged workflow preserves incision geometry, warning priority, and RSTL re
   await expect(markerTooltip).toBeHidden();
   reportWorkflowStage("freehand-controlled-marker-block-pass");
 
+  if (await page.locator('[data-workflow-mobile="true"]').count() > 0
+    && !await page.locator('[data-mobile-panel-slot="incision"]').isVisible()) {
+    await page.getByRole("button", { name: "切口设计", exact: true }).click();
+  }
   const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
   await expect(markerButton).toContainText("受控标记");
   await markerButton.click();

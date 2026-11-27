@@ -3,6 +3,17 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "@pla
 import { uploadGeneratedPhoto, uploadGeneratedPhotoWithControlledMarkers } from "./support/incisionPhoto";
 import { captureMarkerIdentity } from "../../tools/marker_runtime_identity.mts";
 
+
+async function openPhoneIncision(page: Page, section?: string) {
+  if (await page.locator('[data-workflow-mobile="true"]').count() === 0) return;
+  const slot = page.locator('[data-mobile-panel-slot="incision"]');
+  if (!await slot.isVisible()) await page.getByRole("button", { name: "切口设计", exact: true }).click();
+  if (section) {
+    const summary = slot.locator("summary").filter({ hasText: section });
+    if (await summary.locator("..").getAttribute("open") === null) await summary.click();
+  }
+}
+
 function emulateMouseOnly(context: BrowserContext) {
   // Playwright's hasTouch=false can still expose the Windows host's touch points.
   return context.addInitScript(() => Object.defineProperty(navigator, "maxTouchPoints", { get: () => 0 }));
@@ -130,14 +141,16 @@ async function dragUpFrom(page: Page, start: { x: number; y: number }) {
 
 async function expectGestureScrolls(page: Page, target: "pane" | "root" | "document", timeout = 10_000, touch = true) {
   const offset = () => page.evaluate((kind) => (
-    kind === "pane" ? document.querySelector(".workflow-mobile-operation-pane")?.scrollTop ?? 0
+    kind === "pane" ? document.querySelector(".workflow-mobile-sheet-scroll")?.scrollTop ?? 0
       : kind === "root" ? document.querySelector(".workflow-workbench")?.scrollTop ?? 0
         : document.scrollingElement?.scrollTop ?? 0
   ), target);
   const before = await offset();
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("scroll test requires a fixed viewport");
-  if (touch) await dragUpFrom(page, { x: 10, y: viewport.height - 24 });
+  const sheet = target === "pane" ? await page.locator(".workflow-mobile-sheet-scroll").boundingBox() : null;
+  const start = sheet ? { x: sheet.x + 6, y: sheet.y + sheet.height - 10 } : { x: 10, y: viewport.height - 24 };
+  if (touch) await dragUpFrom(page, start);
   else {
     await page.mouse.move(10, viewport.height - 24);
     await page.mouse.wheel(0, 250);
@@ -192,6 +205,9 @@ for (const layout of scrollLayouts) {
       await expect(page.locator('[data-workflow-mobile="true"] .workflow-mobile-recovery-slot')).toHaveCount(layout.mobile ? 1 : 0);
       await expect(page.locator(".workflow-mobile-recovery-slot")).toHaveCount(1);
       await expect(page.locator(".workflow-mobile-recovery-slot")).toBeEmpty();
+      if (layout.mobile) {
+        await openPhoneIncision(page, "候选微调");
+      }
       if (layout.width <= 1280) {
         const stageTop = await page.locator(".stage").evaluate((element) => element.getBoundingClientRect().top);
         await expectGestureScrolls(page, scrollTarget, 10_000, layout.touch);
@@ -211,11 +227,11 @@ for (const layout of scrollLayouts) {
       // Finish the preceding scroll before testing a separate tap; a tap during
       // a fling can stop the fling instead of activating the control.
       await expect.poll(async () => page.evaluate(() => new Promise<boolean>((resolve) => {
-        let prior = `${scrollY}:${document.querySelector(".workflow-mobile-operation-pane")?.scrollTop}`;
+        let prior = `${scrollY}:${document.querySelector(".workflow-mobile-sheet-scroll")?.scrollTop}`;
         let stableFrames = 0;
         let frames = 0;
         const tick = () => {
-          const current = `${scrollY}:${document.querySelector(".workflow-mobile-operation-pane")?.scrollTop}`;
+          const current = `${scrollY}:${document.querySelector(".workflow-mobile-sheet-scroll")?.scrollTop}`;
           stableFrames = current === prior ? stableFrames + 1 : 0;
           prior = current;
           if (stableFrames >= 12) resolve(true);
@@ -244,8 +260,9 @@ test("workflow gesture assertion detects a locked existing mobile pane", async (
   await page.goto("/app/workflow?developer=1");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
   await expect(page.locator(".workflow-mobile-operation-pane")).toBeVisible();
+  await openPhoneIncision(page, "候选微调");
   const lock = await page.addStyleTag({
-    content: ".workflow-mobile-operation-pane { touch-action: none !important; }",
+    content: ".workflow-mobile-sheet-scroll { touch-action: none !important; }",
   });
   let detected = false;
   try {
@@ -571,6 +588,7 @@ test("a visibility-limited candidate prompts for a reviewer before confirmation"
   const marker = { xRatio: 0.10, yRatio: 0.55, radiusRatio: 0.035 };
   await uploadGeneratedPhotoWithControlledMarkers(page, [marker], "#fileInput");
   await expect(page.locator("#livePill")).toContainText("照片", { timeout: 45_000 });
+  await openPhoneIncision(page);
   const markerButton = page.getByTitle("点击照片中的受控黑色标记并识别边界");
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
@@ -591,7 +609,8 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await page.goto("/app/workflow");
   await expect(page.locator("#workflowStageStatus")).toContainText("切口规划资产已就绪", { timeout: 45_000 });
 
-  const operationPane = page.locator(".workflow-mobile-operation-pane");
+  await openPhoneIncision(page, "候选微调");
+  const operationPane = page.locator(".workflow-mobile-sheet-scroll");
   const stage = page.locator(".workflow-workbench > .stage");
   await expect(operationPane).toBeVisible();
   await expect(page.locator(".workflow-mobile-scroll-zone")).toHaveCount(0);
@@ -608,7 +627,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
     await page.setViewportSize(viewport);
     const layout = await page.locator(".workflow-workbench").evaluate((root) => {
       const stageElement = root.querySelector<HTMLElement>(":scope > .stage");
-      const pane = root.querySelector<HTMLElement>(":scope > .workflow-mobile-operation-pane");
+      const pane = root.querySelector<HTMLElement>(".workflow-mobile-sheet-scroll");
       if (!stageElement || !pane) return null;
       const stageBox = stageElement.getBoundingClientRect();
       const paneBox = pane.getBoundingClientRect();
@@ -625,11 +644,11 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
     });
     expect(layout).not.toBeNull();
     expect(layout!.rootHeight).toBeCloseTo(viewport.height, 0);
-    const expectedStageHeight = Math.max(320, Math.min(viewport.height - 136, viewport.width + 134));
+    const expectedStageHeight = viewport.height - 142;
     expect(layout!.stageHeight).toBeCloseTo(expectedStageHeight, 0);
-    expect(layout!.paneTop).toBeCloseTo(layout!.stageTop + layout!.stageHeight, 0);
+    expect(layout!.paneTop).toBeLessThan(layout!.stageTop + layout!.stageHeight);
     expect(layout!.paneOverflowY).toBe("auto");
-    expect(layout!.paneScrollbarWidth).toBe("none");
+    expect(layout!.paneScrollbarWidth).toBe("thin");
     expect(layout!.paneScrollable).toBe(true);
   }
 
@@ -638,7 +657,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   let fileChooserOpened = false;
   page.once("filechooser", () => { fileChooserOpened = true; });
   const stageTopBeforeDrag = await stage.evaluate((element) => element.getBoundingClientRect().top);
-  await dragOperationPaneFrom(page, uploadButton);
+  await expectGestureScrolls(page, "pane");
   await expect.poll(() => operationPane.evaluate((pane) => pane.scrollTop)).toBeGreaterThan(0);
   expect(fileChooserOpened).toBe(false);
   expect(await stage.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(stageTopBeforeDrag, 1);
@@ -667,7 +686,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await expect(page.locator("#ellipseRatio")).toHaveCount(0);
 
   const markerStageHeight = await stage.evaluate((element) => element.getBoundingClientRect().height);
-  expect(markerStageHeight).toBeCloseTo(Math.max(320, Math.min(844 - 136, 390 + 134)), 0);
+  expect(markerStageHeight).toBeCloseTo(844 - 142, 0);
 
   await page.setViewportSize({ width: 430, height: 711 });
   await expect.poll(async () => Math.round((await page.locator("#canvas").boundingBox())?.width || 0))
@@ -690,6 +709,7 @@ test("mobile freehand exits an empty session and draws after leaving controlled 
   await markerButton.click();
   await expect(markerButton).toHaveAttribute("aria-pressed", "true");
 
+  await openPhoneIncision(page, "切口规划");
   const boundaryMode = page.getByLabel("肿物边界");
   const boundaryButton = page.locator("#startBoundaryBtn");
   await boundaryMode.selectOption("freehand");

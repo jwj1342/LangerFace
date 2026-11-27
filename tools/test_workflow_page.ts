@@ -1247,9 +1247,9 @@ assert.match(styles, /\.workflow-workbench \.stage-top > #livePill\s*\{[^}]*disp
   "redundant phone source and FPS labels are hidden while their underlying runtime data remains intact");
 assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
   "the compact input and layer dock is exposed only on phone-class coarse pointers");
-for (const command of ["upload_source", "camera_toggle", "pause_toggle", "recording_toggle", "image_export"]) {
-  assert.equal((mobileControls.match(new RegExp(`liveCommands\\.source\\("${command}"\\)`, "g")) || []).length, 1,
-    `the phone layout retains exactly one ${command} control regardless of visual order`);
+for (const [command, count] of Object.entries({ upload_source: 1, camera_toggle: 2, pause_toggle: 1, recording_toggle: 1, image_export: 1 })) {
+  assert.equal((mobileControls.match(new RegExp(`liveCommands\\.source\\("${command}"(?:\\)|,)`, "g")) || []).length, count,
+    `the phone layout retains the original ${command} bindings, including camera facing selection`);
 }
 assert.match(mobileControls, /停止视频[\s\S]*?导出视频[\s\S]*?导出图片/,
   "the mobile dock distinguishes video recording from still PNG export");

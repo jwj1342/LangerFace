@@ -11,6 +11,7 @@ import { captureMarkerIdentity } from "./marker_runtime_identity.mts";
 // Fixed inventory approved with the routing change. Adding/removing a test
 // requires an explicit inventory update, rather than silently reducing coverage.
 export const EXPECTED = [
+  {"file":"web/e2e/workflow-mobile-layout.spec.ts","full_title_parts":["phone workflow layout","original controls remain bound while phone panels switch and resize"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/workflow-entry.spec.ts","full_title_parts":["site root opens the workflow and the launcher retains all three tools"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/clinical-theme.spec.ts","full_title_parts":["public workflow entrypoints share the blue clinical action theme"],"project":"chromium","suite":"production"},
   {"file":"web/e2e/freehand-mobile-regression.spec.ts","full_title_parts":["workflow scroll and upload remain usable: fine393"],"project":"chromium","suite":"production"},
@@ -650,7 +651,7 @@ export async function main(args = process.argv.slice(2)) {
   const npmCli = process.env.npm_execpath;
   const ci = { prepared: false, attached: false };
   try {
-    assert.equal(EXPECTED.length, 48);
+    assert.equal(EXPECTED.length, 49);
     assertInventory(EXPECTED, EXPECTED);
     assert.equal(SOURCE.length, 2);
     await assertPortsClosed();

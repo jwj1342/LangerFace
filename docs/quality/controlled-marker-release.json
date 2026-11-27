@@ -12,7 +12,7 @@
       "可恢复"
     ],
     "status": "candidate",
-    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0",
+    "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "changeSlug": "public-static-refinement-runtime-recovery",
     "previous": {
@@ -306,32 +306,28 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0",
-    "manifestPath": "local_outputs/recovery-packages/pr248-wrinkle-weight-prefetch-20261125/manifest.json",
-    "manifestSha256": "03efce743ae73129c0c785afd35a61731e93f5e1bcdfd86d8f9da5bc8bf7ed00",
-    "scopeConfigSha256": "81e074193fada64bb8ac1aafc6a47d379be58fd174945484d88a3df77e480ce8",
-    "verifiedAt": "2026-11-25",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-wrinkle-weight-prefetch-20261125",
-    "note": "Verified source-scope archive built from the prefetch worktree. Use the PR commit for files outside this scope. Previous archives remain frozen."
+    "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
+    "manifestPath": "local_outputs/recovery-packages/mobile-workflow-ui-20261127-inventory/manifest.json",
+    "manifestSha256": "3bc881bbfa16568d04fceb6c2dde61c0ac7e74178efb3adb126681c17dc6bf1c",
+    "scopeConfigSha256": "1b374c636ad1ceea1b804dbcc73e0b88c41de70ea92a5c50c43560e843f81c21",
+    "verifiedAt": "2026-11-27",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
+    "note": "Self-contained source-scope archive; excluded media and model files remain fingerprint-only. Use the PR commit for files outside scope."
   },
   "scopeBoundaryReview": {
-    "status": "confirmed",
-    "scope": "The operator requested shared YOLO model delivery changes in PR #248. This covers background prefetch, Worker request timing and associated tests. Existing shared workflow scope remains covered by the earlier requests.",
-    "manifestSha256": "03efce743ae73129c0c785afd35a61731e93f5e1bcdfd86d8f9da5bc8bf7ed00",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-wrinkle-weight-prefetch-20261125",
-    "confirmedAt": "2026-11-25"
+    "status": "not_required",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
+    "note": "Mobile UI and required test changes only; no product algorithm changes. Recovery scope includes all modified executable files."
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-wrinkle-prefetch-operator-evaluation-20261125",
-    "confirmedAt": "2026-11-25"
+    "status": "pending",
+    "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127"
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "dfd0aa7c9117909f025a06f7b82e439089e6efb70db6fd9df933e0587f1811b0",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr248-wrinkle-prefetch-operator-evaluation-20261125",
-    "confirmedAt": "2026-11-25"
+    "status": "pending",
+    "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127"
   },
   "history": [
     {
@@ -2559,19 +2555,23 @@
     }
   ],
   "uiIdentity": {
-    "version": "0.1.36-candidate.1",
-    "name": "诊断导出：保留运行身份与历史记录",
+    "version": "0.1.37-candidate.1",
+    "name": "手机工作台：大图、紧凑半透明面板与底部操作",
     "status": "candidate",
     "sourceFiles": [
       "web/src/components/IncisionStagePanel.tsx",
+      "web/src/components/LiveControlRail.tsx",
       "web/src/components/LiveSourceControlsPanel.tsx",
       "web/src/components/MobileWorkflowControls.tsx",
       "web/src/components/StandaloneReviewControlsPanel.tsx",
       "web/src/components/TumorInputPanel.tsx",
       "web/src/components/WorkflowCanvasTools.tsx",
       "web/src/components/WorkflowDraftRecovery.tsx",
+      "web/src/components/WorkflowIncisionRail.tsx",
       "web/src/components/WorkflowLayout.tsx",
+      "web/src/components/WorkflowMobilePanels.tsx",
       "web/src/components/WorkflowStageStatus.tsx",
+      "web/src/routes/WorkflowWorkbench.tsx",
       "web/src/services/controlledMarkerRunDiagnostics.ts",
       "web/src/services/controlledMarkerUiConfig.ts",
       "web/src/services/incisionClinicalCopy.ts",
@@ -2586,12 +2586,12 @@
       "web/src/services/workflowViewport.ts",
       "web/src/styles.css"
     ],
-    "sourceDigest": "3b1c895e656be88af626ff092ca8a11af96f8cb177ea38e212809460b53d6fdf",
+    "sourceDigest": "57de6c0bd152400348a99c0961652ea810c224e67f770ae7af4dfc37fa54465d",
     "digestMethod": "SHA256(JSON.stringify(sorted [path, SHA256(CRLF-to-LF source)]))",
-    "runtimeSourceDigest": "a5d0aae805f4ff492af75e52b320404c73a2c6402fdd55cc1bb09a39345b2237",
-    "algorithmVersion": "0.104.1-candidate.1",
-    "algorithmDigest": "04049fee3685746fdc43445450f0a805a0a306def023d488be9d2966f78df5cd",
-    "note": "UI version retained from master; scoped bytes and runtime digest recaptured after PR244 integration. This is not new UI acceptance."
+    "runtimeSourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
+    "algorithmVersion": "0.104.2-candidate.4",
+    "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
+    "note": "Phone layout only; original control handlers and desktop layout retained. No algorithm changes."
   },
   "uiHistory": [
     {

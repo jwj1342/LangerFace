@@ -63,14 +63,15 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   await expect(page.locator(".workflow-mobile-quality-slot")).toHaveCount(0);
   await expect(page.locator("#qualityBar")).toHaveCount(1);
 
-  const mobileOperationPane = page.locator(".workflow-mobile-operation-pane");
+  await page.getByRole("button", { name: "皮肤纹理", exact: true }).click();
+  const mobileOperationPane = page.locator(".workflow-mobile-sheet-scroll");
   await expect(mobileOperationPane).toBeVisible();
   await expect(page.locator(".workflow-mobile-scroll-zone")).toHaveCount(0);
   await expect(page.locator("#livePill")).toBeHidden();
   await expect(page.locator("#fps")).toBeHidden();
   expect(await mobileOperationPane.evaluate((pane) => {
     const style = getComputedStyle(pane);
-    return style.overflowY === "auto" && style.scrollbarWidth === "none"
+    return style.overflowY === "auto" && style.scrollbarWidth === "thin"
       && pane.scrollHeight > pane.clientHeight;
   })).toBe(true);
 
@@ -84,19 +85,25 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   expect(stageTopAfterScroll).toBeCloseTo(stageTopBeforeScroll, 1);
   await mobileOperationPane.evaluate((pane) => { pane.scrollTop = 0; });
 
-  const layerGrid = page.locator(".mobile-layer-grid");
-  const rstl = layerGrid.getByRole("button", { name: "RSTL", exact: true });
-  const wrinkles = layerGrid.getByRole("button", { name: "皱纹", exact: true });
-  const incision = layerGrid.getByRole("button", { name: "切口线", exact: true });
-  for (const toggle of [rstl, wrinkles, incision]) {
+  const rstl = page.getByRole("button", { name: "RSTL", exact: true });
+  const wrinkles = page.getByRole("button", { name: "皱纹", exact: true });
+  const incision = page.getByRole("button", { name: "切口线", exact: true });
+  for (const toggle of [rstl, wrinkles]) {
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  }
-  for (const toggle of [rstl, wrinkles, incision]) {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
   }
-  await expect(layerGrid).toContainText("可全部隐藏，结果仍会保留");
-  for (const toggle of [rstl, wrinkles, incision]) await toggle.click();
+  await page.getByRole("button", { name: "切口设计", exact: true }).click();
+  await expect(incision).toHaveAttribute("aria-pressed", "true");
+  await incision.click();
+  await expect(incision).toHaveAttribute("aria-pressed", "false");
+  await incision.click();
+  await page.getByRole("button", { name: "皮肤纹理", exact: true }).click();
+  for (const toggle of [rstl, wrinkles]) {
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+  }
+  await page.getByRole("button", { name: "切口设计", exact: true }).click();
 
   for (const [index, assetPath] of assets.entries()) {
     await uploadPhoto(page, assetPath);
@@ -159,7 +166,7 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
     centerStroke: "0.8px",
   });
 
-  expect(await page.locator(".workflow-incision-rail").evaluate((rail) => {
+  expect(await page.locator('[data-mobile-panel-slot="incision"]').evaluate((rail) => {
     const mainParameters = rail.querySelector("#tumorKind")?.closest(".card");
     const adjustment = rail.querySelector(".mobile-candidate-adjust");
     const review = rail.querySelector("#reviewerName");
