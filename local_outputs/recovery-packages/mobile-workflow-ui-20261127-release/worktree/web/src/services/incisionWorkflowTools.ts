@@ -1,0 +1,1092 @@
+import {
+  WORKFLOW_PLAN_STEP_DEFINITIONS,
+  WORKFLOW_TRACE_GATE_REQUIRED,
+  DEFAULT_RULES,
+  TOOL_SCHEMAS,
+} from "./incisionToolRules.ts";
+import {
+  type AnyRecord,
+  type DirectionResult,
+  type Vec3,
+  add,
+  annotateCandidateSensitiveDistances,
+  classifyRegion,
+  clamp,
+  editRecordIsActive,
+  inspectTumorEngineeringExclusions,
+  mul,
+  norm,
+  queryDirection,
+  sub,
+  unitsPerMmFromVertices,
+  versionedEditProvenance,
+} from "./incisionToolCore.ts";
+import { queryIncisionLocalRstlDirection } from "./incisionLocalRstlDirection.ts";
+import { normalizePlanningLesion } from "./incisionLesionNormalization.ts";
+import {
+  type IncisionCandidate,
+  type IncisionRules,
+  type TumorInput,
+  boundaryProfile,
+  evaluateGuardrails,
+  freeMarginDistanceThresholdMm,
+  fusiformProfile,
+  generateFusiformIncision,
+  generateLinearIncision,
+  inspectSensitiveStructures,
+  normalizeTumorInput,
+  outlineQualityMetrics,
+  summarizeTumorBoundary,
+  summarizeTumorInputQuality,
+  tangentPerp,
+  validateTumor,
+} from "./incisionCandidateTools.ts";
+
+export function rotateInPlane(axis: Vec3, normal: Vec3, angleDeg: number): Vec3 {
+  const a = angleDeg * Math.PI / 180;
+  const p = tangentPerp(axis, normal);
+  return norm(add(mul(axis, Math.cos(a)), mul(p, Math.sin(a))));
+}
+
+export const DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG = [0, -10, 10];
+
+function normalizedDirectionOverride(
+  value: (Partial<DirectionResult> & AnyRecord) | null | undefined,
+  point: Vec3,
+): (DirectionResult & AnyRecord) | null {
+  if (!value || !Array.isArray(value.vector) || value.vector.length !== 3) return null;
+  const raw = value.vector.map(Number) as Vec3;
+  if (!raw.every(Number.isFinite) || Math.hypot(...raw) <= 1e-9) return null;
+  const vector = norm(raw);
+  return {
+    ...value,
+    point,
+    vector,
+    angle_deg: Math.atan2(vector[1], vector[0]) * 180 / Math.PI,
+    confidence: clamp(Number(value.confidence ?? 0), 0, 1),
+    source: String(value.source || "photo_projected_rstl_nearest_segment"),
+    nearest_distance: value.nearest_distance == null ? null : Number(value.nearest_distance),
+    support_count: Math.max(1, Number(value.support_count || 1)),
+    angular_spread_deg: Math.max(0, Number(value.angular_spread_deg || 0)),
+    confidence_reasons: Array.isArray(value.confidence_reasons) ? value.confidence_reasons.map(String) : [],
+  };
+}
+
+function clonePlan<T>(plan: T): T {
+  return JSON.parse(JSON.stringify(plan));
+}
+
+function editedTraceStep(edit: AnyRecord, candidate: IncisionCandidate, guardrails: AnyRecord): AnyRecord {
+  return {
+    summary: "医生调整候选参数，系统重新计算几何并复跑 guardrails。",
+    action: "clinician_edit_candidate",
+    input: edit,
+    observation: {
+      candidate: shortCandidate(candidate),
+      guardrails,
+    },
+  };
+}
+
+function buildEditedFusiform(
+  base: IncisionCandidate,
+  center: Vec3,
+  axis: Vec3,
+  normal: Vec3,
+  unitsPerMm: number,
+  edit: AnyRecord,
+  tumorInput: TumorInput | null = null,
+): IncisionCandidate {
+  const tumor = tumorInput ? validateTumor(tumorInput) : null;
+  const widthAxis = tangentPerp(axis, normal);
+  const fixedRatio = Math.max(1, Number(base.metrics?.fixed_length_to_width_ratio || 3));
+  const uniformScale = Math.max(Number(edit.length_scale || 1), Number(edit.width_scale || 1));
+  const widthMm = Math.max(1, Number(base.width_mm || 1) * uniformScale);
+  const lengthMm = widthMm * fixedRatio;
+  const boundary = tumor ? boundaryProfile(tumor, axis, widthAxis, unitsPerMm) : null;
+  const tumorDiameterMm = Number(tumor?.diameter_mm ?? base.metrics?.diameter_mm ?? 0);
+  const tumorMarginMm = Number(tumor?.margin_mm ?? base.metrics?.margin_mm ?? 0);
+  const lesionAxisMm = Math.max(tumorDiameterMm, Number(boundary?.axis_diameter_mm ?? 0));
+  const axisCoverageRequiredMm = boundary
+    ? lesionAxisMm + 2 * tumorMarginMm
+    : Number(base.metrics?.axis_coverage_required_mm || 0);
+  const axisCoverageDeficitMm = axisCoverageRequiredMm > 0 ? Math.max(0, axisCoverageRequiredMm - lengthMm) : 0;
+  const halfL = lengthMm * unitsPerMm * 0.5;
+  const halfW = widthMm * unitsPerMm * 0.5;
+  const samples = Math.max(12, Math.round((base.outline?.length || 58) / 2));
+  const targetTipAngle = edit.tip_angle_deg == null
+    ? Number(base.metrics?.tip_angle_target_deg || base.tip_angle_deg || 30)
+    : Number(edit.tip_angle_deg);
+  const profile = fusiformProfile(center, axis, widthAxis, halfL, halfW, samples, targetTipAngle);
+  const { upper, lower } = profile;
+  const outline = upper.concat(lower.slice(1, -1).reverse());
+  const outlineMetrics = outlineQualityMetrics({
+    upper,
+    lower,
+    outline,
+    tumor: tumor || { boundary: [] },
+    center,
+    axis,
+    perp: widthAxis,
+    unitsPerMm,
+    boundaryUsed: Boolean(boundary),
+  });
+  return {
+    ...base,
+    axis,
+    width_axis: widthAxis,
+    center,
+    endpoints: [sub(center, mul(axis, halfL)), add(center, mul(axis, halfL))],
+    outline,
+    polyline: outline.concat([outline[0]]),
+    length_mm: lengthMm,
+    width_mm: widthMm,
+    length_units: lengthMm * unitsPerMm,
+    width_units: widthMm * unitsPerMm,
+    tip_angle_deg: profile.metrics.tip_angle_estimated_deg,
+    metrics: {
+      ...(base.metrics || {}),
+      rstl_deviation_deg: Math.abs(Number(edit.angle_offset_deg || 0)),
+      length_to_width_ratio: lengthMm / widthMm,
+      fixed_length_to_width_ratio: fixedRatio,
+      edit_uniform_scale: uniformScale,
+      ...profile.metrics,
+      axis_coverage_required_mm: axisCoverageRequiredMm,
+      axis_coverage_deficit_mm: axisCoverageDeficitMm,
+      boundary_used: Boolean(boundary),
+      boundary_point_count: boundary?.point_count ?? base.metrics?.boundary_point_count ?? 0,
+      boundary_axis_diameter_mm: boundary?.axis_diameter_mm ?? base.metrics?.boundary_axis_diameter_mm ?? null,
+      boundary_perp_diameter_mm: boundary?.perp_diameter_mm ?? base.metrics?.boundary_perp_diameter_mm ?? null,
+      boundary_area_mm2: boundary?.area_mm2 ?? base.metrics?.boundary_area_mm2 ?? null,
+      boundary_area_ratio_to_diameter_disk: boundary?.area_ratio_to_diameter_disk ??
+        base.metrics?.boundary_area_ratio_to_diameter_disk ?? null,
+      boundary_self_intersection: Boolean(boundary?.self_intersection ?? base.metrics?.boundary_self_intersection),
+      boundary_center_shift_mm: boundary?.center_shift_mm ?? base.metrics?.boundary_center_shift_mm ?? null,
+      ...outlineMetrics,
+    },
+  };
+}
+
+export function applyCandidateEdit(
+  plan: AnyRecord,
+  edit: AnyRecord = {},
+  normal: Vec3 = [0, 0, 1],
+  unitsPerMm = 1,
+  verts: Vec3[] | null = null,
+): AnyRecord {
+  const out = clonePlan(plan);
+  const base = clonePlan(plan.original_candidate || plan.candidate);
+  const axis0 = norm(base.axis || [1, 0, 0]);
+  const perp0 = tangentPerp(axis0, normal);
+  const axis = rotateInPlane(axis0, normal, Number(edit.angle_offset_deg || 0));
+  let center = add(
+    add(base.center || plan.tumor.center, mul(axis0, Number(edit.shift_along_mm || 0) * unitsPerMm)),
+    mul(perp0, Number(edit.shift_perp_mm || 0) * unitsPerMm),
+  );
+  const editRecord = {
+    kind: "clinician_adjustment",
+    angle_offset_deg: Number(edit.angle_offset_deg || 0),
+    length_scale: Number(edit.length_scale || 1),
+    width_scale: Number(edit.width_scale || 1),
+    tip_angle_deg: edit.tip_angle_deg == null ? null : Number(edit.tip_angle_deg),
+    shift_along_mm: Number(edit.shift_along_mm || 0),
+    shift_perp_mm: Number(edit.shift_perp_mm || 0),
+    reason: String(edit.reason || ""),
+    source: "web/incision_workflow",
+  };
+  const sessionHistory = Array.isArray(edit.session_history) ? edit.session_history : [];
+  const sessionHasEdits = sessionHistory.some((entry) => editRecordIsActive(entry) || entry.interaction === "control_change");
+  if (!editRecordIsActive(editRecord) && !sessionHasEdits) return out;
+
+  let candidate: IncisionCandidate;
+  if (base.type === "linear") {
+    const lengthMm = Math.max(1, Number(base.length_mm || 1) * editRecord.length_scale);
+    const diameterCoverageRequiredMm = Number(base.metrics?.diameter_coverage_required_mm || plan.tumor?.diameter_mm || 0);
+    const half = mul(axis, lengthMm * unitsPerMm * 0.5);
+    candidate = {
+      ...base,
+      center,
+      axis,
+      endpoints: [sub(center, half), add(center, half)],
+      polyline: [sub(center, half), add(center, half)],
+      length_mm: lengthMm,
+      length_units: lengthMm * unitsPerMm,
+      metrics: {
+        ...(base.metrics || {}),
+        rstl_deviation_deg: Math.abs(editRecord.angle_offset_deg),
+        length_multiplier: lengthMm / Math.max(Number(plan.tumor?.diameter_mm || base.metrics?.diameter_mm || 1), 1),
+        diameter_coverage_deficit_mm: diameterCoverageRequiredMm > 0
+          ? Math.max(0, diameterCoverageRequiredMm - lengthMm)
+          : 0,
+      },
+    };
+  } else {
+    const regenerated = generateFusiformIncision(
+      plan.tumor,
+      {
+        ...(plan.direction || {}),
+        vector: axis,
+        angle_offset_deg: editRecord.angle_offset_deg,
+        variant_source: editRecord.angle_offset_deg === 0 ? "rstl_primary" : "clinician_direction_override",
+      },
+      unitsPerMm,
+      normal,
+      DEFAULT_RULES,
+      null,
+    );
+    const regeneratedPerp = tangentPerp(regenerated.axis, normal);
+    center = add(
+      add(regenerated.center, mul(regenerated.axis, editRecord.shift_along_mm * unitsPerMm)),
+      mul(regeneratedPerp, editRecord.shift_perp_mm * unitsPerMm),
+    );
+    candidate = buildEditedFusiform(regenerated, center, regenerated.axis, normal, unitsPerMm, editRecord, plan.tumor);
+  }
+
+  if (verts) annotateCandidateSensitiveDistances(candidate, verts);
+  candidate.provenance = versionedEditProvenance(base, editRecord, sessionHistory);
+  candidate.edited = true;
+
+  out.original_candidate = plan.original_candidate || plan.candidate;
+  out.candidate = candidate;
+  out.guardrails = evaluateGuardrails(candidate, out.anatomy);
+  out.trace = (out.trace || []).filter((step: AnyRecord) => step.action !== "clinician_edit_candidate");
+  if (
+    editRecord.angle_offset_deg !== 0 ||
+    editRecord.length_scale !== 1 ||
+    editRecord.width_scale !== 1 ||
+    editRecord.tip_angle_deg != null ||
+    editRecord.shift_along_mm !== 0 ||
+    editRecord.shift_perp_mm !== 0 ||
+    editRecord.reason
+  ) {
+    out.trace.push(editedTraceStep(editRecord, candidate, out.guardrails));
+    out.summary = "已应用医生调整并重新计算候选几何；请复核 guardrails 与覆盖原因。";
+    out.next_step = "医生确认调整是否进入审阅记录。";
+  }
+  return attachWorkflowAudit(out);
+}
+
+function shortCandidate(candidate: AnyRecord): AnyRecord {
+  const keys = ["id", "type", "tumor_kind", "center", "axis", "endpoints", "length_mm", "width_mm", "tip_angle_deg", "direction_confidence", "metrics", "hard_violation_count", "hard_violations"];
+  return Object.fromEntries(keys.filter((k) => k in candidate).map((k) => [k, candidate[k]]));
+}
+
+function fallbackSummary(tumor: TumorInput, candidate: IncisionCandidate, guardrails: AnyRecord): string {
+  const kind = candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口";
+  const status = guardrails.passed ? "guardrails 通过" : "guardrails 需要医生复核";
+  return `已生成${kind}候选：长轴沿局部 RSTL，病灶直径 ${tumor.diameter_mm.toFixed(1)} mm，${status}。`;
+}
+
+export function previewIncisionOnFace(
+  tumor: TumorInput,
+  candidate: IncisionCandidate,
+  anatomy: AnyRecord,
+  guardrails: AnyRecord,
+  variant = "baseline",
+): AnyRecord {
+  const candidatePoints = candidate.polyline || candidate.outline || candidate.endpoints || [];
+  const pointCount = Array.isArray(candidatePoints) ? candidatePoints.length : 0;
+  const boundaryCount = Array.isArray(tumor.boundary) ? tumor.boundary.length : 0;
+  const renderable = pointCount >= 2 && Array.isArray(tumor.center) && tumor.center.length >= 3;
+  return {
+    schema_version: "incision-preview-observation/v0.1",
+    renderable,
+    reason: renderable ? "candidate_geometry_renderable" : "candidate_geometry_not_renderable",
+    preview_space: "standard_face_geometry",
+    variant,
+    candidate_id: candidate.id || "unknown",
+    candidate_type: candidate.type || "unknown",
+    face_region: anatomy.region || null,
+    subunit: anatomy.subunit || null,
+    candidate_point_count: pointCount,
+    tumor_center_present: true,
+    tumor_boundary_point_count: boundaryCount,
+    guardrails_passed: guardrails.passed === true,
+    clinician_review_required: true,
+    raw_image_sent: false,
+    raw_video_sent: false,
+    exported_raw_pixels: false,
+    clinical_boundary: "预览记录只说明确定性几何可渲染，医生确认前不能作为手术指令。",
+  };
+}
+
+export function traceStep(action: string, input: AnyRecord, observation: unknown, summary: string): AnyRecord {
+  return { summary, action, input, observation };
+}
+
+function traceActions(trace: AnyRecord[] = []): string[] {
+  return (trace || []).map((step) => String(step?.action || "")).filter(Boolean);
+}
+
+function indexesForActions(actions: string[] = [], accepted: Set<string> = new Set()): number[] {
+  return actions
+    .map((action, index) => (accepted.has(action) ? index : -1))
+    .filter((index) => index >= 0);
+}
+
+export function workflowTraceGate(
+  resultOrTrace: AnyRecord | AnyRecord[] = {},
+  candidateArg: IncisionCandidate | null = null,
+  mode = "deterministic_single_candidate",
+): AnyRecord {
+  const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
+  const candidate = candidateArg || (Array.isArray(resultOrTrace) ? null : resultOrTrace?.candidate);
+  const actions = traceActions(trace);
+  const required = WORKFLOW_TRACE_GATE_REQUIRED.map((req) => {
+    const indexes = req.actions
+      .map((action) => actions.indexOf(action))
+      .filter((index) => index >= 0);
+    return {
+      key: req.key,
+      label: req.label,
+      actions: req.actions,
+      observed: indexes.length > 0,
+      first_index: indexes.length ? Math.min(...indexes) : null,
+    };
+  });
+  const missing = required.filter((req) => !req.observed);
+  const presentIndexes = required
+    .filter((req) => req.first_index != null)
+    .map((req) => Number(req.first_index));
+  const orderOk = presentIndexes.every((idx, i) => i === 0 || idx >= presentIndexes[i - 1]);
+  const geometryPresent = Array.isArray(candidate?.polyline) && candidate.polyline.length >= 2;
+  return {
+    schema_version: "incision-workflow-trace-gate/v0.1",
+    passed: missing.length === 0 && orderOk && geometryPresent,
+    mode,
+    observed_actions: actions,
+    required_actions: required.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
+    missing_actions: missing.map((req) => ({ key: req.key, label: req.label, actions: req.actions })),
+    order_ok: orderOk,
+    deterministic_geometry_present: geometryPresent,
+    boundary: "候选几何、敏感结构检查、guardrails 和预览均由浏览器本地确定性工具完成；不能绕过医生审阅。",
+  };
+}
+
+export function workflowPlanAudit(
+  resultOrTrace: AnyRecord | AnyRecord[] = {},
+  {
+    candidateCount = 0,
+    comparisonReady = false,
+    traceGate = null,
+    retriedFailures = [],
+    recoveredFailures = [],
+    mode = "deterministic_multi_candidate",
+  }: {
+    candidateCount?: number;
+    comparisonReady?: boolean;
+    traceGate?: AnyRecord | null;
+    retriedFailures?: AnyRecord[];
+    recoveredFailures?: AnyRecord[];
+    mode?: string;
+  } = {},
+) {
+  const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
+  const actions = traceActions(trace);
+  const gate = traceGate || workflowTraceGate(resultOrTrace);
+  const steps = WORKFLOW_PLAN_STEP_DEFINITIONS.map((definition) => {
+    const requiredGroups = definition.required_action_groups.map((group) => [...group]);
+    const optionalActions = [...(definition.optional_actions || [])];
+    const requiredActions = new Set(requiredGroups.flat());
+    const accepted = new Set([...requiredActions, ...optionalActions]);
+    const traceIndexes = indexesForActions(actions, accepted);
+    const missingGroups = requiredGroups.filter((group) => !indexesForActions(actions, new Set(group)).length);
+    let status = missingGroups.length ? "failed" : "completed";
+    const issues = missingGroups.map((group) => `missing any of: ${group.join(", ")}`);
+    if (definition.id === "compare_direction_variants") {
+      if (recoveredFailures.length) {
+        status = missingGroups.length ? "failed_with_recovery" : "completed_with_recovery";
+        issues.push("one or more deterministic variants were skipped after bounded retry");
+      } else if (retriedFailures.length) {
+        status = missingGroups.length ? "failed_after_retry" : "completed_after_retry";
+        issues.push("one or more deterministic variants required bounded retry");
+      }
+      if (!comparisonReady) {
+        status = "failed";
+        issues.push("candidate comparison missing");
+      }
+      if (candidateCount <= 0) {
+        status = "failed";
+        issues.push("no candidate alternatives available for review");
+      }
+    }
+    return {
+      id: definition.id,
+      label: definition.label,
+      intent: definition.intent,
+      required_action_groups: requiredGroups,
+      optional_actions: optionalActions,
+      observed_actions: traceIndexes.map((index) => actions[index]),
+      trace_indexes: traceIndexes,
+      status,
+      issues,
+    };
+  });
+  const failedSteps = steps.filter((step) => String(step.status).startsWith("failed"));
+  const passed = Boolean(gate.passed) && comparisonReady && candidateCount > 0 && failedSteps.length === 0;
+  return {
+    schema_version: "incision-workflow-plan-audit/v0.1",
+    mode,
+    passed,
+    trace_gate_passed: Boolean(gate.passed),
+    candidate_count: Number(candidateCount),
+    comparison_ready: Boolean(comparisonReady),
+    step_count: steps.length,
+    completed_step_count: steps.filter((step) => String(step.status).startsWith("completed")).length,
+    failed_step_count: failedSteps.length,
+    retry_count: retriedFailures.length,
+    recovery_count: recoveredFailures.length,
+    steps,
+    clinical_boundary: "该计划只是确定性工具 trace 的审计脚手架，不是自主临床推理或手术指令。",
+  };
+}
+
+function planStepIdsByTraceIndex(plan: AnyRecord = {}): Map<number, string[]> {
+  const byIndex = new Map();
+  for (const step of plan.steps || []) {
+    if (!step?.id) continue;
+    for (const rawIndex of step.trace_indexes || []) {
+      const index = Number(rawIndex);
+      if (!Number.isInteger(index)) continue;
+      byIndex.set(index, [...(byIndex.get(index) || []), String(step.id)]);
+    }
+  }
+  return byIndex;
+}
+
+export function workflowExecutionEvents(
+  resultOrTrace: AnyRecord | AnyRecord[] = {},
+  {
+    traceGate = null,
+    workflowPlan = null,
+    mode = "deterministic_multi_candidate",
+  }: { traceGate?: AnyRecord | null; workflowPlan?: AnyRecord | null; mode?: string } = {},
+): AnyRecord {
+  const trace = Array.isArray(resultOrTrace) ? resultOrTrace : resultOrTrace?.trace || [];
+  const gate = traceGate || workflowTraceGate(resultOrTrace);
+  const plan = workflowPlan || workflowPlanAudit(resultOrTrace, { traceGate: gate });
+  const stepIdsByTraceIndex = planStepIdsByTraceIndex(plan);
+  const events: AnyRecord[] = [{
+    index: 0,
+    event: "execution_started",
+    status: "started",
+    message: "浏览器确定性 workflow 已启动；几何和 guardrails 由本地工具负责。",
+    trace_index: null,
+    action: null,
+    plan_step_ids: [],
+  }];
+  for (const [traceIndex, step] of trace.entries()) {
+    const action = String(step?.action || "");
+    let status = "observed";
+    if (action === "retry_tool_failure") status = "retrying";
+    if (action === "recover_tool_failure") status = "recovered";
+    events.push({
+      index: events.length,
+      event: "tool_observed",
+      status,
+      trace_index: traceIndex,
+      action,
+      plan_step_ids: stepIdsByTraceIndex.get(traceIndex) || [],
+      message: String(step?.summary || action),
+    });
+  }
+  events.push({
+    index: events.length,
+    event: "trace_gate_evaluated",
+    status: gate.passed ? "passed" : "failed",
+    trace_index: null,
+    action: "workflow_trace_gate",
+    plan_step_ids: [],
+    message: gate.passed ? "确定性工具门控已通过。" : "确定性工具门控未通过，候选不能确认。",
+    missing_actions: gate.missing_actions || [],
+  });
+  events.push({
+    index: events.length,
+    event: "workflow_plan_evaluated",
+    status: plan.passed ? "passed" : "failed",
+    trace_index: null,
+    action: "workflow_plan_audit",
+    plan_step_ids: (plan.steps || []).map((step: AnyRecord) => step.id).filter(Boolean),
+    message: `确定性 workflow 计划已评估：${plan.completed_step_count || 0}/${plan.step_count || 0} 步完成。`,
+    failed_step_count: Number(plan.failed_step_count || 0),
+  });
+  return {
+    schema_version: "incision-workflow-execution-events/v0.1",
+    mode,
+    passed: Boolean(gate.passed) && Boolean(plan.passed),
+    event_count: events.length,
+    tool_event_count: trace.length,
+    retry_event_count: events.filter((event) => event.status === "retrying").length,
+    recovery_event_count: events.filter((event) => event.status === "recovered").length,
+    events,
+    clinical_boundary: "执行事件只复放浏览器确定性工具观察，便于 UI 和审计；不是自主临床推理或手术指令。",
+  };
+}
+
+export function rotateDirectionVariant(
+  direction: Partial<DirectionResult> & AnyRecord,
+  angleOffsetDeg: number,
+  normal: Vec3 = [0, 0, 1],
+): DirectionResult {
+  const vector = rotateInPlane(norm(direction.vector || [1, 0, 0]), normal, Number(angleOffsetDeg || 0));
+  const angle = Math.atan2(vector[1], vector[0]) * 180 / Math.PI;
+  const reasons = [
+    ...(Array.isArray(direction.confidence_reasons) ? direction.confidence_reasons : []),
+    ...(Math.abs(Number(angleOffsetDeg || 0)) > 1e-9 ? ["browser_direction_variant_requires_clinician_review"] : []),
+  ];
+  return {
+    ...direction,
+    point: direction.point || [0, 0, 0],
+    vector,
+    angle_deg: angle,
+    confidence: Math.max(0, Number(direction.confidence || 0) - Math.abs(Number(angleOffsetDeg || 0)) / 180),
+    source: direction.source || "rstl_atlas_weighted_nearest",
+    nearest_distance: direction.nearest_distance ?? null,
+    support_count: Number(direction.support_count || 0),
+    angular_spread_deg: Number(direction.angular_spread_deg || 0),
+    variant_source: Math.abs(Number(angleOffsetDeg || 0)) > 1e-9 ? "browser_direction_variant" : "rstl_primary",
+    angle_offset_deg: Number(angleOffsetDeg || 0),
+    confidence_reasons: [...new Set(reasons)],
+  };
+}
+
+export function candidateForDirection(
+  tumor: TumorInput,
+  direction: DirectionResult,
+  unitsPerMm: number,
+  verts: Vec3[],
+  normal: Vec3 = [0, 0, 1],
+  rules: IncisionRules = DEFAULT_RULES,
+): { toolName: string; candidate: IncisionCandidate } {
+  const toolName = tumor.kind === "subcutaneous" ? "linear_subcutaneous_incision" : "fusiform_cutaneous_incision";
+  const candidate = tumor.kind === "subcutaneous"
+    ? generateLinearIncision(tumor, direction, unitsPerMm, rules)
+    : generateFusiformIncision(tumor, direction, unitsPerMm, normal, rules);
+  annotateCandidateSensitiveDistances(candidate, verts);
+  candidate.metrics = {
+    ...(candidate.metrics || {}),
+    rstl_deviation_deg: Math.abs(Number(direction.angle_offset_deg || 0)),
+  };
+  candidate.provenance = {
+    ...(candidate.provenance || {}),
+    direction_variant_angle_offset_deg: direction.angle_offset_deg || 0,
+    direction_variant_source: direction.variant_source || "rstl_primary",
+  };
+  return { toolName, candidate };
+}
+
+export function workflowAudit(
+  result: AnyRecord,
+  { retriedFailures = [], recoveredFailures = [] }: { retriedFailures?: AnyRecord[]; recoveredFailures?: AnyRecord[] } = {},
+): AnyRecord {
+  const candidateRecords = Array.isArray(result.candidate_alternatives)
+    ? result.candidate_alternatives.filter((record) => record?.candidate)
+    : [];
+  const comparisonReady = Array.isArray(result.candidate_comparison) && result.candidate_comparison.length > 0;
+  const traceGate = workflowTraceGate(result);
+  const workflowPlan = workflowPlanAudit(result, {
+    candidateCount: candidateRecords.length,
+    comparisonReady,
+    traceGate,
+    retriedFailures,
+    recoveredFailures,
+  });
+  const executionEvents = workflowExecutionEvents(result, { traceGate, workflowPlan });
+  return {
+    traceGate,
+    workflowPlan,
+    executionEvents,
+    orchestrationAudit: {
+      schema_version: "incision-workflow-audit/v0.1",
+      mode: "browser_deterministic_multi_candidate",
+      candidate_count: candidateRecords.length,
+      preview_count: candidateRecords.filter((record) => record.preview && typeof record.preview === "object").length,
+      preview_ready_count: candidateRecords.filter((record) => record.preview?.renderable === true).length,
+      comparison_ready: comparisonReady,
+      workflow_plan_passed: workflowPlan.passed,
+      workflow_plan_step_count: workflowPlan.step_count,
+      retry_count: retriedFailures.length,
+      retried_failures: retriedFailures,
+      tool_failure_count: recoveredFailures.length,
+      recovered_failures: recoveredFailures,
+      trace_gate_passed: traceGate.passed,
+      clinical_boundary: "浏览器 workflow 可以比较确定性候选供审阅，但不能发出手术指令或绕过医生确认。",
+    },
+  };
+}
+
+export function attachWorkflowAudit(result: AnyRecord, opts: { retriedFailures?: AnyRecord[]; recoveredFailures?: AnyRecord[] } = {}): AnyRecord {
+  const audit = workflowAudit(result, opts);
+  result.workflow_trace_gate = audit.traceGate;
+  result.workflow_plan_audit = audit.workflowPlan;
+  result.workflow_execution_events = audit.executionEvents;
+  result.workflow_audit = audit.orchestrationAudit;
+  return result;
+}
+
+export function planIncisionDeterministic({
+  tumor: tumorInput,
+  verts,
+  tris,
+  atlas,
+  normal = [0, 0, 1],
+  directionOverride = null,
+}: {
+  tumor: Partial<TumorInput> & AnyRecord;
+  verts: Vec3[];
+  tris: Vec3[];
+  atlas: AnyRecord;
+  normal?: Vec3;
+  directionOverride?: (Partial<DirectionResult> & AnyRecord) | null;
+}): AnyRecord {
+  const validatedTumor = validateTumor(tumorInput);
+  const unitsPerMm = unitsPerMmFromVertices(verts);
+  const tumorNormalization = normalizePlanningLesion(validatedTumor, unitsPerMm, normal);
+  const tumor = { ...validatedTumor, center: tumorNormalization.planning_center };
+  const tumorQuality = summarizeTumorInputQuality(tumor);
+  const anatomy = classifyRegion(tumor.center, verts);
+  const overriddenDirection = normalizedDirectionOverride(directionOverride, tumor.center);
+  const direction = overriddenDirection
+    || queryIncisionLocalRstlDirection(tumor.center, verts, tris, atlas);
+  const preCandidateSensitiveInspection = inspectSensitiveStructures(anatomy);
+  const candidate = tumor.kind === "subcutaneous"
+    ? generateLinearIncision(tumor, direction, unitsPerMm)
+    : generateFusiformIncision(tumor, direction, unitsPerMm, normal);
+  annotateCandidateSensitiveDistances(candidate, verts);
+  const sensitiveInspection = inspectSensitiveStructures(anatomy, candidate);
+  const guardrails = evaluateGuardrails(candidate, anatomy);
+  const preview = previewIncisionOnFace(tumor, candidate, anatomy, guardrails);
+  const trace = [
+    {
+      summary: "检查肿物输入来源、作者、单位、深度、切缘和边界完整性。",
+      action: "summarize_tumor_input_quality",
+      input: { tumor },
+      observation: { ...tumorQuality, lesion_normalization: tumorNormalization },
+    },
+    { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
+    { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
+    { summary: "检查附近敏感游离缘和保护性方向例外。", action: "inspect_sensitive_structures", input: { anatomy }, observation: preCandidateSensitiveInspection },
+    {
+      summary: "用确定性工具生成切口候选。",
+      action: tumor.kind === "subcutaneous" ? "linear_subcutaneous_incision" : "fusiform_cutaneous_incision",
+      input: { tumor, direction, units_per_mm: unitsPerMm },
+      observation: shortCandidate(candidate),
+    },
+    { summary: "复核候选几何到敏感游离缘的距离。", action: "inspect_sensitive_structures", input: { anatomy, candidate: shortCandidate(candidate) }, observation: sensitiveInspection },
+    { summary: "评估敏感结构和置信度 guardrails。", action: "evaluate_guardrails", input: { candidate: shortCandidate(candidate), anatomy }, observation: guardrails },
+    { summary: "在标准脸上预览候选切口，确认几何可渲染后再进入医生审阅。", action: "preview_incision_on_face", input: { candidate: shortCandidate(candidate), tumor, anatomy }, observation: preview },
+  ];
+  return {
+    schema_version: "incision-workflow-plan/v0.1",
+    workflow_mode: "deterministic_single_candidate",
+    tool_schemas: TOOL_SCHEMAS,
+    tumor,
+    tumor_normalization: tumorNormalization,
+    direction_override_applied: Boolean(overriddenDirection),
+    tumor_quality: tumorQuality,
+    anatomy,
+    direction,
+    sensitive_structure_inspection: sensitiveInspection,
+    candidate,
+    preview,
+    guardrails,
+    trace,
+    summary: fallbackSummary(tumor, candidate, guardrails),
+    next_step: "医生审阅、编辑或拒绝该候选。",
+  };
+}
+
+export function planIncisionWorkflow({
+  tumor: tumorInput,
+  verts,
+  tris,
+  atlas,
+  normal = [0, 0, 1],
+  angleOffsetsDeg = DEFAULT_SAFE_DIRECTION_SEARCH_OFFSETS_DEG,
+  rules = DEFAULT_RULES,
+  directionOverride = null,
+}: {
+  tumor?: Partial<TumorInput> & AnyRecord;
+  verts?: Vec3[];
+  tris?: Vec3[];
+  atlas?: AnyRecord;
+  normal?: Vec3;
+  angleOffsetsDeg?: number[];
+  rules?: IncisionRules;
+  directionOverride?: (Partial<DirectionResult> & AnyRecord) | null;
+} = {}): AnyRecord {
+  if (!tumorInput || !verts || !tris || !atlas) {
+    throw new Error("planIncisionWorkflow requires tumor, verts, tris, and atlas");
+  }
+  const result = planIncisionDeterministic({ tumor: tumorInput, verts, tris, atlas, normal, directionOverride });
+  result.workflow_mode = "deterministic_multi_candidate";
+  const tumor = result.tumor;
+  const unitsPerMm = unitsPerMmFromVertices(verts);
+  const directionVariants = angleOffsetsDeg.map((offset) => rotateDirectionVariant(result.direction, offset, normal));
+  result.trace.push(traceStep(
+    "propose_direction_variants",
+    { direction: result.direction, angle_offsets_deg: angleOffsetsDeg },
+    {
+      variants: directionVariants.map((variant) => ({
+        angle_offset_deg: variant.angle_offset_deg,
+        angle_deg: variant.angle_deg,
+        confidence: variant.confidence,
+        source: variant.source,
+        variant_source: variant.variant_source,
+      })),
+      boundary: "方向备选由浏览器本地确定性工具按固定工程搜索角度生成；该范围不是医学安全角度标准。",
+    },
+    "探索附近方向偏移，供审阅面板比较确定性候选。",
+  ));
+
+  const candidateRecords: AnyRecord[] = [];
+  const retriedFailures: AnyRecord[] = [];
+  const recoveredFailures: AnyRecord[] = [];
+  for (const variant of directionVariants) {
+    const offset = Number(variant.angle_offset_deg || 0);
+    const variantId = Math.abs(offset) < 1e-9 ? "baseline" : `offset_${offset > 0 ? "+" : ""}${Math.round(offset)}deg`;
+    const label = Math.abs(offset) < 1e-9 ? "RSTL baseline" : `RSTL offset ${offset > 0 ? "+" : ""}${Math.round(offset)} deg`;
+    let variantCandidate;
+    let variantGuardrails;
+    let variantPreview;
+    let variantSensitiveInspection;
+    if (Math.abs(offset) < 1e-9) {
+      variantCandidate = result.candidate;
+      variantGuardrails = result.guardrails;
+      variantPreview = result.preview;
+      variantSensitiveInspection = result.sensitive_structure_inspection;
+    } else {
+      try {
+        const generated = candidateForDirection(tumor, variant, unitsPerMm, verts, normal, rules);
+        variantCandidate = generated.candidate;
+        result.trace.push(traceStep(
+          generated.toolName,
+          { tumor, direction: variant, units_per_mm: unitsPerMm, variant: variantId },
+          shortCandidate(variantCandidate),
+          "生成确定性方向备选候选，供比较使用。",
+        ));
+        variantSensitiveInspection = inspectSensitiveStructures(result.anatomy, variantCandidate, rules);
+        result.trace.push(traceStep(
+          "inspect_sensitive_structures",
+          { anatomy: result.anatomy, candidate: shortCandidate(variantCandidate), variant: variantId },
+          variantSensitiveInspection,
+          "复核方向备选候选几何到敏感游离缘的距离。",
+        ));
+        variantGuardrails = evaluateGuardrails(variantCandidate, result.anatomy, rules);
+        result.trace.push(traceStep(
+          "evaluate_guardrails",
+          { candidate: shortCandidate(variantCandidate), anatomy: result.anatomy, variant: variantId },
+          variantGuardrails,
+          "复跑方向备选候选的 guardrails。",
+        ));
+        variantPreview = previewIncisionOnFace(tumor, variantCandidate, result.anatomy, variantGuardrails, variantId);
+        result.trace.push(traceStep(
+          "preview_incision_on_face",
+          { candidate: shortCandidate(variantCandidate), tumor, anatomy: result.anatomy, variant: variantId },
+          variantPreview,
+          "预览确定性方向备选候选后再进入比较。",
+        ));
+      } catch (err) {
+        const retry = {
+          tool: tumor.kind === "subcutaneous" ? "linear_subcutaneous_incision" : "fusiform_cutaneous_incision",
+          variant: variantId,
+          angle_offset_deg: offset,
+          attempt: 1,
+          error: err instanceof Error ? err.message : String(err),
+          retry: "retry_same_deterministic_tool_once",
+          max_attempts: 1,
+        };
+        retriedFailures.push(retry);
+        result.trace.push(traceStep(
+          "retry_tool_failure",
+          { tool: retry.tool, variant: variantId, error: err instanceof Error ? err.message : String(err), attempt: 1 },
+          retry,
+          "确定性工具失败后重试一次，再决定是否跳过该备选。",
+        ));
+        try {
+          const generated = candidateForDirection(tumor, variant, unitsPerMm, verts, normal, rules);
+          variantCandidate = generated.candidate;
+          result.trace.push(traceStep(
+            generated.toolName,
+            { tumor, direction: variant, units_per_mm: unitsPerMm, variant: variantId, retry_attempt: 1 },
+            shortCandidate(variantCandidate),
+            "重试后生成确定性方向备选候选。",
+          ));
+          variantSensitiveInspection = inspectSensitiveStructures(result.anatomy, variantCandidate, rules);
+          result.trace.push(traceStep(
+            "inspect_sensitive_structures",
+            { anatomy: result.anatomy, candidate: shortCandidate(variantCandidate), variant: variantId, retry_attempt: 1 },
+            variantSensitiveInspection,
+            "重试成功后复核方向备选候选几何到敏感游离缘的距离。",
+          ));
+          variantGuardrails = evaluateGuardrails(variantCandidate, result.anatomy, rules);
+          result.trace.push(traceStep(
+            "evaluate_guardrails",
+            { candidate: shortCandidate(variantCandidate), anatomy: result.anatomy, variant: variantId, retry_attempt: 1 },
+            variantGuardrails,
+            "重试成功后复跑方向备选候选的 guardrails。",
+          ));
+          variantPreview = previewIncisionOnFace(tumor, variantCandidate, result.anatomy, variantGuardrails, variantId);
+          result.trace.push(traceStep(
+            "preview_incision_on_face",
+            { candidate: shortCandidate(variantCandidate), tumor, anatomy: result.anatomy, variant: variantId, retry_attempt: 1 },
+            variantPreview,
+            "重试成功后预览方向备选候选。",
+          ));
+        } catch (retryErr) {
+          const failure = {
+            tool: retry.tool,
+            variant: variantId,
+            angle_offset_deg: offset,
+            error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+            previous_errors: [err instanceof Error ? err.message : String(err)],
+            recovery: "skipped_failed_variant_and_kept_other_candidates",
+          };
+          recoveredFailures.push(failure);
+          result.trace.push(traceStep(
+            "recover_tool_failure",
+            { tool: retry.tool, variant: variantId, error: retryErr instanceof Error ? retryErr.message : String(retryErr) },
+            failure,
+            "记录确定性工具失败并继续比较剩余候选。",
+          ));
+          continue;
+        }
+      }
+    }
+    candidateRecords.push({
+      id: `browser_${variantId}`,
+      label,
+      angle_offset_deg: offset,
+      candidate: variantCandidate,
+      direction: variant,
+      guardrails: variantGuardrails,
+      preview: variantPreview,
+      sensitive_structure_inspection: variantSensitiveInspection,
+      anatomy: result.anatomy,
+      review_status: "pending_clinician_confirmation",
+    });
+  }
+
+  result.candidate_alternatives = candidateRecords;
+  result.candidate_comparison = compareCandidateRecords(candidateRecords, rules);
+  const baselineCandidate = candidateRecords.find((record) => Number(record.angle_offset_deg) === 0);
+  const baselineSafe = baselineCandidate && Number(baselineCandidate.candidate?.hard_violation_count || 0) === 0
+    ? baselineCandidate
+    : null;
+  const nearestSafeVariant = candidateRecords
+    .filter((record) => Number(record.candidate?.hard_violation_count || 0) === 0)
+    .sort((first, second) => Math.abs(Number(first.angle_offset_deg)) - Math.abs(Number(second.angle_offset_deg)))[0] || null;
+  const safeCandidate = baselineSafe || nearestSafeVariant;
+  if (safeCandidate) {
+    result.candidate = safeCandidate.candidate;
+    result.original_candidate = safeCandidate.candidate;
+    result.direction = safeCandidate.direction;
+    result.guardrails = safeCandidate.guardrails;
+    result.preview = safeCandidate.preview;
+    result.sensitive_structure_inspection = safeCandidate.sensitive_structure_inspection;
+    result.selected_candidate_id = safeCandidate.id;
+    result.candidate_display_blocked = false;
+    result.candidate_selection_reason = safeCandidate.angle_offset_deg === 0
+      ? "baseline_candidate_passed_engineering_hard_guardrails"
+      : "nearest_safe_direction_variant_selected_after_baseline_block";
+    result.candidate_selection_explanation = safeCandidate.angle_offset_deg === 0
+      ? {
+        baseline_preserved: true,
+        direction_changed_for_margin: false,
+        angle_offset_deg: 0,
+      }
+      : {
+        baseline_preserved: false,
+        direction_changed_for_margin: false,
+        angle_offset_deg: safeCandidate.angle_offset_deg,
+        reason: "baseline_intersects_engineering_non_skin_opening",
+      };
+  } else {
+    result.selected_candidate_id = null;
+    result.candidate_display_blocked = true;
+    result.candidate_selection_reason = "all_direction_variants_have_engineering_hard_violations";
+    result.candidate_selection_explanation = {
+      baseline_preserved: false,
+      direction_changed_for_margin: false,
+      attempted_angle_offsets_deg: angleOffsetsDeg,
+    };
+  }
+  const tumorEngineeringValidation = inspectTumorEngineeringExclusions(tumor, verts);
+  result.tumor_engineering_validation = tumorEngineeringValidation;
+  result.trace.push(traceStep(
+    "validate_tumor_engineering_exclusions",
+    { tumor },
+    tumorEngineeringValidation,
+    "校验病灶中心、边界或直径投影是否进入明确的非皮肤开口。",
+  ));
+  if (!tumorEngineeringValidation.passed) {
+    result.selected_candidate_id = null;
+    result.candidate_display_blocked = true;
+    result.candidate_selection_reason = "tumor_input_intersects_non_skin_opening";
+  }
+  result.trace.push(traceStep(
+    "compare_candidates",
+    { candidate_ids: candidateRecords.map((record) => record.id) },
+    {
+      ranked_candidates: result.candidate_comparison,
+      candidate_count: candidateRecords.length,
+      recovered_failure_count: recoveredFailures.length,
+      clinical_boundary: "工程排序只用于审阅分流，不是临床推荐或手术指令。",
+    },
+    "用确定性工程指标对方向备选做排序，辅助医生审阅。",
+  ));
+  result.summary = fallbackSummary(tumor, result.candidate, result.guardrails);
+  result.next_step = "医生查看 trace、候选比较和 guardrails 后，编辑、确认或否决该候选。";
+  return attachWorkflowAudit(result, { retriedFailures, recoveredFailures });
+}
+
+function finiteOr(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function warningSeverityCounts(guardrails: AnyRecord = {}): { high: number; medium: number; low: number } {
+  const warnings = Array.isArray(guardrails.warnings) ? guardrails.warnings : [];
+  return {
+    high: warnings.filter((w) => w.severity === "high").length,
+    medium: warnings.filter((w) => w.severity === "medium").length,
+    low: warnings.filter((w) => w.severity === "low").length,
+  };
+}
+
+function comparisonReasons({
+  severity,
+  metrics,
+  reviewStatus,
+  sensitiveDistance,
+  sensitiveThreshold,
+  candidateType,
+  hardViolationCount,
+}: {
+  severity: { high: number; medium: number; low: number };
+  metrics: AnyRecord;
+  reviewStatus: string;
+  sensitiveDistance: number;
+  sensitiveThreshold: number;
+  candidateType: string;
+  hardViolationCount: number;
+}): string[] {
+  const reasons: string[] = [];
+  if (hardViolationCount) reasons.push(`${hardViolationCount} 个工程硬阻断`);
+  if (reviewStatus === "rejected_by_clinician") reasons.push("医生已否决");
+  if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
+  if (severity.medium) reasons.push(`${severity.medium} 个 medium guardrail`);
+  const rstlDeviation = finiteOr(metrics.rstl_deviation_deg, 0);
+  if (rstlDeviation > 0) reasons.push(`RSTL 偏角 ${rstlDeviation.toFixed(1)}°`);
+  const linearDeficit = finiteOr(metrics.diameter_coverage_deficit_mm, 0);
+  if (linearDeficit > 0) reasons.push(`直径覆盖缺口 ${linearDeficit.toFixed(1)} mm`);
+  const axisDeficit = finiteOr(metrics.axis_coverage_deficit_mm, 0);
+  if (axisDeficit > 0) reasons.push(`边界覆盖缺口 ${axisDeficit.toFixed(1)} mm`);
+  if (candidateType === "fusiform") {
+    const tipError = finiteOr(metrics.tip_angle_error_deg, 0);
+    if (tipError > 0.5) reasons.push(`尖端角误差 ${tipError.toFixed(1)}°`);
+  }
+  if (Number.isFinite(sensitiveDistance) && Number.isFinite(sensitiveThreshold) && sensitiveDistance <= sensitiveThreshold) {
+    reasons.push(`距敏感游离缘 ${sensitiveDistance.toFixed(1)} mm（阈值 ${sensitiveThreshold.toFixed(1)} mm）`);
+  }
+  return reasons.length ? reasons : ["工程指标未见额外扣分"];
+}
+
+export function compareCandidateRecords(records: AnyRecord[] = [], rules: IncisionRules = DEFAULT_RULES): AnyRecord[] {
+  const cfg = rules?.guardrails || DEFAULT_RULES.guardrails;
+  return (records || [])
+    .filter(Boolean)
+    .map((record, index) => {
+      const candidate = record.candidate || {};
+      const metrics = candidate.metrics || {};
+      const severity = warningSeverityCounts(record.guardrails);
+      const reviewStatus = record.review_status || record.review?.status || "pending_clinician_confirmation";
+      const hardViolationCount = Math.max(
+        finiteOr(candidate.hard_violation_count, 0),
+        finiteOr(record.guardrails?.hard_violation_count, 0),
+      );
+      const sensitiveDistance = finiteOr(metrics.sensitive_free_margin_min_distance_mm, Infinity);
+      const sensitiveThreshold = Number.isFinite(sensitiveDistance)
+        ? freeMarginDistanceThresholdMm(
+            metrics.sensitive_free_margin_nearest || record.anatomy?.region || candidate.region,
+            cfg,
+            record.anatomy?.region || candidate.region || "unknown",
+          )
+        : Infinity;
+      const sensitivePenalty = Number.isFinite(sensitiveDistance)
+        ? Math.max(0, sensitiveThreshold - sensitiveDistance) * 5
+        : 0;
+      const score =
+        hardViolationCount * 100000 +
+        severity.high * 100 +
+        severity.medium * 25 +
+        severity.low * 5 +
+        finiteOr(metrics.rstl_deviation_deg, 0) +
+        finiteOr(metrics.diameter_coverage_deficit_mm, 0) * 10 +
+        finiteOr(metrics.axis_coverage_deficit_mm, 0) * 10 +
+        finiteOr(metrics.tip_angle_error_deg, 0) * 2 +
+        sensitivePenalty +
+        (reviewStatus === "rejected_by_clinician" ? 1000 : 0);
+      return {
+        id: record.id || `candidate_${index}`,
+        label: record.label || `候选 ${index + 1}`,
+        original_index: index,
+        candidate_type: candidate.type || "unknown",
+        review_status: reviewStatus,
+        score,
+        score_breakdown: {
+          high_guardrails: severity.high,
+          hard_violations: hardViolationCount,
+          medium_guardrails: severity.medium,
+          rstl_deviation_deg: finiteOr(metrics.rstl_deviation_deg, 0),
+          diameter_coverage_deficit_mm: finiteOr(metrics.diameter_coverage_deficit_mm, 0),
+          axis_coverage_deficit_mm: finiteOr(metrics.axis_coverage_deficit_mm, 0),
+          tip_angle_error_deg: finiteOr(metrics.tip_angle_error_deg, 0),
+          sensitive_free_margin_threshold_mm: Number.isFinite(sensitiveThreshold) ? sensitiveThreshold : null,
+          sensitive_margin_penalty: sensitivePenalty,
+          rejected_penalty: reviewStatus === "rejected_by_clinician" ? 1000 : 0,
+        },
+        reasons: comparisonReasons({
+          severity,
+          metrics,
+          reviewStatus,
+          sensitiveDistance,
+          sensitiveThreshold,
+          candidateType: candidate.type,
+          hardViolationCount,
+        }),
+      };
+    })
+    .sort((a, b) => a.score - b.score || a.original_index - b.original_index)
+    .map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+      score: Number(item.score.toFixed(3)),
+      clinical_boundary: "工程排序仅用于候选对比，不是临床推荐或手术指令。",
+    }));
+}
+
+export const __incisionToolsForTests = {
+  DEFAULT_RULES,
+  TOOL_SCHEMAS,
+  WORKFLOW_TRACE_GATE_REQUIRED,
+  workflowTraceGate,
+  workflowPlanAudit,
+  workflowExecutionEvents,
+  applyCandidateEdit,
+  compareCandidateRecords,
+  classifyRegion,
+  queryDirection,
+  normalizeTumorInput,
+  summarizeTumorInputQuality,
+  annotateCandidateSensitiveDistances,
+  summarizeTumorBoundary,
+  generateLinearIncision,
+  generateFusiformIncision,
+  evaluateGuardrails,
+  inspectSensitiveStructures,
+  previewIncisionOnFace,
+  planIncisionDeterministic,
+  planIncisionWorkflow,
+  unitsPerMmFromVertices,
+};
