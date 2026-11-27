@@ -552,6 +552,8 @@ const loadLayout = (source: string, phone: boolean, shared?: unknown) => {
     };
     if (name === "../lib/cn") return { cn: (...values: unknown[]) => twMerge(clsx(values)) };
     if (name === "./WorkbenchLayout") return shared;
+    if (name === "./WorkflowMobilePanels") return { WorkflowMobilePanelContext: react.createContext(null) };
+    if (name === "lucide-react") return requireWeb(name);
     throw new Error(`Unexpected layout dependency: ${name}`);
   } });
   return exports;
@@ -583,9 +585,15 @@ for (const phone of [false, true]) {
     const { WorkflowLayout } = loadLayout(layout, phone, layoutExports) as Record<string, typeof react.Component>;
     const actual = h(WorkflowLayout, { stage: stageFixture, liveRail: liveFixture, incisionRail: incisionFixture, mobileOperations: operations });
     const expected = h("div", { className: "app clinical-compat-workbench workflow-workbench",
-      "data-workflow-mobile": String(phone) }, stageFixture,
+      "data-workflow-mobile": String(phone), "data-mobile-panel": phone ? "closed" : undefined }, stageFixture,
         h("div", { className: "workflow-mobile-operation-pane", "aria-label": "移动端操作台" },
-          h("div", { className: "workflow-mobile-recovery-slot" }), phone ? operations : null),
+          h("div", { className: "workflow-mobile-recovery-slot" }),
+          h("section", { className: "workflow-mobile-sheet", hidden: true, "aria-label": "更多" },
+            h("header", { className: "workflow-mobile-sheet-heading" },
+              h("strong", null, "更多"), h("button", { type: "button", "aria-label": "收起操作面板" }, h(requireWeb("lucide-react").ChevronDown, { size: 18, "aria-hidden": true }))),
+            h("div", { className: "workflow-mobile-sheet-scroll" },
+              ...["texture", "incision", "more"].map(name => h("div", { "data-mobile-panel-slot": name, hidden: true })))),
+          phone ? operations : null),
         h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
         h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture));
     assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `phone=${phone}: stable workflow shell and portal payloads`);
@@ -671,7 +679,8 @@ assert.match(workflowDraftSession, /globalThis\.sessionStorage/,
   "workflow recovery stays within the current browser-tab session");
 assert.doesNotMatch(workflowDraftSession, /indexedDB|localStorage/,
   "workflow recovery cannot grow into a persistent browser case database");
-assert.match(workbench, /workflowActions={<WorkflowCanvasTools\s*\/>}/, "workflow places incision actions in the shared stage header");
+assert.match(workbench, /workflowActions={<WorkflowMobileSection panel="incision"><WorkflowCanvasTools\s*\/><\/WorkflowMobileSection>}/,
+  "workflow retains the desktop stage tools and places those same controls in the phone incision panel");
 assert.match(workbench, /workflowOverlay={<WorkflowCanvasOverlay\s*\/>}/, "workflow keeps only the incision drawing layer over the shared canvas");
 assert.match(workbench, /workflowStatus={<WorkflowStageStatus\s*\/>}/, "workflow places incision status in the shared stage header");
 assert.match(workbench, /mobileOperations={<MobileWorkflowControls\s*\/>}/,
@@ -1238,8 +1247,10 @@ assert.match(styles, /\.workflow-workbench \.stage-top > #livePill\s*\{[^}]*disp
   "redundant phone source and FPS labels are hidden while their underlying runtime data remains intact");
 assert.match(styles, /@media \(max-width:\s*560px\)[\s\S]*?\.workflow-workbench:where\(\[data-workflow-mobile="true"\]\) \.mobile-workflow-dock\s*\{[^}]*display:\s*grid;/,
   "the compact input and layer dock is exposed only on phone-class coarse pointers");
-assert.match(mobileControls, /upload_source[\s\S]*?camera_toggle[\s\S]*?pause_toggle[\s\S]*?recording_toggle[\s\S]*?image_export/,
-  "the mobile dock retains photo, rear-camera, pause, video export, and image export command paths");
+for (const command of ["upload_source", "camera_toggle", "pause_toggle", "recording_toggle", "image_export"]) {
+  assert.equal((mobileControls.match(new RegExp(`liveCommands\\.source\\("${command}"\\)`, "g")) || []).length, 1,
+    `the phone layout retains exactly one ${command} control regardless of visual order`);
+}
 assert.match(mobileControls, /停止视频[\s\S]*?导出视频[\s\S]*?导出图片/,
   "the mobile dock distinguishes video recording from still PNG export");
 assert.match(liveSourceControls, /recording_toggle[\s\S]*?image_export/,

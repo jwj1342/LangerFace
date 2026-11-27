@@ -15,6 +15,7 @@ import { Card } from "./ui/card";
 import { Hint } from "./ui/hint";
 import { Label } from "./ui/label";
 import { StatusBadge } from "./ui/status-badge";
+import { WorkflowMobileSection } from "./WorkflowMobilePanels";
 
 interface LiveControlRailProps {
   showIncisionEntry?: boolean;
@@ -49,10 +50,12 @@ export function LiveControlRail({
       </Card>
 
       {showStatusOverview ? <LiveStatePanel /> : null}
-      <LiveIncisionOverlayPanel />
+      <WorkflowMobileSection panel="incision"><LiveIncisionOverlayPanel /></WorkflowMobileSection>
       <LiveSourceControlsPanel requireCameraPhoto={requireCameraPhoto} />
-      <LiveWrinklePanel />
-      <LiveRefinePanel />
+      <WorkflowMobileSection panel="texture">
+        <LiveWrinklePanel />
+        <LiveRefinePanel />
+      </WorkflowMobileSection>
       <LiveRenderControlsPanel />
       <LiveQualityPanel />
 
