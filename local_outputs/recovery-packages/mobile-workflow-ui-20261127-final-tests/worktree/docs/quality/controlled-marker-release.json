@@ -307,12 +307,12 @@
   "archive": {
     "status": "verified",
     "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
-    "manifestPath": "local_outputs/recovery-packages/mobile-workflow-ui-20261127-inventory/manifest.json",
-    "manifestSha256": "3bc881bbfa16568d04fceb6c2dde61c0ac7e74178efb3adb126681c17dc6bf1c",
-    "scopeConfigSha256": "1b374c636ad1ceea1b804dbcc73e0b88c41de70ea92a5c50c43560e843f81c21",
+    "manifestPath": "local_outputs/recovery-packages/mobile-workflow-ui-20261127-release/manifest.json",
+    "manifestSha256": "d945d05cc19cceca21a6f2bdd7615021054265715ea86ed57d5c880ca87d40a3",
+    "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
     "verifiedAt": "2026-11-27",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
-    "note": "Self-contained source-scope archive; excluded media and model files remain fingerprint-only. Use the PR commit for files outside scope."
+    "note": "Self-contained source-only recovery archive included for clean CI verification. No patient media, models or browser output included."
   },
   "scopeBoundaryReview": {
     "status": "not_required",
@@ -320,14 +320,17 @@
     "note": "Mobile UI and required test changes only; no product algorithm changes. Recovery scope includes all modified executable files."
   },
   "operatorEvaluation": {
-    "status": "pending",
+    "status": "accepted",
     "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127"
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
+    "confirmedAt": "2026-11-27",
+    "note": "用户在当前会话明确答复：已查看并接受，文件均已保存。仅确认本次手机 UI，不重新验收未修改的算法。"
   },
   "editorSaveConfirmation": {
-    "status": "pending",
+    "status": "confirmed",
     "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127"
+    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
+    "confirmedAt": "2026-11-27"
   },
   "history": [
     {

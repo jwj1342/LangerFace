@@ -37,6 +37,8 @@
 
 [UI_RSTL_BOUNDARY_REVIEW.md](quality/UI_RSTL_BOUNDARY_REVIEW.md) 记录双端界面分工、手动交互授权与可复核的 RSTL 核心边界证据。
 
+[MOBILE_WORKFLOW_UI_20261127.md](quality/MOBILE_WORKFLOW_UI_20261127.md) 记录手机工作台布局、原有控件对应位置和本次审核范围。
+
 [LESION_CANDIDATE_REVIEW.md](quality/LESION_CANDIDATE_REVIEW.md) 说明照片肿物候选、切口显示的复现步骤、资源依赖和未通过范围。
 
 [OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md](quality/OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md) 说明叠加导出和照片标记缩放修复的来源、组合回归与未验范围。

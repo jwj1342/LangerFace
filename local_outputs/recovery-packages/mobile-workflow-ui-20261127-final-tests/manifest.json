@@ -1,13 +1,13 @@
 {
   "schema": "skin-texture-algorithm-recovery/2",
-  "name": "mobile-workflow-ui-20261127-release",
-  "createdAt": "2026-11-27T09:46:11.677Z",
+  "name": "mobile-workflow-ui-20261127-final-tests",
+  "createdAt": "2026-11-27T09:55:40.137Z",
   "source": {
     "branch": "codex/mobile-workflow-ui-20261127",
-    "head": "9c1b1b5c645394b689e57eae6891fcb4a438f0b1",
-    "tree": "44885778e0a8f823620b78cb058f7242d0f730e0",
+    "head": "0a2a4335cf1afa93c24d020abb9e7d6ad8a639b7",
+    "tree": "c1c6873930742f3a4d5a927b9ed7bd95fa5a2766",
     "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
-    "status": " M .gitattributes\n M docs/quality/algorithm-archive-scope.json\n"
+    "status": " M web/e2e/zoom-cap-current.spec.ts\n"
   },
   "archiveScope": {
     "schema": "langerface-algorithm-archive-scope/1",
@@ -45,9 +45,7 @@
     ],
     "configPath": "docs/quality/algorithm-archive-scope.json",
     "configSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
-    "changedOutsideScope": [
-      ".gitattributes"
-    ]
+    "changedOutsideScope": []
   },
   "algorithmIdentity": {
     "schema": 1,
@@ -57,7 +55,7 @@
     "profile": "small-lesion-boundary-candidate",
     "implementationVersion": "0.104.2-candidate.4",
     "branch": "codex/mobile-workflow-ui-20261127",
-    "head": "9c1b1b5c645394b689e57eae6891fcb4a438f0b1",
+    "head": "0a2a4335cf1afa93c24d020abb9e7d6ad8a639b7",
     "worktreeId": "62455ed7646f1b380bbf5a3f424b05b610e97abf62e4c943f18c0ef822a84eec",
     "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
@@ -91,13 +89,13 @@
     },
     {
       "relativePath": "docs/README.md",
-      "bytes": 7936,
-      "sha256": "eb6f2d6df01038ec158214a41d34a5a72e93323c2450b3fa44cefb710b891fb0"
+      "bytes": 8089,
+      "sha256": "ac9c2c9ee756a880ab3c2cb1800c77ecd01166650af920ee8df7a46820a343f1"
     },
     {
       "relativePath": "docs/quality/ALGORITHM_VERSIONING.md",
-      "bytes": 147356,
-      "sha256": "191150834e7ce9cb2ef781ec23c897ed4ab34edd10477fcafa35fa9beb39f1c4"
+      "bytes": 147473,
+      "sha256": "7beff44e8f5c2c9413f91dfa95af06081873d48c4cd3c38106b8f48529bedc0f"
     },
     {
       "relativePath": "docs/quality/LESION_CANDIDATE_REVIEW.md",
@@ -121,8 +119,8 @@
     },
     {
       "relativePath": "docs/quality/controlled-marker-release.json",
-      "bytes": 349588,
-      "sha256": "f36d1698bb212bb94a87cd9597a0220013997a8465cdb6602d86653f71b44131"
+      "bytes": 349809,
+      "sha256": "f31ce439c9f58c9978bbb99b0710840dcafa69f3d0f5c23b352732b756181500"
     },
     {
       "relativePath": "docs/tracks/INCISION_WORKFLOW.md",
@@ -671,8 +669,8 @@
     },
     {
       "relativePath": "web/e2e/zoom-cap-current.spec.ts",
-      "bytes": 4306,
-      "sha256": "eedd374ef2192ded30b93314e8e56be5ef647c8f6b173d87f68d6cf5d8217ccd"
+      "bytes": 4391,
+      "sha256": "cb5ced162f659cff97a15cba91083b171f5f4e8198e401125c47428826a4883f"
     },
     {
       "relativePath": "web/package-lock.json",

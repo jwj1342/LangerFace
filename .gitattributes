@@ -9,4 +9,4 @@ local_outputs/recovery-packages/rstl-wrinkle-performance-20261123-recovery-fix/*
 local_outputs/recovery-packages/pr248-cbe8f55/** -text
 local_outputs/recovery-packages/pr248-review-fixes-20261125/** -text
 local_outputs/recovery-packages/pr248-wrinkle-weight-prefetch-20261125/** -text
-local_outputs/recovery-packages/mobile-workflow-ui-20261127-release/** -text linguist-generated=true
+local_outputs/recovery-packages/mobile-workflow-ui-20261127-final-tests/** -text linguist-generated=true

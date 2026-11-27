@@ -786,10 +786,10 @@ MK003侧脸7个落点均返回约1666.4977px²，介于原653.1px²限幅结果�
 
 - 当前完整运行源码指纹：`09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102`。
 - 原算法版本保持 `0.104.2-candidate.4`，算法指纹保持 `a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc`。
-- 恢复包：`local_outputs/recovery-packages/mobile-workflow-ui-20261127-inventory/manifest.json`；manifest SHA-256：`3bc881bbfa16568d04fceb6c2dde61c0ac7e74178efb3adb126681c17dc6bf1c`。
+- 恢复包：`local_outputs/recovery-packages/mobile-workflow-ui-20261127-release/manifest.json`；manifest SHA-256：`d945d05cc19cceca21a6f2bdd7615021054265715ea86ed57d5c880ca87d40a3`。
 - 归档范围增加固定浏览器用例清单脚本，确保新增手机测试也可恢复；没有新增产品算法责任范围。冻结旧包保持原样。
 - 已从干净基线解出源码，覆盖此包的 275 项并逐项核对哈希，再执行 `tools/test_workflow_page.ts` 和 `tsc --noEmit`；均通过。依赖复用已安装的 node_modules，模型和媒体仅有指纹，此包不声称独立恢复它们。恢复结果保存在本地 `local_outputs/mobile-ui-restoration-20261127.json`。
 - 完整 `npm test`、生产构建已通过；浏览器结果以 PR 正文的最终执行结果为准。
-- 本轮操作者实际查看/接受与编辑器保存确认仍待本次答复；历史 PR 的确认不沿用。登记保持 pending，不宣称发布 PR 门禁通过。
+- 用户在当前会话明确答复：“已查看并接受，文件均已保存”。此确认绑定上述当前运行源码指纹，仅适用于本次手机 UI；不沿用历史 PR 的验收，也不扩展为算法或临床验收。
 
-本次没有真实患者数据或恢复包副本提交到 GitHub，没有修改 RSTL、皱纹或切口/受控标记算法。
+本次仅提交源码恢复包，供干净 CI 检查使用；没有提交真实患者数据、模型或浏览器输出，没有修改 RSTL、皱纹或切口/受控标记算法。

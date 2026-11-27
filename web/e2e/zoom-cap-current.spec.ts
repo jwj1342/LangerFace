@@ -67,6 +67,7 @@ test("main photo view zoom reaches the desktop and touch-mobile caps", async ({ 
     const canvas = page.locator("#canvas");
     await expect(canvas).toHaveClass(/image-source/, { timeout: 45_000 });
     if (viewport.hasTouch) {
+      await page.getByRole("button", { name: "切口设计", exact: true }).click();
       const markerToggle = page.locator(".workflow-marker-toggle");
       await markerToggle.click();
       const scan = page.locator(".workflow-marker-scan");

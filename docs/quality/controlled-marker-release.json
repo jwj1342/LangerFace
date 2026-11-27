@@ -307,8 +307,8 @@
   "archive": {
     "status": "verified",
     "sourceDigest": "09f3a23535ec3596c81be09a9f0bc54c7d95183699a3092ffca83276441c5102",
-    "manifestPath": "local_outputs/recovery-packages/mobile-workflow-ui-20261127-release/manifest.json",
-    "manifestSha256": "d945d05cc19cceca21a6f2bdd7615021054265715ea86ed57d5c880ca87d40a3",
+    "manifestPath": "local_outputs/recovery-packages/mobile-workflow-ui-20261127-final-tests/manifest.json",
+    "manifestSha256": "25a4d60e2a3057aa96419407f6069f8e624d5acea15469460fc5b6b089757444",
     "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
     "verifiedAt": "2026-11-27",
     "evidence": "docs/quality/ALGORITHM_VERSIONING.md#mobile-workflow-ui-20261127",
