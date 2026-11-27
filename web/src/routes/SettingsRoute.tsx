@@ -154,7 +154,7 @@ function AtlasSettings() {
         <Card>
           <CardHeader><span>图谱复核工具</span><PenLine size={16} /></CardHeader>
           <CardContent>
-            <Hint>打开当前 3D 线标注工具，绘制和复核标准脸上的 RSTL / Langer 线草案。导出的图谱仍需临床校验后才能成为正式参考。</Hint>
+            <Hint>打开当前 3D 线标注工具，绘制和复核标准脸上的皮纹线/ Langer 线草案。导出的图谱仍需临床校验后才能成为正式参考。</Hint>
             <Button asChild variant="workbenchPrimary">
               <Link to="/annotate"><PenLine size={16} />打开图谱标注工具</Link>
             </Button>

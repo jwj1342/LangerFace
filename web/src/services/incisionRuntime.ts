@@ -197,7 +197,7 @@ function currentAssetLoadingSnapshot() {
 function currentHeadAssetSnapshot(): IncisionHeadAssetState {
   return S.headAsset || {
     id: "pending",
-    label: "RSTL 资产加载中",
+    label: "皮纹线资产加载中",
     topologyId: "unknown",
     topologyVersion: "unknown",
     vertexCount: 0,

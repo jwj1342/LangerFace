@@ -449,18 +449,18 @@ function snapshotSeedGeometry(seeds) {
 
 function assertSeedGeometryPreserved(seeds, snapshot, stage) {
   if (seeds.length !== snapshot.length) {
-    throw new Error(`${stage}: 原始 RSTL 曲线数量被修改`);
+    throw new Error(`${stage}: 原始皮纹线曲线数量被修改`);
   }
   for (let curveIndex = 0; curveIndex < seeds.length; curveIndex += 1) {
     const points = seeds[curveIndex].pts;
     const expected = snapshot[curveIndex];
     if (points.length !== expected.length) {
-      throw new Error(`${stage}: 原始 RSTL 第 ${curveIndex} 条曲线点数被修改`);
+      throw new Error(`${stage}: 原始皮纹线第 ${curveIndex} 条曲线点数被修改`);
     }
     for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
       if (points[pointIndex][0] !== expected[pointIndex][0] ||
           points[pointIndex][1] !== expected[pointIndex][1]) {
-        throw new Error(`${stage}: 原始 RSTL 第 ${curveIndex} 条曲线坐标被修改`);
+        throw new Error(`${stage}: 原始皮纹线第 ${curveIndex} 条曲线坐标被修改`);
       }
     }
   }
@@ -546,9 +546,9 @@ function drawDecisions(imageData, seeds, audit, visibility, directNoseCurves = [
   drawLegend(context, [
     { label: "采用皱纹", color: COLORS.accepted },
     { label: "拒绝皱纹", color: COLORS.rejected },
-    ...(directNoseCurves.length ? [{ label: "鼻背直接 RSTL", color: COLORS.accepted }] : []),
-    { label: BUNDLE_PROPAGATION ? "主锚 RSTL" : "匹配 RSTL", color: COLORS.priorStrong },
-    ...(BUNDLE_PROPAGATION ? [{ label: "传播 RSTL", color: COLORS.follower }] : []),
+    ...(directNoseCurves.length ? [{ label: "鼻背直接皮纹线", color: COLORS.accepted }] : []),
+    { label: BUNDLE_PROPAGATION ? "主锚皮纹线" : "匹配皮纹线", color: COLORS.priorStrong },
+    ...(BUNDLE_PROPAGATION ? [{ label: "传播皮纹线", color: COLORS.follower }] : []),
   ]);
 }
 
@@ -559,7 +559,7 @@ function drawRefined(imageData, curves, visibility, noseRootPlan) {
     strokePolyline(context, curve.pts, COLORS.refined, width, [],
       lineVisibility(curve.pts, curve.region, visibility, curve, noseRootPlan, curveIndex));
   }
-  drawLegend(context, [{ label: "refined RSTL", color: COLORS.refined }]);
+  drawLegend(context, [{ label: "微调后的皮纹线", color: COLORS.refined }]);
 }
 
 function drawComparison(imageData, seeds, curves, visibility, noseRootPlan) {
@@ -1173,12 +1173,12 @@ async function runExperiment(file) {
       !atlas.lines.some((line) => line.region === "brow_temporal_fan_v94") ||
       !atlas.lines.some((line) => line.region === "cheek_alar_gap_fill_v95")) {
     throw new Error(
-      "RSTL atlas 必须是 validated=false 的 v8.1.96 204 曲线版本",
+      "皮纹线 atlas 必须是 validated=false 的 v8.1.96 204 曲线版本",
     );
   }
   const pointCount = atlas.lines.reduce((sum, line) => sum + line.points.length, 0);
   if (pointCount !== RSTL_EXPERIMENT_CONTRACT.pointCount) {
-    throw new Error(`RSTL atlas 点数异常：${pointCount}`);
+    throw new Error(`皮纹线 atlas 点数异常：${pointCount}`);
   }
 
   setStatus("正在本机定位人脸并建立统一坐标…");
@@ -1205,7 +1205,7 @@ async function runExperiment(file) {
   }));
   if (seeds.length !== 204 || seeds.some((line, index) =>
     line.pts.length !== atlas.lines[index].points.length)) {
-    throw new Error("映射后的 RSTL 未保持 204 条 / 19030 点拓扑");
+    throw new Error("映射后的皮纹线未保持 204 条 / 19030 点拓扑");
   }
   const seedGeometrySnapshot = snapshotSeedGeometry(seeds);
   const displayVisibility = buildDisplayVisibility(workingImage, refMesh, sourceSha256);
@@ -1234,7 +1234,7 @@ async function runExperiment(file) {
   const masks = drawEvidence(workingImage, fineEvidence);
   const workingFaceWidth = faceWidth(refMesh, working.size);
 
-  setStatus("正在执行皱纹主导的 RSTL 局部轨迹重建…");
+  setStatus("正在执行皱纹主导的皮纹线局部轨迹重建…");
   const refinementFunction = V9_REFINEMENT_REPLAY ? refineV9Exact : refineV6;
   const refined = refinementFunction({
     seeds,
@@ -1600,8 +1600,8 @@ async function runExperiment(file) {
     ` · ${refined.diagnostics.bundle_follower_moved_curve_count} 条邻线传播` : "";
   const summary = `${fineEvidence.lines.length} 条 v10 中心线 · ` +
     `${detection.detections.length} 个 YOLO 原始检测 · ${acceptedTrends} 段采用 · ` +
-    `${rejectedTrends} 段拒绝 · ${refined.diagnostics.moved_curve_count} 条 RSTL 被微调 · ` +
-    `${refined.diagnostics.direct_nose_dorsum_generated_curve_count} 条鼻背 RSTL 直接生成 · ` +
+    `${rejectedTrends} 段拒绝 · ${refined.diagnostics.moved_curve_count} 条皮纹线被微调 · ` +
+    `${refined.diagnostics.direct_nose_dorsum_generated_curve_count} 条鼻背皮纹线直接生成 · ` +
     `鼻根区域隐藏 ${noseRootVisibilityPlan.hiddenCurveCount} 条交叉线的 ` +
     `${noseRootVisibilityPlan.hiddenPointCount} 个采样点` +
     bundleSummary;

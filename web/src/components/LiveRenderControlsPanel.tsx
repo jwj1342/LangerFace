@@ -37,7 +37,7 @@ export function LiveRenderControlsPanel() {
             defaultValue={render?.system || "rstl"}
             onChange={(event) => commands.render("template_change", event.currentTarget.value)}
           >
-            <option value="rstl">面部 RSTL 指南（首选）</option>
+            <option value="rstl">面部皮纹线指南（首选）</option>
           </Select>
           <Hint visible={Boolean(atlasPreview?.active)} id="atlasProvenance">
             {atlasPreview?.active ? `${atlasPreview.source || "标注会话"} · ${atlasPreview.count ?? 0} 条线` : ""}

@@ -368,9 +368,9 @@ function SurgerySceneContent({
     setWoundBed(null);
     setSurfaceState((current) => ({ epoch: current.epoch + 1, faces: d.tris }));
     onActiveCutChange(null);
-    onHintChange("已复位：可重新标记肿物并观察沿 RSTL 闭合。");
+    onHintChange("已复位：可重新标记肿物并观察沿皮纹线闭合。");
     onTensionChange(null);
-    onVerdictChange("点击沿 RSTL 切除后，观察闭合区域新增张力如何局部集中。", "neutral");
+    onVerdictChange("点击沿皮纹线切除后，观察闭合区域新增张力如何局部集中。", "neutral");
   }, [onActiveCutChange, onHintChange, onTensionChange, onVerdictChange]);
 
   const exciseAlong = useCallback(() => {
@@ -398,7 +398,7 @@ function SurgerySceneContent({
     setWoundBed(buildWoundBed(d.verts[lesion], d.normalsRest[lesion], d.meanEdge, la));
     setSurfaceState((current) => ({ epoch: current.epoch + 1, faces: aliveFaces(d.tris, sb) }));
     onActiveCutChange("along");
-    onHintChange(`沿 RSTL 切除 ${removed} 个顶点，正在闭合。`);
+    onHintChange(`沿皮纹线切除 ${removed} 个顶点，正在闭合。`);
     onTensionChange(null);
     onVerdictChange("软体沉降中：颜色显示闭合新增张力的局部集中。", "neutral");
   }, [onActiveCutChange, onHintChange, onTensionChange, onVerdictChange]);
@@ -421,7 +421,7 @@ function SurgerySceneContent({
       }
     }
     selectLesion(best);
-    onHintChange("已更新肿物落点：可调整切口大小后执行沿 RSTL 切除。");
+    onHintChange("已更新肿物落点：可调整切口大小后执行沿皮纹线切除。");
   }, [onHintChange, selectLesion]);
 
   useEffect(() => {
@@ -434,10 +434,10 @@ function SurgerySceneContent({
     setWoundBed(null);
     setSurfaceState((current) => ({ epoch: current.epoch + 1, faces: derived.tris }));
     onActiveCutChange(null);
-    onHintChange("已就绪：在脸上点击标记肿物，再执行沿 RSTL 切除。");
+    onHintChange("已就绪：在脸上点击标记肿物，再执行沿皮纹线切除。");
     onLesionStateChange("默认在脸颊");
     onTensionChange(null);
-    onVerdictChange("点击沿 RSTL 切除后，观察闭合区域新增张力如何局部集中。", "neutral");
+    onVerdictChange("点击沿皮纹线切除后，观察闭合区域新增张力如何局部集中。", "neutral");
   }, [derived, onActiveCutChange, onHintChange, onLesionStateChange, onTensionChange, onVerdictChange]);
 
   useEffect(() => {
@@ -527,7 +527,7 @@ function SurgerySceneContent({
       runtime.settled = true;
       onTensionChange(Math.round(score));
       onHintChange("闭合完成：可复位后换一个落点继续观察。");
-      onVerdictChange(`沿 RSTL 闭合新增张力指数 ${Math.round(score)} / 100。`, score > 55 ? "warn" : "ok");
+      onVerdictChange(`沿皮纹线闭合新增张力指数 ${Math.round(score)} / 100。`, score > 55 ? "warn" : "ok");
     }
   });
 

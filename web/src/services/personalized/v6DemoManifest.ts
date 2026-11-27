@@ -62,6 +62,6 @@ export const V6_DEMO_RESULTS: readonly V6DemoResult[] = [
 export const V6_VIEW_LABELS: Readonly<Record<V6DemoView, string>> = {
   compare: "完整前后对比",
   zoom: "4× 局部变化",
-  match: "皱纹—RSTL 对应",
+  match: "皱纹—皮纹线对应",
   heatmap: "位移热图",
 };

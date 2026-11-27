@@ -184,7 +184,7 @@ export function WorkflowLayerVisibilityButtons({ className = "", mobile = false,
 
   return (
     <div className={`workflow-layer-grid ${className}`.trim()} role="group" aria-label="叠加图层显示开关">
-      {layers.includes("rstl") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.rstl} onClick={() => toggleWrinkleLayer("rstl")}>RSTL</Button>}
+      {layers.includes("rstl") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.rstl} onClick={() => toggleWrinkleLayer("rstl")}>皮纹线</Button>}
       {layers.includes("wrinkles") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.wrinkles} onClick={() => toggleWrinkleLayer("wrinkles")}>皱纹</Button>}
       {layers.includes("incision") && <Button variant="workbench" type="button" className={mobile ? "mobile-layer-toggle" : "workflow-layer-toggle"} aria-pressed={visibility.incision} onClick={() => setMobileIncisionCandidateVisible(!visibility.incision)}>切口线</Button>}
     </div>

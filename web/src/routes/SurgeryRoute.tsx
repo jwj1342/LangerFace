@@ -15,7 +15,7 @@ export function SurgeryRoute() {
   const [showLines, setShowLines] = useState(true);
   const [sizePct, setSizePct] = useState(110);
   const [tensionScore, setTensionScore] = useState<number | null>(null);
-  const [verdict, setVerdict] = useState("点击沿 RSTL 切除后，观察闭合区域新增张力如何局部集中。");
+  const [verdict, setVerdict] = useState("点击沿皮纹线切除后，观察闭合区域新增张力如何局部集中。");
   const [verdictTone, setVerdictTone] = useState<SurgeryVerdictTone>("neutral");
   const setRouteStatus = useAppStore((state) => state.setRouteStatus);
   const handleAssetFailure = useCallback((message: string) => setHint(message), []);
@@ -42,7 +42,7 @@ export function SurgeryRoute() {
 
   const handleExciseAlong = useCallback(() => {
     issueCommand("exciseAlong");
-    setRouteStatus("执行沿 RSTL 切除");
+    setRouteStatus("执行沿皮纹线切除");
   }, [issueCommand, setRouteStatus]);
 
   const handleReset = useCallback(() => {

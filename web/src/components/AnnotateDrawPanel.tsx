@@ -12,7 +12,7 @@ import { Select } from "./ui/select";
 function currentStateText(snapshot: ReturnType<typeof useAnnotateStore.getState>["snapshot"]) {
   const draft = snapshot?.draft;
   if (!draft?.active) return "当前没有正在绘制的线。点击“开始一条线”，或直接在脸表面点击开始。";
-  const system = snapshot?.system?.toUpperCase?.() || "RSTL";
+  const system = snapshot?.system === "langer" ? "LANGER" : "皮纹线";
   const countText = draft.controlCount < 2 ? "（至少 2 点可保存）" : "";
   const fallback = draft.fallback ? " · 贴面路由已退回直线，需复核可能穿面" : "";
   return `正在绘制：${draft.name || "未命名"} · ${system} · ${draft.controlCount} 点${countText}${fallback}`;
@@ -36,7 +36,7 @@ export function AnnotateDrawPanel() {
           defaultValue={snapshot?.system || "rstl"}
           onChange={(event) => commands.draw("system_changed", event.currentTarget.value)}
         >
-          <option value="rstl">RSTL（首选）</option>
+          <option value="rstl">皮纹线（首选）</option>
           <option value="langer">Langer</option>
         </Select>
       </div>

@@ -70,9 +70,9 @@ const REASON_LABELS: Record<string, string> = {
   nasolabial_transition_band: "位于鼻唇沟过渡区",
   oral_commissure_transition_band: "位于口角过渡区",
   jawline_or_face_boundary: "位于下颌缘或面部边界",
-  empty_atlas: "局部没有可用 RSTL 图谱",
-  nearest_atlas_support_far: "距离最近 RSTL 支持线较远",
-  high_angular_spread: "附近 RSTL 方向离散较大",
+  empty_atlas: "局部没有可用皮纹线图谱",
+  nearest_atlas_support_far: "距离最近皮纹线支持线较远",
+  high_angular_spread: "附近皮纹线方向离散较大",
   browser_direction_variant_requires_clinician_review: "方向备选需医生复核",
 };
 
@@ -100,14 +100,14 @@ const GUARDRAIL_LABELS: Record<string, string> = {
   fusiform_outline_self_intersection: "梭形切口轮廓存在自交",
   linear_diameter_coverage_deficit: "线性切口长度不足以覆盖肿物直径",
   low_region_confidence: "面部分区置信度较低",
-  low_rstl_confidence: "RSTL 方向置信度较低",
+  low_rstl_confidence: "皮纹线方向置信度较低",
   missing_cutaneous_boundary: "缺少皮表肿物边界",
   missing_cutaneous_margin: "缺少皮表安全切缘",
   missing_subcutaneous_depth: "缺少皮下肿物深度",
   missing_tumor_author: "缺少记录者",
   near_sensitive_free_margin: "病灶靠近敏感游离缘",
   non_mm_tumor_units: "肿物单位不是毫米",
-  rstl_deviation_override: "候选方向偏离局部 RSTL",
+  rstl_deviation_override: "候选方向偏离局部皮纹线",
   sensitive_region_lower_eyelid: "下眼睑属于敏感区域",
   sensitive_region_lip_vermilion: "唇红缘属于敏感区域",
   sensitive_region_nasal_ala: "鼻翼属于敏感区域",
@@ -117,12 +117,12 @@ const GUARDRAIL_LABELS: Record<string, string> = {
 };
 
 const DIRECTION_SOURCE_LABELS: Record<string, string> = {
-  rstl_atlas_weighted_nearest: "局部 RSTL 图谱",
-  personalized_rstl_atlas_weighted_nearest: "个体化 RSTL（YOLO/V6 皱纹证据）",
-  rstl_atlas_nearest_segment: "最近 RSTL 线段局部切线",
-  personalized_rstl_atlas_nearest_segment: "个体化 RSTL 最近线段局部切线",
-  rstl_atlas_empty: "RSTL 图谱无可用支持点",
-  rstl_atlas_no_valid_direction_support: "RSTL 图谱记录无有效方向支持",
+  rstl_atlas_weighted_nearest: "局部皮纹线图谱",
+  personalized_rstl_atlas_weighted_nearest: "个体化皮纹线（YOLO/V6 皱纹证据）",
+  rstl_atlas_nearest_segment: "最近皮纹线线段局部切线",
+  personalized_rstl_atlas_nearest_segment: "个体化皮纹线最近线段局部切线",
+  rstl_atlas_empty: "皮纹线图谱无可用支持点",
+  rstl_atlas_no_valid_direction_support: "皮纹线图谱记录无有效方向支持",
 };
 
 const DIRECTION_HINT_LABELS: Record<string, string> = {
@@ -143,7 +143,7 @@ const OVERRIDE_LABELS: Record<string, string> = {
   fusiform_shape_review: "复核梭形切口形态",
   fusiform_boundary_envelope_review: "复核边界是否完全位于梭形包络内",
   fusiform_length_or_margin_review: "复核梭形切口长度与安全切缘",
-  override_reason_required: "记录偏离局部 RSTL 的医生理由",
+  override_reason_required: "记录偏离局部皮纹线的医生理由",
 };
 
 function labelOf(labels: Record<string, string>, value: unknown, fallback = "未记录") {

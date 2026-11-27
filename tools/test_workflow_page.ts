@@ -1071,7 +1071,7 @@ assert.doesNotMatch(styles, /\.mobile-workflow-dock,\s*\.mobile-candidate-adjust
   "candidate adjustment is not hidden with the mobile-only operations dock");
 assert.match(liveWrinklePanel, /WorkflowLayerVisibilityButtons/,
   "the desktop wrinkle panel mounts the same shared layer switches as the phone dock");
-assert.match(mobileControls, /function WorkflowLayerVisibilityButtons[\s\S]*?>RSTL<[\s\S]*?>皱纹<[\s\S]*?>切口线</,
+assert.match(mobileControls, /function WorkflowLayerVisibilityButtons[\s\S]*?>皮纹线<[\s\S]*?>皱纹<[\s\S]*?>切口线</,
   "the shared switch group exposes independent RSTL, wrinkle, and incision visibility controls");
 assert.match(mobileControls, /WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile/,
   "the phone dock explicitly preserves the established mobile layer-button presentation");

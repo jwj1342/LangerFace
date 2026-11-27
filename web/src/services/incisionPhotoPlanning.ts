@@ -166,7 +166,7 @@ export function incisionPhotoStatusPresentation({
   return {
     message: candidateSmoothingMode === "limitedVisibility" && candidatePointCount > 0
       ? detail
-      : `照片规划 · RSTL ${rstlLineCount} 条 · ${detail}`,
+      : `照片规划 · 皮纹线 ${rstlLineCount} 条 · ${detail}`,
     tone: candidateDisplayBlocked
       || !candidateProjectionValid
       || projectedDirectionNeedsReview

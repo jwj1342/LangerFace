@@ -85,7 +85,7 @@ test("phone review fixes stay visible, independent, and desktop-isolated", async
   expect(stageTopAfterScroll).toBeCloseTo(stageTopBeforeScroll, 1);
   await mobileOperationPane.evaluate((pane) => { pane.scrollTop = 0; });
 
-  const rstl = page.getByRole("button", { name: "RSTL", exact: true });
+  const rstl = page.getByRole("button", { name: "皮纹线", exact: true });
   const wrinkles = page.getByRole("button", { name: "皱纹", exact: true });
   const incision = page.getByRole("button", { name: "切口线", exact: true });
   for (const toggle of [rstl, wrinkles]) {

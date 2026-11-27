@@ -8,9 +8,9 @@ export function LiveWrinklePanel() {
   return (
     <Card id="liveWrinkleCard">
       <Select id="wrinkleDisplayMode" defaultValue="both" disabled aria-label="画面叠加内容">
-        <option value="rstl">只显示 RSTL</option>
+        <option value="rstl">只显示皮纹线</option>
         <option value="wrinkles">只显示皱纹</option>
-        <option value="both">RSTL 与皱纹同时显示</option>
+        <option value="both">皮纹线与皱纹同时显示</option>
       </Select>
       {/* 仅切换已有结果的可见性；不触碰 RSTL/皱纹生成、检测或参数。 */}
       <div className="desktop-layer-controls">
@@ -32,7 +32,7 @@ export function LiveWrinklePanel() {
         </Button>
       </ButtonRow>
       <Button variant="workbench" id="wrinkleRestoreBtn" type="button" disabled>
-        恢复标准 RSTL
+        恢复标准皮纹线
       </Button>
     </Card>
   );

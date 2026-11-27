@@ -95,7 +95,7 @@ assert.ok(html.includes("本地确定性 workflow"), "workbench explains candida
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(
-  clinicalCopy.includes("RSTL 图谱记录无有效方向支持"),
+  clinicalCopy.includes("皮纹线图谱记录无有效方向支持"),
   "workbench explains a non-empty atlas with no valid direction samples",
 );
 assert.ok(html.includes('id="workflowGate"'), "workbench exposes agent trace gate feedback");

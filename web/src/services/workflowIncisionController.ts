@@ -421,7 +421,7 @@ function clearTumorBoundaryForCenterSelection(state: WorkflowIncisionState) {
 function fallbackHeadAsset(): IncisionHeadAssetState {
   return {
     id: "pending",
-    label: "RSTL 资产加载中",
+    label: "皮纹线资产加载中",
     topologyId: "unknown",
     topologyVersion: "unknown",
     vertexCount: 0,
@@ -1570,7 +1570,7 @@ function activeAtlas(state: WorkflowIncisionState) {
       mode: personalized ? "mediapipe_personalized" : "mediapipe_standard",
       atlasProvenance: personalized ? "current_live_runtime" : state.headAsset.atlasProvenance,
       atlasContract: modelState.atlasContracts[renderState.system] || state.headAsset.atlasContract,
-      statusLabel: personalized ? "当前 Live 个性化 RSTL" : "当前 Live 标准 RSTL",
+      statusLabel: personalized ? "当前 Live 个性化皮纹线" : "当前 Live 标准皮纹线",
     };
   }
   return lines?.length ? { ...(state.atlas || {}), system: renderState.system, lines } : state.atlas;
@@ -1620,7 +1620,7 @@ function reconcileProjectedRstlSnapshot(state: WorkflowIncisionState): boolean {
   invalidateSavedSources(state);
   invalidateCandidate(
     state,
-    "最终 RSTL 已更新，旧候选已失效；请重新选择肿物或调整任一参数生成新候选。",
+    "最终皮纹线已更新，旧候选已失效；请重新选择肿物或调整任一参数生成新候选。",
   );
   publish(state, "workflow_rstl_snapshot_changed");
   return true;
@@ -1713,7 +1713,7 @@ async function runWorkflow(state: WorkflowIncisionState, explicit = false, prese
     }
     const currentRstlFingerprint = projectedRstlFingerprint(activeProjectedRstlLines());
     if (currentRstlFingerprint !== rstlFingerprint) {
-      invalidateCandidate(state, "RSTL 在候选生成期间已更新，旧结果已丢弃；请重新生成候选。");
+      invalidateCandidate(state, "皮纹线在候选生成期间已更新，旧结果已丢弃；请重新生成候选。");
       state.lastProjectedRstlFingerprint = currentRstlFingerprint;
       publish(state, "workflow_stale_rstl");
       return { status: "stale", requestId };

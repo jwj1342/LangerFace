@@ -562,10 +562,10 @@ export function updateWrinkleUi(): void {
   } else if (state.status === "error") {
     setWrinkleSummary(`${state.error || "皱纹检测失败"}；请稍后重试，或更换正面、清晰、光线均匀的照片。`, true);
   } else if (state.status === "evidence") {
-    setWrinkleSummary(`已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准 RSTL 保持不变。可更换照片重新检测。`, true);
+    setWrinkleSummary(`已绘制 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；${state.error || "自动微调未通过安全门禁"}，标准皮纹线保持不变。可更换照片重新检测。`, true);
   } else if (state.status === "detected") {
     setWrinkleSummary(`YOLO 已检测 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域）；` +
-      "额头、眉间或鼻背证据可用时，可点击按钮微调对应 RSTL。", false);
+      "额头、眉间或鼻背证据可用时，可点击按钮微调对应皮纹线。", false);
   } else if (state.status === "ready" || state.status === "applied") {
     const evidenceVersion = state.evidenceSource === "yolo-live"
       ? "YOLO-only 额头/眉间/鼻背引导"
@@ -602,23 +602,23 @@ export function updateWrinkleUi(): void {
           .sort((left: any, right: any) => left.meanY - right.meanY);
         const lowest = forehead.at(-1)?.trend;
         return lowest
-          ? `最下方额纹审计：趋势 ${lowest.id}，最终 RSTL [${lowest.acceptedCurveIndices.join(", ")}]，状态 ${lowest.finalStatus}；`
+          ? `最下方额纹审计：趋势 ${lowest.id}，最终皮纹线[${lowest.acceptedCurveIndices.join(", ")}]，状态 ${lowest.finalStatus}；`
           : "";
       })()
       : "";
-    const moved = `RSTL v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2 · ${processingLocation}；` +
+    const moved = `皮纹线 v${RSTL_STANDARD_CONTRACT.atlasVersion} · ${evidenceVersion} · V9 7.2 · ${processingLocation}；` +
       `识别 ${state.fineLineCount} 条细皱纹（${state.sourceComponentCount} 个候选区域），` +
       regionalMovement + (state.diagnostics?.forehead_attraction_version
         ? `额头直接吸附通过 ${Number(state.diagnostics.forehead_attraction_direct_count || 0)} 个匹配，` +
           `邻线协调 ${Number(state.diagnostics.forehead_attraction_follower_count || 0)} 条，` +
-          `受限 ${Number(state.diagnostics.forehead_attraction_incomplete_count || 0)} 个匹配；` : "") + `共调整 ${state.movedCurveCount} 条 RSTL / ${state.movedPointCount} 个点。` +
+          `受限 ${Number(state.diagnostics.forehead_attraction_incomplete_count || 0)} 个匹配；` : "") + `共调整 ${state.movedCurveCount} 条皮纹线/ ${state.movedPointCount} 个点。` +
       glabellarDiagnostic + foreheadDiagnostic;
     setWrinkleSummary(hasManualRefineChanges()
       ? `${moved} 已有医生手动修改，自动应用已锁定；可恢复后重新应用。`
       : moved, false);
   } else if (busy) {
     setWrinkleSummary(state.status === "refining"
-      ? "正在使用已缓存的皱纹检测结果运行 RSTL 微调。"
+      ? "正在使用已缓存的皱纹检测结果运行皮纹线微调。"
       : state.provider
       ? `正在${processingLocation}运行 V10 四区域检测。`
       : import.meta.env?.VITE_SERVER_COMPUTE === 'true'
@@ -1535,7 +1535,7 @@ export async function applyWrinkleGuidedRefinement({ canApply = () => true }: {
     assertRefinementGate(refined.diagnostics);
     if (refined.standardCurveCount !== state.standardLines.length
         || refined.curves.length < refined.standardCurveCount) {
-      throw new Error("皱纹引导结果未保持 RSTL 曲线数量");
+      throw new Error("皱纹引导结果未保持皮纹线曲线数量");
     }
     const noseHybrid = refined.diagnostics.nose_hybrid_refinement as
       { movedCurveIndices?: number[] } | undefined;

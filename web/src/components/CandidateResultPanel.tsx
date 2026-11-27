@@ -48,9 +48,9 @@ export function CandidateResultPanel({ showWorkflowGuidance = true }: { showWork
         <MetricItem label="长度" value={view.candidateLength} valueProps={{ id: "candidateLength" }} />
         <MetricItem label="宽度 / 比例" value={view.candidateWidth} valueProps={{ id: "candidateWidth" }} />
         <MetricItem label="尖端角" value={view.candidateTipAngle} valueProps={{ id: "candidateTipAngle" }} />
-        <MetricItem label="RSTL 角度偏差" value={view.rstlDeviation} valueProps={{ id: "candidateRstlDeviation" }} />
+        <MetricItem label="皮纹线角度偏差" value={view.rstlDeviation} valueProps={{ id: "candidateRstlDeviation" }} />
         <MetricItem
-          label="RSTL 置信度"
+          label="皮纹线置信度"
           value={view.directionConfidence}
           valueProps={{ id: "directionConf", title: view.directionTitle }}
         />

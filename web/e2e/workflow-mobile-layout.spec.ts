@@ -31,7 +31,7 @@ test.describe("phone workflow layout", () => {
     await page.getByRole("button", { name: "皮肤纹理", exact: true }).click();
     const texture = page.locator('[data-mobile-panel-slot="texture"]');
     await expect(texture.getByRole("checkbox")).toHaveCount(0);
-    const rstl = texture.getByRole("button", { name: "RSTL", exact: true });
+    const rstl = texture.getByRole("button", { name: "皮纹线", exact: true });
     const wrinkles = texture.getByRole("button", { name: "皱纹", exact: true });
     await rstl.click();
     await wrinkles.click();

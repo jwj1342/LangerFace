@@ -59,7 +59,7 @@ test("surgery buttons remain readable across loading, hover, pressed, and select
 
   const execute = page.getByRole("button", { name: "执行闭合模拟" });
   const reset = page.getByRole("button", { name: /复位/ });
-  const showLines = page.getByRole("checkbox", { name: "显示 RSTL 张力线" });
+  const showLines = page.getByRole("checkbox", { name: "显示 皮纹线" });
   const showLinesButton = showLines.locator("..");
 
   // WCAG 1.4.3 exempts inactive controls from 4.5:1. Verify the real loading
