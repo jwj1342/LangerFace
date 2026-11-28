@@ -181,7 +181,7 @@ assert.deepEqual(resultAfterTransfer, expectedFallback, "post-transfer failure k
 
 const refineModule = ts.createSourceFile("liveRefine2d.ts", read("web/src/services/liveRefine2d.ts"), ts.ScriptTarget.Latest, true);
 const projectedRefineNames = ["beginFrozenRefineSession", "setLatestAutoLines", "projectPhotoRstlBaseline",
-  "startPhotoRstlProjection", "getDisplayLines", "commitRefineForLive", "toggleRefine2d"];
+  "startPhotoRstlProjection", "getDisplayLines", "commitRefineForLive", "finishRefine2d", "finishRefineDrag", "toggleRefine2d"];
 const projectedRefineSource = refineModule.statements.filter((node: any) => ts.isFunctionDeclaration(node)
   && projectedRefineNames.includes(node.name?.text))
   .map((node: any) => node.getText(refineModule).replace(/^export /, "")).join("\n");
