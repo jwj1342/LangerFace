@@ -248,12 +248,12 @@
       "lower_eyelid": {
         "direction_hint": "parallel_to_lower_eyelid_margin_or_eyelid_crease",
         "canonical_axis": [1.0, 0.0, 0.0],
-        "reason": "Prefer a clinician-confirmed axis that protects lower eyelid support before following local RSTL."
+        "reason": "应优先考虑医生确认的方向，保护下眼睑支撑，再参考局部皮纹线。"
       },
       "lip_vermilion": {
         "direction_hint": "parallel_to_vermilion_border_or_white_roll",
         "canonical_axis": [1.0, 0.0, 0.0],
-        "reason": "Protect vermilion alignment; subunit border alignment may override local RSTL."
+        "reason": "应保护唇红缘对齐；必要时可优先参考解剖亚单位边界。"
       },
       "oral_commissure": {
         "direction_hint": "protect_commissure_alignment_with_manual_axis",
@@ -263,12 +263,12 @@
       "nasal_ala": {
         "direction_hint": "parallel_to_alar_groove_or_nasal_subunit_boundary",
         "canonical_axis": [0.65, 0.76, 0.0],
-        "reason": "Protect alar contour; nasal subunit boundary can override local RSTL."
+        "reason": "应保护鼻翼轮廓；必要时可优先参考鼻部亚单位边界。"
       },
       "nasal_tip": {
         "direction_hint": "manual_nasal_tip_subunit_axis",
         "canonical_axis": [1.0, 0.0, 0.0],
-        "reason": "Protect nasal tip contour and support before following local RSTL."
+        "reason": "应优先保护鼻尖轮廓和支撑，再参考局部皮纹线。"
       }
     },
     "source": "clinician_rule",
