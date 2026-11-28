@@ -44,12 +44,12 @@ export const DEFAULT_RULES = {
       lower_eyelid: {
         direction_hint: "parallel_to_lower_eyelid_margin_or_eyelid_crease",
         canonical_axis: [1, 0, 0],
-        reason: "Prefer a clinician-confirmed axis that protects lower eyelid support before following local RSTL.",
+        reason: "应优先考虑医生确认的方向，保护下眼睑支撑，再参考局部皮纹线。",
       },
       lip_vermilion: {
         direction_hint: "parallel_to_vermilion_border_or_white_roll",
         canonical_axis: [1, 0, 0],
-        reason: "Protect vermilion alignment; subunit border alignment may override local RSTL.",
+        reason: "应保护唇红缘对齐；必要时可优先参考解剖亚单位边界。",
       },
       oral_commissure: {
         direction_hint: "protect_commissure_alignment_with_manual_axis",
@@ -59,12 +59,12 @@ export const DEFAULT_RULES = {
       nasal_ala: {
         direction_hint: "parallel_to_alar_groove_or_nasal_subunit_boundary",
         canonical_axis: [0.65, 0.76, 0],
-        reason: "Protect alar contour; nasal subunit boundary can override local RSTL.",
+        reason: "应保护鼻翼轮廓；必要时可优先参考鼻部亚单位边界。",
       },
       nasal_tip: {
         direction_hint: "manual_nasal_tip_subunit_axis",
         canonical_axis: [1, 0, 0],
-        reason: "Protect nasal tip contour and support before following local RSTL.",
+        reason: "应优先保护鼻尖轮廓和支撑，再参考局部皮纹线。",
       },
     },
   },
@@ -87,7 +87,7 @@ export const TOOL_SCHEMAS = [
 export const WORKFLOW_TRACE_GATE_REQUIRED = [
   { key: "tumor_input_quality", label: "肿物输入质量", actions: ["summarize_tumor_input_quality"] },
   { key: "face_region", label: "面部分区", actions: ["classify_region"] },
-  { key: "rstl_direction", label: "RSTL 查询", actions: ["query_rstl_direction"] },
+  { key: "rstl_direction", label: "皮纹线查询", actions: ["query_rstl_direction"] },
   { key: "sensitive_structures", label: "敏感结构检查", actions: ["inspect_sensitive_structures"] },
   { key: "candidate_generation", label: "确定性切口生成", actions: ["linear_subcutaneous_incision", "fusiform_cutaneous_incision"] },
   { key: "guardrails", label: "Guardrails", actions: ["evaluate_guardrails"] },
@@ -111,8 +111,8 @@ export const WORKFLOW_PLAN_STEP_DEFINITIONS = [
   },
   {
     id: "query_direction",
-    label: "查询 RSTL 方向",
-    intent: "从确定性 atlas 服务读取局部 RSTL 方向。",
+    label: "查询皮纹线方向",
+    intent: "从确定性 atlas 服务读取局部皮纹线方向。",
     required_action_groups: [["query_rstl_direction"]],
     optional_actions: [],
   },

@@ -194,7 +194,7 @@ function applyStagedAtlas(): void {
   syncPreviewControls();
   if (!sourceState.running) {
     setMsg(provenanceSource === "个性化 V6"
-      ? "已载入本次个性化 V6 RSTL。开启摄像头或上传照片即可实时查看。"
+      ? "已载入本次个性化 V6 皮纹线。开启摄像头或上传照片即可实时查看。"
       : "已载入标注预览图谱（未验证）。开启摄像头或上传照片即可在脸上查看。");
   }
   scheduleLiveState("staged_atlas");
@@ -218,7 +218,7 @@ function applyStagedIncisionOverlay(): void {
   const highCodes = overlay.guardrail_summary?.high_codes || overlay.review_gate?.high_guardrail_codes || [];
   const reviewLabel = overlay.review?.status === "approved_for_discussion" ? "已确认候选草案" : "待复核候选";
   const riskText = highCodes.length ? `；高风险项 ${highCodes.join("、")}` : "";
-  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片或开启摄像头后，会随 RSTL 一起显示。`);
+  setMsg(`已载入切口候选叠加（${reviewLabel}${riskText}）。上传照片或开启摄像头后，会随皮纹线一起显示。`);
   scheduleLiveState("staged_incision_overlay");
 }
 
@@ -228,7 +228,7 @@ function clearIncisionOverlay(): void {
   setIncisionOverlayQa(null);
   buildZoomCards(refreshStaticImage);
   refreshStaticImage();
-  setMsg("已清除本次切口候选叠加。RSTL 显示不受影响。");
+  setMsg("已清除本次切口候选叠加。皮纹线显示不受影响。");
   scheduleLiveState("incision_overlay_cleared");
 }
 

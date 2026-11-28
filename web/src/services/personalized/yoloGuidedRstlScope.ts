@@ -100,7 +100,7 @@ export function mergeYoloGuidedRstlCurves(
     .map((seed, index) => isYoloGuidedRstlSeed(seed) ? index : -1)
     .filter((index) => index >= 0);
   if (scopedCurves.length !== eligibleIndices.length) {
-    throw new Error("额头与眉间 RSTL 微调结果数量与输入不一致");
+    throw new Error("额头与眉间皮纹线微调结果数量与输入不一致");
   }
   const refinedByOriginalIndex = new Map(eligibleIndices.map((index, scopedIndex) => [
     index,
@@ -234,7 +234,7 @@ export function guardMergedYoloGuidedRstlCurves(
   options: { cacheGeometry?: boolean; performance?: YoloGuidedGuardPerformance } = {},
 ): YoloGuidedGlobalGuardResult {
   if (seeds.length !== mergedCurves.length) {
-    throw new Error("全局交叉检查的 RSTL 数量与输入不一致");
+    throw new Error("全局交叉检查的皮纹线数量与输入不一致");
   }
   const seedPoints = (seed: V6Seed): Point2[] => {
     const points = Array.isArray(seed.pts) ? seed.pts : [];

@@ -274,7 +274,7 @@ function shortCandidate(candidate: AnyRecord): AnyRecord {
 function fallbackSummary(tumor: TumorInput, candidate: IncisionCandidate, guardrails: AnyRecord): string {
   const kind = candidate.type === "linear" ? "皮下线性切口" : "皮表梭形切口";
   const status = guardrails.passed ? "guardrails 通过" : "guardrails 需要医生复核";
-  return `已生成${kind}候选：长轴沿局部 RSTL，病灶直径 ${tumor.diameter_mm.toFixed(1)} mm，${status}。`;
+  return `已生成${kind}候选：长轴沿局部皮纹线，病灶直径 ${tumor.diameter_mm.toFixed(1)} mm，${status}。`;
 }
 
 export function previewIncisionOnFace(
@@ -664,7 +664,7 @@ export function planIncisionDeterministic({
       observation: { ...tumorQuality, lesion_normalization: tumorNormalization },
     },
     { summary: "定位病灶所在面部分区。", action: "classify_region", input: { point: tumor.center }, observation: anatomy },
-    { summary: "查询局部 RSTL 方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
+    { summary: "查询局部皮纹线方向。", action: "query_rstl_direction", input: { point: tumor.center, source: "rstl_atlas" }, observation: direction },
     { summary: "检查附近敏感游离缘和保护性方向例外。", action: "inspect_sensitive_structures", input: { anatomy }, observation: preCandidateSensitiveInspection },
     {
       summary: "用确定性工具生成切口候选。",
@@ -745,7 +745,7 @@ export function planIncisionWorkflow({
   for (const variant of directionVariants) {
     const offset = Number(variant.angle_offset_deg || 0);
     const variantId = Math.abs(offset) < 1e-9 ? "baseline" : `offset_${offset > 0 ? "+" : ""}${Math.round(offset)}deg`;
-    const label = Math.abs(offset) < 1e-9 ? "RSTL baseline" : `RSTL offset ${offset > 0 ? "+" : ""}${Math.round(offset)} deg`;
+    const label = Math.abs(offset) < 1e-9 ? "皮纹线基准" : `皮纹线偏转 ${offset > 0 ? "+" : ""}${Math.round(offset)}°`;
     let variantCandidate;
     let variantGuardrails;
     let variantPreview;
@@ -977,7 +977,7 @@ function comparisonReasons({
   if (severity.high) reasons.push(`${severity.high} 个 high guardrail`);
   if (severity.medium) reasons.push(`${severity.medium} 个 medium guardrail`);
   const rstlDeviation = finiteOr(metrics.rstl_deviation_deg, 0);
-  if (rstlDeviation > 0) reasons.push(`RSTL 偏角 ${rstlDeviation.toFixed(1)}°`);
+  if (rstlDeviation > 0) reasons.push(`皮纹线偏角 ${rstlDeviation.toFixed(1)}°`);
   const linearDeficit = finiteOr(metrics.diameter_coverage_deficit_mm, 0);
   if (linearDeficit > 0) reasons.push(`直径覆盖缺口 ${linearDeficit.toFixed(1)} mm`);
   const axisDeficit = finiteOr(metrics.axis_coverage_deficit_mm, 0);

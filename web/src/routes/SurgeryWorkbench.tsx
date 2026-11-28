@@ -72,7 +72,7 @@ export function SurgeryWorkbench({
 
       <Disclaimer>
         本页提供闭合张力的定性辅助观察，非有限元、非患者个体化建模，<b>不是手术指令、非医疗器械</b>。
-        真实软组织力学需体网格 FEM + 影像，本工具只为直观呈现 RSTL 与闭合张力的关系。
+        真实软组织力学需体网格 FEM + 影像，本工具只为直观呈现皮纹线与闭合张力的关系。
       </Disclaimer>
     </WorkbenchLayout>
   );

@@ -1,0 +1,1135 @@
+import { DEFAULT_RULES } from "./incisionToolRules.ts";
+import { normalizePlanningLesion } from "./incisionLesionNormalization.ts";
+import {
+  type AnyRecord,
+  type DirectionResult,
+  type Vec2,
+  type Vec3,
+  add,
+  annotateCandidateSensitiveDistances,
+  clamp,
+  cross,
+  directionProvenance,
+  dot,
+  mul,
+  norm,
+  sub,
+} from "./incisionToolCore.ts";
+
+export interface TumorInput extends AnyRecord {
+  kind: "subcutaneous" | "cutaneous";
+  center: Vec3;
+  diameter_mm: number;
+  depth_mm: number | null;
+  margin_mm: number;
+  boundary: Vec3[];
+  boundary_mode: string;
+  boundary_source: string;
+  photo_boundary_enclosing_diameter_mm?: number | null;
+  boundary_equivalent_diameter_mm?: number | null;
+  boundary_major_axis_mm?: number | null;
+  boundary_minor_axis_mm?: number | null;
+  source: string;
+  author: string;
+  units: string;
+}
+
+export type IncisionRules = AnyRecord;
+export type IncisionCandidate = AnyRecord;
+
+export function normalizeTumorInput(tumor: Partial<TumorInput> & AnyRecord): TumorInput {
+  const kind = tumor.kind;
+  if (kind !== "subcutaneous" && kind !== "cutaneous") throw new Error("tumor.kind must be subcutaneous or cutaneous");
+  if (!Array.isArray(tumor.center) || tumor.center.length !== 3) throw new Error("tumor.center must be a 3D point");
+  const diameterMm = Number(tumor.diameter_mm);
+  if (!(diameterMm > 0)) throw new Error("tumor.diameter_mm must be positive");
+  return {
+    kind,
+    center: tumor.center.map(Number) as Vec3,
+    diameter_mm: diameterMm,
+    depth_mm: tumor.depth_mm == null ? null : Number(tumor.depth_mm),
+    margin_mm: Number(tumor.margin_mm || 0),
+    boundary: Array.isArray(tumor.boundary)
+      ? tumor.boundary
+        .filter((p: unknown) => Array.isArray(p) && p.length === 3)
+        .map((p: number[]) => p.map(Number) as Vec3)
+        .filter((p: Vec3) => p.every(Number.isFinite))
+      : [],
+    boundary_mode: tumor.boundary_mode || "center_diameter",
+    boundary_source: tumor.boundary_source || "manual",
+    photo_boundary_enclosing_diameter_mm: Number.isFinite(Number(tumor.photo_boundary_enclosing_diameter_mm))
+      && Number(tumor.photo_boundary_enclosing_diameter_mm) > 0
+      ? Number(tumor.photo_boundary_enclosing_diameter_mm)
+      : null,
+    boundary_equivalent_diameter_mm: Number.isFinite(Number(tumor.boundary_equivalent_diameter_mm))
+      ? Number(tumor.boundary_equivalent_diameter_mm) : null,
+    boundary_major_axis_mm: Number.isFinite(Number(tumor.boundary_major_axis_mm))
+      ? Number(tumor.boundary_major_axis_mm) : null,
+    boundary_minor_axis_mm: Number.isFinite(Number(tumor.boundary_minor_axis_mm))
+      ? Number(tumor.boundary_minor_axis_mm) : null,
+    source: tumor.source || "manual",
+    author: tumor.author || "",
+    units: tumor.units || "mm",
+  };
+}
+
+export function validateTumor(tumor: Partial<TumorInput> & AnyRecord): TumorInput {
+  return normalizeTumorInput(tumor);
+}
+
+export function summarizeTumorInputQuality(tumorInput: Partial<TumorInput> & AnyRecord): AnyRecord {
+  const tumor = validateTumor(tumorInput);
+  const warnings: AnyRecord[] = [];
+  if (!tumor.author) {
+    warnings.push({
+      code: "missing_tumor_author",
+      severity: "medium",
+      message: "Tumor input has no author/reviewer name recorded.",
+    });
+  }
+  if (tumor.units !== "mm") {
+    warnings.push({
+      code: "non_mm_tumor_units",
+      severity: "high",
+      message: "Tumor input units are not millimeters; deterministic incision rules assume mm.",
+    });
+  }
+  if (tumor.kind === "subcutaneous" && tumor.depth_mm == null) {
+    warnings.push({
+      code: "missing_subcutaneous_depth",
+      severity: "medium",
+      message: "Subcutaneous tumor depth is missing; confirm ultrasound/source depth before review.",
+    });
+  }
+  if (tumor.kind === "subcutaneous" && tumor.boundary.length < 3) {
+    warnings.push({
+      code: "missing_subcutaneous_boundary",
+      severity: "high",
+      message: "Subcutaneous incision generation requires a detected or clinician-drawn boundary.",
+    });
+  }
+  if (tumor.kind === "cutaneous") {
+    if (tumor.margin_mm <= 0) {
+      warnings.push({
+        code: "missing_cutaneous_margin",
+        severity: "medium",
+        message: "Cutaneous tumor margin is zero; confirm intended margin before review.",
+      });
+    }
+    if (tumor.boundary_mode === "freehand" && tumor.boundary.length < 6) {
+      warnings.push({
+        code: "sparse_cutaneous_boundary_input",
+        severity: "medium",
+        message: "Freehand cutaneous boundary has fewer than 6 points.",
+      });
+    }
+    if (tumor.boundary_mode !== "center_diameter" && tumor.boundary.length < 3) {
+      warnings.push({
+        code: "missing_cutaneous_boundary",
+        severity: "medium",
+        message: "Cutaneous boundary mode is selected but no usable boundary was provided.",
+      });
+    }
+  }
+  return {
+    passed: !warnings.some((w) => w.severity === "high"),
+    warning_count: warnings.length,
+    warnings,
+    source: tumor.source,
+    boundary_source: tumor.boundary_source,
+    author_present: Boolean(tumor.author),
+    units: tumor.units,
+  };
+}
+
+export function generateLinearIncision(
+  tumorInput: Partial<TumorInput> & AnyRecord,
+  direction: Partial<DirectionResult> & AnyRecord,
+  unitsPerMm: number,
+  rules: IncisionRules = DEFAULT_RULES,
+): IncisionCandidate {
+  const tumor = validateTumor(tumorInput);
+  if (tumor.kind !== "subcutaneous") throw new Error("linear incision requires subcutaneous tumor");
+  const axis = norm(direction.vector || [1, 0, 0]);
+  const perpendicular = tangentPerp(axis, direction.normal || [0, 0, 1]);
+  const boundary = boundaryProfile(tumor, axis, perpendicular, unitsPerMm);
+  if (!boundary || boundary.self_intersection || !(boundary.axis_diameter_mm > 0)) {
+    throw new Error("subcutaneous incision requires a valid detected or clinician-drawn boundary");
+  }
+  const lengthMm = Number(boundary.axis_diameter_mm);
+  const half = mul(axis, lengthMm * unitsPerMm * 0.5);
+  const center = boundary.envelope_center as Vec3;
+  const p0 = sub(center, half), p1 = add(center, half);
+  const equivalentDiameterMm = 2 * Math.sqrt(Number(boundary.area_mm2) / Math.PI);
+  const majorAxisMm = Math.max(Number(boundary.axis_diameter_mm), Number(boundary.perp_diameter_mm));
+  const minorAxisMm = Math.min(Number(boundary.axis_diameter_mm), Number(boundary.perp_diameter_mm));
+  const fitError = majorAxisMm > 0 ? Math.abs(majorAxisMm - minorAxisMm) / majorAxisMm : 0;
+  return {
+    id: "linear_subcutaneous_candidate",
+    type: "linear",
+    tumor_kind: tumor.kind,
+    center,
+    axis,
+    endpoints: [p0, p1],
+    polyline: [p0, p1],
+    length_mm: lengthMm,
+    length_units: lengthMm * unitsPerMm,
+    direction_confidence: direction.confidence,
+    metrics: {
+      rstl_deviation_deg: 0,
+      diameter_mm: equivalentDiameterMm,
+      boundary_directional_feret_diameter_mm: lengthMm,
+      boundary_equivalent_diameter_mm: equivalentDiameterMm,
+      boundary_major_axis_mm: majorAxisMm,
+      boundary_minor_axis_mm: minorAxisMm,
+      boundary_fit_error_ratio: fitError,
+      diameter_coverage_required_mm: lengthMm,
+      diameter_coverage_deficit_mm: 0,
+      length_target_mm: lengthMm,
+      length_target_deficit_mm: 0,
+      length_clamped_by_min: false,
+      length_clamped_by_max: false,
+      length_multiplier: 1,
+      boundary_used: true,
+      boundary_scale_shape: "directional_feret_diameter",
+    },
+    provenance: {
+      generator: "generateLinearIncision",
+      rules_version: rules.version,
+      candidate_version: 2,
+      boundary_source: tumor.boundary_source,
+      marker_detection_profile: tumor.marker_detection_profile || null,
+      marker_implementation_version: tumor.marker_implementation_version || null,
+      edit_history: [],
+      ...directionProvenance(direction),
+    },
+  };
+}
+
+export function tangentPerp(axis: Vec3, normal: ArrayLike<number> | null | undefined): Vec3 {
+  const n = norm(normal || [0, 0, 1]);
+  let p = cross(n, axis);
+  if (Math.hypot(p[0], p[1], p[2]) < 1e-9) p = [-axis[1], axis[0], 0];
+  return norm(p);
+}
+
+export function polygonArea(points: Vec2[]): number {
+  if (points.length < 3) return 0;
+  let s = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    s += a[0] * b[1] - a[1] * b[0];
+  }
+  return Math.abs(s) * 0.5;
+}
+
+function orientation(a: Vec2, b: Vec2, c: Vec2): number {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function onSegment(a: Vec2, b: Vec2, c: Vec2): boolean {
+  const eps = 1e-9;
+  return (
+    Math.min(a[0], c[0]) - eps <= b[0] && b[0] <= Math.max(a[0], c[0]) + eps &&
+    Math.min(a[1], c[1]) - eps <= b[1] && b[1] <= Math.max(a[1], c[1]) + eps &&
+    Math.abs(orientation(a, b, c)) <= eps
+  );
+}
+
+function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
+  const eps = 1e-9;
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+  if (o1 * o2 < -eps && o3 * o4 < -eps) return true;
+  return onSegment(a, c, b) || onSegment(a, d, b) || onSegment(c, a, d) || onSegment(c, b, d);
+}
+
+function polygonSelfIntersects(points: Vec2[]): boolean {
+  if (points.length < 4) return false;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    for (let j = i + 1; j < points.length; j++) {
+      if (Math.abs(i - j) <= 1 || (i === 0 && j === points.length - 1)) continue;
+      const c = points[j], d = points[(j + 1) % points.length];
+      if (segmentsIntersect(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
+
+export function boundaryProfile(tumor: TumorInput, axis: Vec3, perp: Vec3, unitsPerMm: number): AnyRecord | null {
+  const boundary = (tumor.boundary || [])
+    .filter((p: unknown) => Array.isArray(p) && p.length === 3)
+    .map((p: number[]) => p.map(Number) as Vec3);
+  if (boundary.length < 3 || !(unitsPerMm > 0)) return null;
+  const center = boundary.reduce((acc, p) => add(acc, p), [0, 0, 0] as Vec3).map((v) => v / boundary.length) as Vec3;
+  const centroidProjected = boundary.map((p) => {
+    const d = sub(p, center);
+    return [dot(d, axis), dot(d, perp)] as Vec2;
+  });
+  const minAxis = Math.min(...centroidProjected.map((point) => point[0]));
+  const maxAxis = Math.max(...centroidProjected.map((point) => point[0]));
+  const minPerp = Math.min(...centroidProjected.map((point) => point[1]));
+  const maxPerp = Math.max(...centroidProjected.map((point) => point[1]));
+  const selectedCenterProjected = boundary.map((point) => {
+    const delta = sub(point, tumor.center);
+    return [dot(delta, axis), dot(delta, perp)] as Vec2;
+  });
+  const envelopeCenter = add(
+    add(center, mul(axis, (minAxis + maxAxis) / 2)),
+    mul(perp, (minPerp + maxPerp) / 2),
+  );
+  const projected = projectToAxisPlane(boundary, envelopeCenter, axis, perp);
+  const areaMm2 = polygonArea(projected) / (unitsPerMm * unitsPerMm);
+  const nominalDiskAreaMm2 = Math.PI * (tumor.diameter_mm * 0.5) ** 2;
+  return {
+    point_count: boundary.length,
+    center,
+    envelope_center: envelopeCenter,
+    axis_diameter_mm: (maxAxis - minAxis) / unitsPerMm,
+    perp_diameter_mm: (maxPerp - minPerp) / unitsPerMm,
+    selected_center_axis_diameter_mm: 2 * Math.max(...selectedCenterProjected.map((point) => Math.abs(point[0]))) / unitsPerMm,
+    selected_center_perp_diameter_mm: 2 * Math.max(...selectedCenterProjected.map((point) => Math.abs(point[1]))) / unitsPerMm,
+    area_mm2: areaMm2,
+    area_ratio_to_diameter_disk: areaMm2 / Math.max(nominalDiskAreaMm2, 1e-9),
+    self_intersection: polygonSelfIntersects(projected),
+    center_shift_mm: Math.hypot(...sub(center, tumor.center)) / unitsPerMm,
+    envelope_center_shift_mm: Math.hypot(...sub(envelopeCenter, tumor.center)) / unitsPerMm,
+  };
+}
+
+function hermiteHalfWidth(u: number, tipSlope: number): number {
+  return (tipSlope - 2) * u ** 3 + (3 - 2 * tipSlope) * u ** 2 + tipSlope * u;
+}
+
+export function fusiformProfile(
+  center: Vec3,
+  axis: Vec3,
+  perp: Vec3,
+  halfL: number,
+  halfW: number,
+  samples: number,
+  tipAngleDeg: number,
+): { upper: Vec3[]; lower: Vec3[]; metrics: AnyRecord } {
+  if (!(halfL > 1e-9) || !(halfW > 1e-9)) throw new Error("fusiform profile requires positive length and width");
+  const ratio = halfL / halfW;
+  const targetAngle = clamp(Number(tipAngleDeg || 30), 8, 75);
+  const targetSlope = Math.tan((targetAngle / 2) * Math.PI / 180);
+  const requestedShapeSlope = ratio * targetSlope;
+  const shapeSlope = Math.min(requestedShapeSlope, 2.95);
+  const actualSlope = shapeSlope / ratio;
+  const actualAngle = Math.atan(actualSlope) * 2 * 180 / Math.PI;
+  const upper: Vec3[] = [], lower: Vec3[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const x = (t - 0.5) * 2 * halfL;
+    const u = t <= 0.5 ? 2 * t : 2 * (1 - t);
+    const y = hermiteHalfWidth(u, shapeSlope) * halfW;
+    upper.push(add(add(center, mul(axis, x)), mul(perp, y)));
+    lower.push(add(add(center, mul(axis, x)), mul(perp, -y)));
+  }
+  return {
+    upper,
+    lower,
+    metrics: {
+      profile: "cubic_hermite_tip_angle_constrained",
+      tip_angle_target_deg: targetAngle,
+      tip_angle_estimated_deg: actualAngle,
+      tip_angle_error_deg: Math.abs(actualAngle - targetAngle),
+      tip_angle_limited_by_ratio: shapeSlope < requestedShapeSlope,
+    },
+  };
+}
+
+function projectToAxisPlane(points: Vec3[], center: Vec3, axis: Vec3, perp: Vec3): Vec2[] {
+  return points.map((p) => {
+    const d = sub(p, center);
+    return [dot(d, axis), dot(d, perp)];
+  });
+}
+
+function interpolateHalfWidth(x: number, profile: Vec2[]): number {
+  if (x < profile[0][0]) return -(profile[0][0] - x);
+  if (x > profile[profile.length - 1][0]) return -(x - profile[profile.length - 1][0]);
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[i], b = profile[i + 1];
+    if (a[0] <= x && x <= b[0]) {
+      const span = b[0] - a[0];
+      const t = Math.abs(span) > 1e-12 ? (x - a[0]) / span : 0;
+      return Math.abs(a[1]) + (Math.abs(b[1]) - Math.abs(a[1])) * t;
+    }
+  }
+  return 0;
+}
+
+function fixedRatioContainmentFit({
+  tumor,
+  lesionCenter,
+  axis,
+  perp,
+  unitsPerMm,
+  initialWidthMm,
+  ratio,
+  minLengthMm,
+  maxLengthMm,
+  samples,
+  tipAngleDeg,
+  fixedCenter,
+}: {
+  tumor: TumorInput;
+  lesionCenter: Vec3;
+  axis: Vec3;
+  perp: Vec3;
+  unitsPerMm: number;
+  initialWidthMm: number;
+  ratio: number;
+  minLengthMm: number;
+  maxLengthMm: number;
+  samples: number;
+  tipAngleDeg: number;
+  fixedCenter?: Vec3 | null;
+}): { center: Vec3; widthMm: number; feasible: boolean; iterations: number } {
+  const boundary = tumor.boundary || [];
+  const maximumWidthMm = Math.max(1e-3, maxLengthMm / ratio);
+  const minimumWidthMm = Math.min(
+    maximumWidthMm,
+    Math.max(minLengthMm / ratio, 1e-3),
+  );
+  if (boundary.length < 3) {
+    return { center: lesionCenter, widthMm: Math.min(maximumWidthMm, Math.max(initialWidthMm, minimumWidthMm)), feasible: true, iterations: 0 };
+  }
+
+  const projected = boundary.map((point) => {
+    const delta = sub(point, lesionCenter);
+    return [dot(delta, axis), dot(delta, perp)] as Vec2;
+  });
+  const xs = projected.map((point) => point[0]);
+  const ys = projected.map((point) => point[1]);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const marginUnits = Math.max(0, tumor.margin_mm) * unitsPerMm;
+  let iterations = 0;
+  const targetAngle = clamp(Number(tipAngleDeg || 30), 8, 75);
+  const targetSlope = Math.tan((targetAngle / 2) * Math.PI / 180);
+  const shapeSlope = Math.min(ratio * targetSlope, 2.95);
+  // Fit the same sampled outline that is rendered and checked downstream.
+  // An analytic curve can enclose points that fall outside its chord segments.
+  const profileWidths = Array.from({ length: samples + 1 }, (_, i) => {
+    const t = i / samples;
+    return hermiteHalfWidth(t <= 0.5 ? 2 * t : 2 * (1 - t), shapeSlope);
+  });
+
+  const fits = (centerX: number, centerY: number, widthMm: number): boolean => {
+    const halfW = widthMm * unitsPerMm * 0.5;
+    const halfL = halfW * ratio;
+    iterations += 1;
+    return projected.every(([x, y]) => {
+      const localX = x - centerX;
+      if (Math.abs(localX) + marginUnits > halfL + 1e-7) return false;
+      const samplePosition = clamp((localX / halfL + 1) * 0.5 * samples, 0, samples);
+      const index = Math.min(samples - 1, Math.floor(samplePosition));
+      const fraction = samplePosition - index;
+      const availableHalfWidth = (profileWidths[index]
+        + (profileWidths[index + 1] - profileWidths[index]) * fraction) * halfW;
+      return availableHalfWidth >= Math.abs(y - centerY) + marginUnits;
+    });
+  };
+
+  const requiredWidthAt = (centerX: number, centerY: number): { widthMm: number; feasible: boolean } => {
+    if (!fits(centerX, centerY, maximumWidthMm)) return { widthMm: maximumWidthMm, feasible: false };
+    if (fits(centerX, centerY, minimumWidthMm)) return { widthMm: minimumWidthMm, feasible: true };
+    let low = minimumWidthMm;
+    let high = maximumWidthMm;
+    for (let index = 0; index < 24; index += 1) {
+      const middle = (low + high) * 0.5;
+      if (fits(centerX, centerY, middle)) high = middle;
+      else low = middle;
+    }
+    return { widthMm: high + 1e-6, feasible: true };
+  };
+
+  if (fixedCenter) {
+    const fixedDelta = sub(fixedCenter, lesionCenter);
+    const fixedX = dot(fixedDelta, axis);
+    const fixedY = dot(fixedDelta, perp);
+    const fixedFit = requiredWidthAt(fixedX, fixedY);
+    return { center: fixedCenter, widthMm: fixedFit.widthMm, feasible: fixedFit.feasible, iterations };
+  }
+
+  let best = { x: 0, y: 0, widthMm: maximumWidthMm, feasible: false };
+  const consider = (x: number, y: number) => {
+    const fit = requiredWidthAt(x, y);
+    const shift = Math.hypot(x, y);
+    const bestShift = Math.hypot(best.x, best.y);
+    if ((fit.feasible && !best.feasible)
+      || (fit.feasible === best.feasible && fit.widthMm < best.widthMm - 1e-6)
+      || (fit.feasible === best.feasible && Math.abs(fit.widthMm - best.widthMm) <= 1e-6 && shift < bestShift)) {
+      best = { x, y, ...fit };
+    }
+  };
+
+  consider(0, 0);
+  consider((xMin + xMax) * 0.5, (yMin + yMax) * 0.5);
+  let searchMinX = xMin, searchMaxX = xMax;
+  let searchMinY = yMin, searchMaxY = yMax;
+  for (let level = 0; level < 12; level += 1) {
+    const xStep = (searchMaxX - searchMinX) / 4;
+    const yStep = (searchMaxY - searchMinY) / 4;
+    for (let xi = 0; xi <= 4; xi += 1) {
+      for (let yi = 0; yi <= 4; yi += 1) {
+        consider(searchMinX + xStep * xi, searchMinY + yStep * yi);
+      }
+    }
+    searchMinX = best.x - xStep;
+    searchMaxX = best.x + xStep;
+    searchMinY = best.y - yStep;
+    searchMaxY = best.y + yStep;
+  }
+
+  return {
+    center: add(add(lesionCenter, mul(axis, best.x)), mul(perp, best.y)),
+    widthMm: best.widthMm,
+    feasible: best.feasible,
+    iterations,
+  };
+}
+
+export function outlineQualityMetrics({
+  upper,
+  lower,
+  outline,
+  tumor,
+  center,
+  axis,
+  perp,
+  unitsPerMm,
+  boundaryUsed,
+}: {
+  upper: Vec3[];
+  lower: Vec3[];
+  outline: Vec3[];
+  tumor: Pick<TumorInput, "boundary"> & AnyRecord;
+  center: Vec3;
+  axis: Vec3;
+  perp: Vec3;
+  unitsPerMm: number;
+  boundaryUsed: boolean;
+}): AnyRecord {
+  if (!(unitsPerMm > 0)) return {};
+  const upperProjected = projectToAxisPlane(upper, center, axis, perp);
+  const lowerProjected = projectToAxisPlane(lower, center, axis, perp);
+  const outlineProjected = projectToAxisPlane(outline, center, axis, perp);
+  const widths = upperProjected.map((p) => Math.abs(p[1]));
+  const mid = Math.floor(widths.length / 2);
+  const eps = 1e-7;
+  let monotone = true;
+  for (let i = 0; i < mid; i++) if (widths[i] > widths[i + 1] + eps) monotone = false;
+  for (let i = mid; i < widths.length - 1; i++) if (widths[i] < widths[i + 1] - eps) monotone = false;
+  let symmetryMax = 0;
+  for (let i = 0; i < upperProjected.length; i++) {
+    symmetryMax = Math.max(
+      symmetryMax,
+      Math.hypot(upperProjected[i][0] - lowerProjected[i][0], upperProjected[i][1] + lowerProjected[i][1]),
+    );
+  }
+  let boundaryEnvelopeMinMarginMm = null;
+  let boundaryEnvelopeOutsideCount = 0;
+  if (boundaryUsed && Array.isArray(tumor.boundary) && tumor.boundary.length >= 3) {
+    const boundaryProjected = projectToAxisPlane(tumor.boundary, center, axis, perp);
+    const margins = boundaryProjected.map(([x, y]) => (interpolateHalfWidth(x, upperProjected) - Math.abs(y)) / unitsPerMm);
+    if (margins.length) {
+      boundaryEnvelopeMinMarginMm = Math.min(...margins);
+      boundaryEnvelopeOutsideCount = margins.filter((margin) => margin < -1e-6).length;
+    }
+  }
+  return {
+    outline_area_mm2: polygonArea(outlineProjected) / (unitsPerMm * unitsPerMm),
+    outline_self_intersection: polygonSelfIntersects(outlineProjected),
+    outline_half_width_monotone: monotone,
+    outline_symmetry_max_error_mm: symmetryMax / unitsPerMm,
+    boundary_envelope_min_margin_mm: boundaryEnvelopeMinMarginMm,
+    boundary_envelope_outside_count: boundaryEnvelopeOutsideCount,
+  };
+}
+
+export function summarizeTumorBoundary(
+  tumorInput: Partial<TumorInput> & AnyRecord,
+  axis: Vec3 = [1, 0, 0],
+  normal: Vec3 = [0, 0, 1],
+  unitsPerMm = 1,
+): AnyRecord {
+  const tumor = validateTumor(tumorInput);
+  const a = norm(axis);
+  const n = norm(normal);
+  const perp = tangentPerp(a, normal);
+  const profile = boundaryProfile(tumor, a, perp, unitsPerMm);
+  const warnings = [];
+  if (tumor.kind === "cutaneous" && tumor.boundary_mode === "freehand" && tumor.boundary.length < 6) {
+    warnings.push({ code: "few_boundary_points", severity: "medium", message: "Freehand lesion boundary has fewer than 6 points." });
+  }
+  if (!profile) {
+    return {
+      mode: tumor.boundary_mode,
+      source: tumor.boundary_source,
+      point_count: tumor.boundary.length,
+      boundary_used: false,
+      warnings,
+    };
+  }
+  const ratio = profile.perp_diameter_mm > 1e-6 ? profile.axis_diameter_mm / profile.perp_diameter_mm : Infinity;
+  if (profile.center_shift_mm > Math.max(tumor.diameter_mm, 1)) {
+    warnings.push({ code: "boundary_center_shift", severity: "medium", message: "Boundary centroid is far from selected tumor center." });
+  }
+  return {
+    mode: tumor.boundary_mode,
+    source: tumor.boundary_source,
+    point_count: profile.point_count,
+    boundary_used: true,
+    units_per_mm: unitsPerMm,
+    summary_axis: a,
+    summary_normal: n,
+    center: profile.center,
+    axis_diameter_mm: profile.axis_diameter_mm,
+    perp_diameter_mm: profile.perp_diameter_mm,
+    area_mm2: profile.area_mm2,
+    area_ratio_to_diameter_disk: profile.area_ratio_to_diameter_disk,
+    self_intersection: profile.self_intersection,
+    center_shift_mm: profile.center_shift_mm,
+    aspect_ratio: ratio,
+    warnings,
+  };
+}
+
+export function generateFusiformIncision(
+  tumorInput: Partial<TumorInput> & AnyRecord,
+  direction: Partial<DirectionResult> & AnyRecord,
+  unitsPerMm: number,
+  normal: Vec3 = [0, 0, 1],
+  rules: IncisionRules = DEFAULT_RULES,
+  fixedCenter: Vec3 | null = null,
+): IncisionCandidate {
+  const tumor = validateTumor(tumorInput);
+  if (tumor.kind !== "cutaneous") throw new Error("fusiform incision requires cutaneous tumor");
+  const cfg = rules.fusiform_cutaneous;
+  const axis = norm(direction.vector || [1, 0, 0]);
+  const perp = tangentPerp(axis, normal);
+  const lesionNormalization = normalizePlanningLesion(tumor, unitsPerMm, normal);
+  const planningDiameterMm = lesionNormalization.planning_diameter_mm;
+  const equivalentAreaReferenceDiameterMm = Number(lesionNormalization.detected_equivalent_diameter_mm);
+  const referenceCircleDiameterMm = lesionNormalization.applied
+    && Number.isFinite(equivalentAreaReferenceDiameterMm)
+    && equivalentAreaReferenceDiameterMm > 0
+    ? equivalentAreaReferenceDiameterMm
+    : planningDiameterMm;
+  const lesionCenter = lesionNormalization.planning_center;
+  // Fit the actual boundary; the equal-area circle is only a size reference,
+  // never a lower bound on the final width or a replacement for that boundary.
+  const planningBoundary = tumor.boundary;
+  const planningTumor = lesionNormalization.applied
+    ? { ...tumor, diameter_mm: planningDiameterMm, boundary: planningBoundary }
+    : tumor;
+  const boundary = boundaryProfile(planningTumor, axis, perp, unitsPerMm);
+  const boundaryDrivesCandidateGeometry = lesionNormalization.applied && Boolean(boundary);
+  const fixedRatio = Math.max(1, Number(cfg.length_to_width_ratio || 3));
+  const samples = Math.max(12, cfg.samples || 56);
+  const initialWidthMm = referenceCircleDiameterMm + 2 * tumor.margin_mm;
+  const fit = fixedRatioContainmentFit({
+    tumor: boundaryDrivesCandidateGeometry
+      ? planningTumor
+      : { ...planningTumor, boundary: [] },
+    lesionCenter,
+    axis,
+    perp,
+    unitsPerMm,
+    initialWidthMm,
+    ratio: fixedRatio,
+    minLengthMm: Number(cfg.min_length_mm || 0),
+    maxLengthMm: Number(cfg.max_length_mm || 80),
+    samples,
+    tipAngleDeg: cfg.tip_angle_deg,
+    fixedCenter,
+  });
+  const center = fit.center;
+  const widthMm = fit.widthMm;
+  const lengthMm = widthMm * fixedRatio;
+  const profile = fusiformProfile(
+    center, axis, perp,
+    lengthMm * unitsPerMm * 0.5,
+    widthMm * unitsPerMm * 0.5,
+    samples, cfg.tip_angle_deg,
+  );
+  const upper = profile.upper;
+  const lower = profile.lower;
+  const outline = upper.concat(lower.slice(1, -1).reverse());
+  const outlineMetrics = outlineQualityMetrics({
+    upper,
+    lower,
+    outline,
+    tumor: planningTumor,
+    center,
+    axis,
+    perp,
+    unitsPerMm,
+    boundaryUsed: boundaryDrivesCandidateGeometry,
+  });
+  const boundaryProjectedAtCenter = boundaryDrivesCandidateGeometry
+    ? projectToAxisPlane(planningTumor.boundary, center, axis, perp)
+    : [];
+  const axisCoverageMm = boundaryProjectedAtCenter.length
+    ? 2 * Math.max(...boundaryProjectedAtCenter.map(([x]) => Math.abs(x))) / unitsPerMm + 2 * tumor.margin_mm
+    : planningDiameterMm + 2 * tumor.margin_mm;
+  const ratioLengthMm = referenceCircleDiameterMm * fixedRatio;
+  const targetLengthMm = initialWidthMm * fixedRatio;
+  const halfL = lengthMm * unitsPerMm * 0.5;
+  const axisCoverageDeficitMm = Math.max(0, axisCoverageMm - lengthMm);
+  return {
+    id: "fusiform_cutaneous_candidate",
+    type: "fusiform",
+    tumor_kind: tumor.kind,
+    center,
+    axis,
+    width_axis: perp,
+    endpoints: [sub(center, mul(axis, halfL)), add(center, mul(axis, halfL))],
+    outline,
+    polyline: outline.concat([outline[0]]),
+    length_mm: lengthMm,
+    width_mm: widthMm,
+    length_units: lengthMm * unitsPerMm,
+    width_units: widthMm * unitsPerMm,
+    tip_angle_deg: profile.metrics.tip_angle_estimated_deg,
+    direction_confidence: direction.confidence,
+    metrics: {
+      rstl_deviation_deg: 0,
+      length_to_width_ratio: lengthMm / widthMm,
+      ...profile.metrics,
+      diameter_mm: planningDiameterMm,
+      operator_diameter_mm: tumor.diameter_mm,
+      margin_mm: tumor.margin_mm,
+      length_target_mm: targetLengthMm,
+      boundary_envelope_length_expansion_iterations: fit.iterations,
+      boundary_envelope_length_expanded: lengthMm > targetLengthMm + 1e-6,
+      boundary_envelope_width_expansion_iterations: fit.iterations,
+      boundary_envelope_width_expanded: widthMm > initialWidthMm + 1e-6,
+      length_ratio_target_mm: ratioLengthMm,
+      length_ratio_basis_mm: referenceCircleDiameterMm,
+      length_ratio_basis: "equivalent_area_reference_circle_diameter",
+      equivalent_area_reference_circle_diameter_mm: referenceCircleDiameterMm,
+      clinical_ratio_basis_status: "confirmed_equivalent_area_reference_circle",
+      fixed_length_to_width_ratio: fixedRatio,
+      fixed_ratio_containment_feasible: fit.feasible,
+      fixed_ratio_search_iterations: fit.iterations,
+      lesion_center: lesionCenter,
+      candidate_center_shift_mm: Math.hypot(...sub(center, lesionCenter)) / unitsPerMm,
+      axis_coverage_required_mm: axisCoverageMm,
+      axis_coverage_deficit_mm: axisCoverageDeficitMm,
+      length_clamped_by_min: lengthMm <= Number(cfg.min_length_mm || 0) + 1e-6,
+      length_clamped_by_max: lengthMm >= Number(cfg.max_length_mm || 80) - 1e-6,
+      boundary_used: Boolean(boundary),
+      boundary_drives_candidate_geometry: boundaryDrivesCandidateGeometry,
+      boundary_scale_shape: boundaryDrivesCandidateGeometry
+        ? "directional_extents"
+        : "operator_diameter",
+      lesion_normalization_schema: lesionNormalization.schema,
+      lesion_normalization_applied: lesionNormalization.applied,
+      lesion_normalization_status: lesionNormalization.status,
+      lesion_boundary_role: lesionNormalization.boundary_role,
+      detected_lesion_area_mm2: lesionNormalization.detected_area_mm2,
+      detected_equivalent_diameter_mm: lesionNormalization.detected_equivalent_diameter_mm,
+      detected_enclosing_diameter_mm: lesionNormalization.detected_enclosing_diameter_mm,
+      photo_boundary_enclosing_diameter_mm: lesionNormalization.photo_boundary_enclosing_diameter_mm,
+      detected_lesion_compactness: lesionNormalization.detected_compactness,
+      detected_boundary_centroid: lesionNormalization.detected_centroid,
+      detected_center_shift_mm: lesionNormalization.detected_center_shift_mm,
+      detected_to_planning_diameter_ratio: lesionNormalization.detected_to_planning_diameter_ratio,
+      planning_diameter_mm: lesionNormalization.planning_diameter_mm,
+      clinical_scale_source: lesionNormalization.clinical_scale_source,
+      clinical_scale_status: lesionNormalization.clinical_scale_status,
+      boundary_point_count: boundary?.point_count || tumor.boundary.length,
+      boundary_axis_diameter_mm: boundary?.axis_diameter_mm || null,
+      boundary_perp_diameter_mm: boundary?.perp_diameter_mm || null,
+      boundary_selected_center_axis_diameter_mm: boundary?.selected_center_axis_diameter_mm || null,
+      boundary_selected_center_perp_diameter_mm: boundary?.selected_center_perp_diameter_mm || null,
+      boundary_area_mm2: boundary?.area_mm2 || null,
+      boundary_area_ratio_to_diameter_disk: boundary?.area_ratio_to_diameter_disk || null,
+      boundary_self_intersection: Boolean(boundary?.self_intersection),
+      boundary_center_shift_mm: boundary?.center_shift_mm || null,
+      boundary_envelope_center_shift_mm: boundary?.envelope_center_shift_mm || null,
+      ...outlineMetrics,
+    },
+    provenance: {
+      generator: "generateFusiformIncision",
+      rules_version: rules.version,
+      boundary_source: tumor.boundary_source,
+      lesion_normalization_schema: lesionNormalization.schema,
+      lesion_normalization_status: lesionNormalization.status,
+      candidate_version: 1,
+      edit_history: [],
+      ...directionProvenance(direction),
+    },
+  };
+}
+
+function asLandmarkNames(value: unknown): string[] {
+  if (value == null) return [];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  return [String(value)];
+}
+
+export function freeMarginDistanceThresholdMm(landmarks: unknown, cfg: AnyRecord, fallbackRegion = "unknown"): number {
+  const fallback = Number(cfg?.free_margin_distance_warn_mm ?? 18);
+  const thresholds = cfg?.free_margin_distance_thresholds_mm || {};
+  const defaultThreshold = Number(thresholds.default ?? fallback);
+  const names = asLandmarkNames(landmarks);
+  if (!names.length) names.push(fallbackRegion);
+
+  const matched = [];
+  for (const name of names) {
+    const normalized = String(name).toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(thresholds, normalized)) {
+      const threshold = Number(thresholds[normalized]);
+      if (Number.isFinite(threshold)) matched.push(threshold);
+      continue;
+    }
+    for (const [key, rawThreshold] of Object.entries(thresholds)) {
+      const normalizedKey = String(key).toLowerCase();
+      if (normalizedKey !== "default" && normalizedKey && normalized.includes(normalizedKey)) {
+        const threshold = Number(rawThreshold);
+        if (Number.isFinite(threshold)) matched.push(threshold);
+        break;
+      }
+    }
+  }
+
+  return matched.length ? Math.max(...matched) : defaultThreshold;
+}
+
+function protectiveDirectionRule(names: unknown, cfg: AnyRecord, fallbackRegion = "unknown"): [string, AnyRecord] | null {
+  const rules = cfg?.protective_direction_hints || {};
+  const candidates = asLandmarkNames(names).concat([fallbackRegion]);
+  for (const name of candidates) {
+    const normalized = String(name).toLowerCase();
+    if (rules[normalized]) return [normalized, rules[normalized]];
+    for (const [key, rule] of Object.entries(rules as AnyRecord)) {
+      const normalizedKey = String(key).toLowerCase();
+      if (normalizedKey && normalized.includes(normalizedKey)) return [normalizedKey, rule as AnyRecord];
+    }
+  }
+  return null;
+}
+
+function protectiveDirectionSummary(cfg: AnyRecord, names: unknown, fallbackRegion: string, source: string): AnyRecord | null {
+  const match = protectiveDirectionRule(names, cfg, fallbackRegion);
+  if (!match) return null;
+  const [structure, rule] = match;
+  return {
+    structure,
+    source,
+    direction_hint: rule.direction_hint || "manual_sensitive_margin_axis",
+    canonical_axis: rule.canonical_axis || null,
+    reason: rule.reason || "应优先保护敏感游离缘，再参考局部皮纹线。",
+    requires_clinician_override_reason: true,
+    priority: "sensitive_margin_exception_before_rstl",
+  };
+}
+
+export function inspectSensitiveStructures(anatomy: AnyRecord, candidate: IncisionCandidate | null = null, rules: IncisionRules = DEFAULT_RULES): AnyRecord {
+  const cfg = rules.guardrails;
+  const region = anatomy?.region || "unknown";
+  const nearby = Array.isArray(anatomy?.nearby_landmarks) ? anatomy.nearby_landmarks : [];
+  const centerDistance = anatomy?.free_margin_distance_mm ?? null;
+  const centerThreshold = freeMarginDistanceThresholdMm(nearby, cfg, region);
+  const metrics = candidate?.metrics || {};
+  const candidateDistance = metrics.sensitive_free_margin_min_distance_mm ?? null;
+  const candidateNearest = metrics.sensitive_free_margin_nearest ?? null;
+  const candidateThreshold = freeMarginDistanceThresholdMm(candidateNearest || nearby, cfg, region);
+  const warnings: AnyRecord[] = [];
+  let protectiveNames = nearby;
+  let protectiveSource = "nearby_sensitive_free_margin";
+  if (cfg.sensitive_regions[region]) {
+    warnings.push({ code: `sensitive_region_${region}`, severity: "high", message: cfg.sensitive_regions[region] });
+    protectiveNames = region;
+    protectiveSource = `sensitive_region_${region}`;
+  }
+  if (centerDistance != null && Number(centerDistance) <= centerThreshold) {
+    warnings.push({
+      code: "near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate center is ${Number(centerDistance).toFixed(1)} mm from sensitive free-margin structures (threshold ${centerThreshold.toFixed(1)} mm).`,
+    });
+    protectiveSource = "near_sensitive_free_margin";
+  }
+  if (candidateDistance != null && Number(candidateDistance) <= candidateThreshold) {
+    warnings.push({
+      code: "candidate_near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate geometry is ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin structures (threshold ${candidateThreshold.toFixed(1)} mm).`,
+    });
+    protectiveNames = candidateNearest || protectiveNames;
+    protectiveSource = "candidate_near_sensitive_free_margin";
+  }
+  return {
+    schema_version: "sensitive-structure-inspection/v0.1",
+    region,
+    subunit: anatomy?.subunit || "unknown",
+    sensitive_region: Boolean(anatomy?.sensitive) || Boolean(cfg.sensitive_regions[region]),
+    nearby_landmarks: nearby,
+    center_free_margin_distance_mm: centerDistance,
+    center_free_margin_threshold_mm: centerThreshold,
+    center_within_threshold: centerDistance != null && Number(centerDistance) <= centerThreshold,
+    candidate_free_margin_distance_mm: candidateDistance,
+    candidate_free_margin_nearest: candidateNearest,
+    candidate_free_margin_threshold_mm: candidateDistance != null ? candidateThreshold : null,
+    candidate_within_threshold: candidateDistance != null && Number(candidateDistance) <= candidateThreshold,
+    warning_count: warnings.length,
+    warnings,
+    protective_direction: protectiveDirectionSummary(cfg, protectiveNames, region, protectiveSource),
+    clinician_review_required: true,
+    clinical_boundary: "敏感结构检查只是确定性筛查观察；医生审阅和 guardrails 仍然必需。",
+  };
+}
+
+function appendProtectiveDirectionOverride(
+  suggestedOverrides: AnyRecord[],
+  cfg: AnyRecord,
+  names: unknown,
+  fallbackRegion: string,
+  sourceWarning: string,
+): void {
+  const match = protectiveDirectionRule(names, cfg, fallbackRegion);
+  if (!match) return;
+  const [structure, rule] = match;
+  if (suggestedOverrides.some((item) => item.kind === "protective_direction" && item.structure === structure)) {
+    return;
+  }
+  suggestedOverrides.push({
+    kind: "protective_direction",
+    structure,
+    source_warning: sourceWarning,
+    direction_hint: rule.direction_hint || "manual_sensitive_margin_axis",
+    canonical_axis: rule.canonical_axis || null,
+    reason: rule.reason || "应优先保护敏感游离缘，再参考局部皮纹线。",
+    requires_clinician_override_reason: true,
+    priority: "sensitive_margin_exception_before_rstl",
+  });
+}
+
+export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRecord, rules: IncisionRules = DEFAULT_RULES): AnyRecord {
+  const cfg = rules.guardrails;
+  const warnings: AnyRecord[] = [], suggested_overrides: AnyRecord[] = [];
+  const hardViolations = Array.isArray(candidate.hard_violations) ? candidate.hard_violations : [];
+  if ((candidate.direction_confidence || 0) < cfg.low_direction_confidence) {
+    const reasons = candidate.provenance?.direction_confidence_reasons || [];
+    warnings.push({
+      code: "low_rstl_confidence",
+      severity: "medium",
+      message: `局部皮纹线方向置信度较低，需人工确认${reasons.length ? ` (${reasons.join(", ")}).` : "."}`,
+    });
+  }
+  if ((anatomy.confidence || 0) < cfg.low_region_confidence) {
+    const reasons = anatomy.confidence_reasons || [];
+    warnings.push({
+      code: "low_region_confidence",
+      severity: "medium",
+      message: `Face region classification is low confidence; require clinician review${reasons.length ? ` (${reasons.join(", ")}).` : "."}`,
+    });
+  }
+  if (cfg.sensitive_regions[anatomy.region]) {
+    warnings.push({ code: `sensitive_region_${anatomy.region}`, severity: "high", message: cfg.sensitive_regions[anatomy.region] });
+    suggested_overrides.push({ kind: "manual_direction_confirmation", reason: `${anatomy.region} is a sensitive free-margin region.` });
+    appendProtectiveDirectionOverride(
+      suggested_overrides,
+      cfg,
+      anatomy.region,
+      anatomy.region,
+      `sensitive_region_${anatomy.region}`,
+    );
+  }
+  const centerThreshold = freeMarginDistanceThresholdMm(anatomy.nearby_landmarks, cfg, anatomy.region);
+  if (anatomy.free_margin_distance_mm != null && Number(anatomy.free_margin_distance_mm) <= centerThreshold) {
+    warnings.push({
+      code: "near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate center is approximately ${Number(anatomy.free_margin_distance_mm).toFixed(1)} mm from sensitive free-margin landmark(s): ${(anatomy.nearby_landmarks || []).join(", ") || anatomy.region} (threshold ${centerThreshold.toFixed(1)} mm).`,
+    });
+    suggested_overrides.push({ kind: "free_margin_distance_review", reason: "Confirm functional and contour risk before accepting this direction." });
+    appendProtectiveDirectionOverride(
+      suggested_overrides,
+      cfg,
+      anatomy.nearby_landmarks,
+      anatomy.region,
+      "near_sensitive_free_margin",
+    );
+  }
+  const candidateDistance = candidate.metrics?.sensitive_free_margin_min_distance_mm;
+  const diameterCoverageDeficit = Number(candidate.metrics?.diameter_coverage_deficit_mm || 0);
+  if (candidate.type === "linear" && diameterCoverageDeficit > 1e-6) {
+    const required = candidate.metrics?.diameter_coverage_required_mm;
+    warnings.push({
+      code: "linear_diameter_coverage_deficit",
+      severity: "high",
+      message: `Linear candidate is shorter than the recorded subcutaneous lesion diameter by ${diameterCoverageDeficit.toFixed(1)} mm${required != null ? ` (required ${Number(required).toFixed(1)} mm).` : "."}`,
+    });
+    suggested_overrides.push({
+      kind: "linear_length_or_access_review",
+      reason: "Increase incision length, confirm a smaller imaging diameter, or record an explicit clinician access decision.",
+    });
+  }
+  if (candidate.type === "fusiform" && candidate.metrics?.boundary_used) {
+    const boundaryPoints = Number(candidate.metrics?.boundary_point_count || 0);
+    const minPoints = Number(cfg.min_freehand_boundary_points || 6);
+    if (boundaryPoints > 0 && boundaryPoints < minPoints) {
+      warnings.push({
+        code: "cutaneous_boundary_too_few_points",
+        severity: "medium",
+        message: `Cutaneous lesion boundary has ${boundaryPoints} point(s); ${minPoints} or more are recommended before review.`,
+      });
+      suggested_overrides.push({
+        kind: "redraw_cutaneous_boundary",
+        reason: "Add more lesion boundary points or use ellipse mode before accepting this candidate.",
+      });
+    }
+
+    if (candidate.metrics?.boundary_self_intersection) {
+      warnings.push({
+        code: "cutaneous_boundary_self_intersection",
+        severity: "high",
+        message: "Cutaneous lesion boundary self-intersects; redraw a simple closed contour.",
+      });
+      suggested_overrides.push({
+        kind: "redraw_cutaneous_boundary",
+        reason: "Self-intersecting lesion contours cannot be treated as valid excision boundaries.",
+      });
+    }
+
+    const areaRatio = candidate.metrics?.boundary_area_ratio_to_diameter_disk;
+    const minAreaRatio = Number(cfg.min_boundary_area_diameter_disk_fraction || 0.08);
+    if (areaRatio != null && Number(areaRatio) < minAreaRatio) {
+      const area = candidate.metrics?.boundary_area_mm2;
+      warnings.push({
+        code: "cutaneous_boundary_degenerate_area",
+        severity: "high",
+        message: `Cutaneous lesion boundary encloses too little projected area (ratio ${Number(areaRatio).toFixed(3)}${area != null ? `, area ${Number(area).toFixed(1)} mm^2` : ""}); redraw the lesion contour.`,
+      });
+      suggested_overrides.push({
+        kind: "redraw_cutaneous_boundary",
+        reason: "Boundary points are nearly collinear or do not enclose the selected lesion.",
+      });
+    }
+
+    const centerShift = candidate.metrics?.boundary_center_shift_mm;
+    const lesionDiameter = Number(
+      candidate.metrics?.clinical_scale_source === "manual_freehand_enclosing_circle"
+        ? candidate.metrics?.detected_equivalent_diameter_mm
+          ?? candidate.metrics?.boundary_axis_diameter_mm
+          ?? candidate.metrics?.diameter_mm
+        : candidate.metrics?.diameter_mm,
+    );
+    const multiplier = Number(cfg.boundary_center_shift_diameter_multiplier || 1);
+    if (centerShift != null && lesionDiameter > 0) {
+      const threshold = Math.max(lesionDiameter * multiplier, 1e-6);
+      if (Number(centerShift) > threshold) {
+        warnings.push({
+          code: "cutaneous_boundary_center_shift",
+          severity: "high",
+          message: `Cutaneous lesion boundary centroid is ${Number(centerShift).toFixed(1)} mm from the selected tumor center (threshold ${threshold.toFixed(1)} mm).`,
+        });
+        suggested_overrides.push({
+          kind: "tumor_center_or_boundary_review",
+          reason: "Re-pick tumor center, redraw boundary, or record why the boundary is intentionally eccentric.",
+        });
+      }
+    }
+  }
+  if (candidate.type === "fusiform") {
+    if (candidate.metrics?.outline_self_intersection) {
+      warnings.push({
+        code: "fusiform_outline_self_intersection",
+        severity: "high",
+        message: "Fusiform candidate outline self-intersects; regenerate or edit the candidate.",
+      });
+      suggested_overrides.push({
+        kind: "fusiform_shape_review",
+        reason: "Self-intersecting fusiform outlines cannot be treated as valid candidates.",
+      });
+    }
+    if (candidate.metrics?.outline_half_width_monotone === false) {
+      warnings.push({
+        code: "fusiform_outline_not_smoothly_tapered",
+        severity: "high",
+        message: "Fusiform candidate does not taper smoothly from the widest point to both tips.",
+      });
+      suggested_overrides.push({
+        kind: "fusiform_shape_review",
+        reason: "Regenerate the candidate or adjust length/width/tip-angle before review.",
+      });
+    }
+    const outsideCount = Number(candidate.metrics?.boundary_envelope_outside_count || 0);
+    if (outsideCount > 0) {
+      const minMargin = candidate.metrics?.boundary_envelope_min_margin_mm;
+      warnings.push({
+        code: "fusiform_boundary_outside_envelope",
+        severity: "high",
+        message: `${outsideCount} cutaneous boundary point(s) fall outside the fusiform outline${minMargin != null ? ` (minimum envelope margin ${Number(minMargin).toFixed(1)} mm).` : "."}`,
+      });
+      suggested_overrides.push({
+        kind: "fusiform_boundary_envelope_review",
+        reason: "Increase candidate width/length, redraw boundary, or record an explicit clinician decision.",
+      });
+    }
+  }
+  const axisCoverageDeficit = Number(candidate.metrics?.axis_coverage_deficit_mm || 0);
+  if (candidate.type === "fusiform" && axisCoverageDeficit > 1e-6) {
+    const required = candidate.metrics?.axis_coverage_required_mm;
+    warnings.push({
+      code: "fusiform_axis_coverage_deficit",
+      severity: "high",
+      message: `Fusiform candidate is shorter than the lesion boundary plus margin coverage requirement by ${axisCoverageDeficit.toFixed(1)} mm${required != null ? ` (required ${Number(required).toFixed(1)} mm).` : "."}`,
+    });
+    suggested_overrides.push({
+      kind: "fusiform_length_or_margin_review",
+      reason: "Increase candidate length, reduce margin only with explicit clinician decision, or redraw boundary.",
+    });
+  }
+  const nearestSensitiveMargin = candidate.metrics?.sensitive_free_margin_nearest || anatomy.region;
+  const candidateThreshold = freeMarginDistanceThresholdMm(nearestSensitiveMargin, cfg, anatomy.region);
+  if (candidateDistance != null && Number(candidateDistance) <= candidateThreshold) {
+    warnings.push({
+      code: "candidate_near_sensitive_free_margin",
+      severity: "high",
+      message: `Candidate geometry is approximately ${Number(candidateDistance).toFixed(1)} mm from sensitive free-margin landmark: ${nearestSensitiveMargin} (threshold ${candidateThreshold.toFixed(1)} mm).`,
+    });
+    suggested_overrides.push({ kind: "candidate_free_margin_distance_review", reason: "Review the full candidate path/outline near sensitive free margins." });
+    appendProtectiveDirectionOverride(
+      suggested_overrides,
+      cfg,
+      nearestSensitiveMargin,
+      anatomy.region,
+      "candidate_near_sensitive_free_margin",
+    );
+  }
+  const typeCfg = candidate.type === "fusiform" ? rules.fusiform_cutaneous : rules.linear_subcutaneous;
+  const maxDeviation = Number(typeCfg?.max_rstl_deviation_deg ?? 15);
+  const deviation = Math.abs(Number(candidate.metrics?.rstl_deviation_deg || 0));
+  if (deviation > maxDeviation) {
+    const reason = candidate.provenance?.clinician_edit?.reason || "";
+    warnings.push({
+      code: "rstl_deviation_override",
+      severity: reason ? "medium" : "high",
+      message: reason
+        ? `长轴偏离局部皮纹线 ${deviation.toFixed(1)}°，已记录医生说明。`
+        : `长轴偏离局部皮纹线 ${deviation.toFixed(1)}°，请在审阅前记录原因。`,
+    });
+    if (!reason) suggested_overrides.push({ kind: "override_reason_required", reason: "候选长轴偏离局部皮纹线。" });
+  }
+  return {
+    passed: hardViolations.length === 0 && !warnings.some((w) => w.severity === "high"),
+    hard_violation_count: hardViolations.length,
+    hard_violations: hardViolations,
+    warnings,
+    suggested_overrides,
+    clinical_boundary: "Hard violations cover engineering-invalid geometry only; medical-sensitive findings remain clinician-review warnings.",
+  };
+}

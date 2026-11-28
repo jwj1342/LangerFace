@@ -9,7 +9,7 @@ import { useIncisionStore, type IncisionAssetLoadingState } from "../stores/inci
 
 const DEFAULT_ASSET_LOADING: IncisionAssetLoadingState = {
   visible: true,
-  text: "准备加载 MediaPipe 面部拓扑、个体化 RSTL 和切口规划资产。",
+  text: "准备加载 MediaPipe 面部拓扑、个体化皮纹线和切口规划资产。",
 };
 
 export function IncisionStagePanel() {
@@ -20,7 +20,7 @@ export function IncisionStagePanel() {
     <StageShell
       top={(
         <>
-          <StageStatus active>{snapshot?.headAsset.statusLabel || "个体化 RSTL 规划"}</StageStatus>
+          <StageStatus active>{snapshot?.headAsset.statusLabel || "个体化皮纹线规划"}</StageStatus>
           <StageActions>
             <StageMeta
               id="stageStatus"

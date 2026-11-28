@@ -343,7 +343,7 @@ export function createIncisionPhotoRuntime(options: IncisionPhotoRuntimeOptions)
     kind ? kind === "cutaneous" : elements.tumorKind.value === "cutaneous"
   );
   const subcutaneousControlledMarkerMessage =
-    "受控标记仅适用于皮表肿物；皮下肿物按术前测量直径与 RSTL 方向规划。";
+    "受控标记仅适用于皮表肿物；皮下肿物按术前测量直径与皮纹线方向规划。";
 
   const updatePhotoUploadTitle = (fileName = currentPhotoFileName) => {
     currentPhotoFileName = fileName;

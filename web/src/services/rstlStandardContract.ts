@@ -38,7 +38,7 @@ export function assertStandardRstlAtlas(payload: RstlAtlasPayloadLike): void {
       lines.length !== RSTL_STANDARD_CONTRACT.curveCount ||
       pointCount !== RSTL_STANDARD_CONTRACT.pointCount) {
     throw new Error(
-      `RSTL atlas 必须是 validated=false 的 v${RSTL_STANDARD_CONTRACT.atlasVersion} ` +
+      `皮纹线 atlas 必须是 validated=false 的 v${RSTL_STANDARD_CONTRACT.atlasVersion} ` +
       `${RSTL_STANDARD_CONTRACT.curveCount} 曲线 / ${RSTL_STANDARD_CONTRACT.pointCount} 点版本`,
     );
   }

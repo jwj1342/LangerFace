@@ -3,7 +3,7 @@ import { ANNOTATE_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchem
 export { ANNOTATE_SNAPSHOT_SCHEMA_VERSION };
 
 export const ANNOTATE_SYSTEM_LABELS: Record<string, string> = {
-  rstl: "RSTL",
+  rstl: "皮纹线",
   langer: "Langer",
 };
 
@@ -104,7 +104,7 @@ export interface AnnotateControllerSnapshotInput {
 }
 
 export function annotateSystemLabel(system?: string) {
-  return ANNOTATE_SYSTEM_LABELS[system || ""] || String(system || "RSTL").toUpperCase();
+  return ANNOTATE_SYSTEM_LABELS[system || ""] || (system ? String(system).toUpperCase() : "皮纹线");
 }
 
 export function controlsOf(line?: AnnotateLineLike | null) {

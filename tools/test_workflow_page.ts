@@ -181,7 +181,7 @@ assert.deepEqual(resultAfterTransfer, expectedFallback, "post-transfer failure k
 
 const refineModule = ts.createSourceFile("liveRefine2d.ts", read("web/src/services/liveRefine2d.ts"), ts.ScriptTarget.Latest, true);
 const projectedRefineNames = ["beginFrozenRefineSession", "setLatestAutoLines", "projectPhotoRstlBaseline",
-  "startPhotoRstlProjection", "getDisplayLines", "commitRefineForLive", "toggleRefine2d"];
+  "startPhotoRstlProjection", "getDisplayLines", "commitRefineForLive", "finishRefine2d", "finishRefineDrag", "toggleRefine2d"];
 const projectedRefineSource = refineModule.statements.filter((node: any) => ts.isFunctionDeclaration(node)
   && projectedRefineNames.includes(node.name?.text))
   .map((node: any) => node.getText(refineModule).replace(/^export /, "")).join("\n");
@@ -596,7 +596,7 @@ for (const phone of [false, true]) {
               ...["texture", "incision", "more"].map(name => h("div", { "data-mobile-panel-slot": name, hidden: true })))),
           h("div", { className: "workflow-mobile-marker-tools", "aria-label": "标记操作" }),
           phone ? operations : null),
-        h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
+        h("aside", { "aria-label": "实时皮纹线操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
         h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture));
     assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `phone=${phone}: stable workflow shell and portal payloads`);
   }
@@ -1071,7 +1071,7 @@ assert.doesNotMatch(styles, /\.mobile-workflow-dock,\s*\.mobile-candidate-adjust
   "candidate adjustment is not hidden with the mobile-only operations dock");
 assert.match(liveWrinklePanel, /WorkflowLayerVisibilityButtons/,
   "the desktop wrinkle panel mounts the same shared layer switches as the phone dock");
-assert.match(mobileControls, /function WorkflowLayerVisibilityButtons[\s\S]*?>RSTL<[\s\S]*?>皱纹<[\s\S]*?>切口线</,
+assert.match(mobileControls, /function WorkflowLayerVisibilityButtons[\s\S]*?>皮纹线<[\s\S]*?>皱纹<[\s\S]*?>切口线</,
   "the shared switch group exposes independent RSTL, wrinkle, and incision visibility controls");
 assert.match(mobileControls, /WorkflowLayerVisibilityButtons className="mobile-layer-grid" mobile/,
   "the phone dock explicitly preserves the established mobile layer-button presentation");

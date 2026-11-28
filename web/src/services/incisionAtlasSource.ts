@@ -53,28 +53,28 @@ export function resolveIncisionAtlas({
       return {
         atlas: personalizedAtlas as AtlasPayload,
         mode: "mediapipe_personalized",
-        statusLabel: "MediaPipe 个体化 RSTL · YOLO/V6 证据",
-        warnings: ["个体化 RSTL 仍是未临床验证的研究草案；候选必须经过 guardrails 与医生确认。"],
+        statusLabel: "MediaPipe 个体化皮纹线· YOLO/V6 证据",
+        warnings: ["个体化皮纹线仍是未临床验证的研究草案；候选必须经过 guardrails 与医生确认。"],
         provenance,
         contract: buildRstlSourceContract(personalizedAtlas, { provenance }),
       };
     }
     warnings.push(issues.length
-      ? `个体化 RSTL 未通过 MediaPipe 拓扑校验：${issues.join("；")}`
-      : "跨页图谱不是受支持的 YOLO/V6 个体化 RSTL。",
+      ? `个体化皮纹线未通过 MediaPipe 拓扑校验：${issues.join("；")}`
+      : "跨页图谱不是受支持的 YOLO/V6 个体化皮纹线。",
     );
   }
 
   const standardIssues = validationIssues(standardAtlas, triangleCount);
   if (standardIssues.length) {
-    throw new Error(`标准 RSTL 图谱校验失败：${standardIssues.join("；")}`);
+    throw new Error(`标准皮纹线图谱校验失败：${standardIssues.join("；")}`);
   }
-  warnings.push("当前使用 MediaPipe 标准 RSTL；个体化 RSTL 需完成相应采集后启用。");
+  warnings.push("当前使用 MediaPipe 标准皮纹线；个体化皮纹线需完成相应采集后启用。");
   const provenance = "bundled_standard_rstl_prior";
   return {
     atlas: standardAtlas,
     mode: "mediapipe_standard",
-    statusLabel: "MediaPipe 标准 RSTL",
+    statusLabel: "MediaPipe 标准皮纹线",
     warnings,
     provenance,
     contract: buildRstlSourceContract(standardAtlas, { provenance }),

@@ -479,16 +479,21 @@ export function updateRefineUi(): void {
   window.dispatchEvent(new CustomEvent("langerface:refine2d-state"));
 }
 
-export function toggleRefine2d(): void {
+export function finishRefine2d(): boolean {
   const s = state();
-  if (s.active) {
-    s.active = false;
-    s.selected = null;
-    setRefineCanvasViewActive(false);
-    updateRefineUi();
-    requestRefineFrame();
-    return;
-  }
+  if (!s.active) return false;
+  if (s.drag) finishRefineDrag(s.drag.pointerId);
+  s.active = false;
+  s.selected = null;
+  setRefineCanvasViewActive(false);
+  updateRefineUi();
+  requestRefineFrame();
+  return true;
+}
+
+export function toggleRefine2d(): void {
+  if (finishRefine2d()) return;
+  const s = state();
   const staticImageReady = sourceState.sourceKind === "image" && Boolean(sourceState.imageCacheLM);
   const frozenLiveReady = (sourceState.sourceKind === "camera" || sourceState.sourceKind === "video")
     && sourceState.paused && Boolean(sourceState.frozenFrame) && Boolean(sourceState.lastLM);
@@ -826,13 +831,17 @@ export function moveRefinePointer(event: PointerEvent): boolean {
 }
 
 export function endRefinePointer(event: PointerEvent): boolean {
+  return finishRefineDrag(event.pointerId);
+}
+
+function finishRefineDrag(pointerId: number): boolean {
   const s = state();
-  if (!s.active || !s.drag || s.drag.pointerId !== event.pointerId) return false;
+  if (!s.active || !s.drag || s.drag.pointerId !== pointerId) return false;
   const line = s.lines?.[s.drag.pick.lineIndex];
   const moved = s.drag.moved;
   const symmetryLinked = s.drag.symmetryLinkedIndex != null;
   s.drag = null;
-  if (els.canvas.hasPointerCapture(event.pointerId)) els.canvas.releasePointerCapture(event.pointerId);
+  if (els.canvas.hasPointerCapture(pointerId)) els.canvas.releasePointerCapture(pointerId);
   if (moved) {
     const symmetryMessage = s.symmetry
       ? symmetryLinked ? "已同步对称线。" : "此曲线未找到可联动的对称线。"

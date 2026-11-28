@@ -2498,6 +2498,12 @@
   border-left: 1px solid var(--clinical-dark-border);
 }
 
+.workflow-workbench[data-workflow-mobile="false"] > .workflow-live-rail > .brand .eyebrow,
+.workflow-workbench[data-workflow-mobile="false"] > .workflow-live-rail > a[href="/app"],
+.workflow-workbench[data-workflow-mobile="false"] > .workflow-incision-rail > .brand > .brand-top {
+  display: none;
+}
+
 .incision-workbench > .sidebar {
   grid-column: 1;
   grid-row: 1;
@@ -2964,6 +2970,11 @@ body:has(.dark-workbench-page) {
   color: #94a3b8;
 }
 
+/* The controller still uses the select; the workflow exposes the layer buttons. */
+.workflow-workbench #wrinkleDisplayMode {
+  display: none;
+}
+
 .desktop-layer-controls {
   display: grid;
   gap: 8px;
@@ -3163,10 +3174,6 @@ body:has(.dark-workbench-page) {
   }
 
   .workflow-workbench:where([data-workflow-mobile="true"]) #liveInputCard {
-    display: none;
-  }
-
-  .workflow-workbench:where([data-workflow-mobile="true"]) #wrinkleDisplayMode {
     display: none;
   }
 

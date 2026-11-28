@@ -8,8 +8,8 @@ export function PersonalizedWorkbench() {
               <span className="personalized-eyebrow">GUIDED CAPTURE</span>
               <span className="personalized-badge warn" id="badge">准备中</span>
             </div>
-            <h1>中性脸 RSTL 个性化</h1>
-            <p className="personalized-hint personalized-heading-hint">最新 v8.1.67 · 133 条 RSTL · 每个表情采集一次 · 采集中质量检查 · 采集后在线 YOLO 0.07 严格并集 + V6</p>
+            <h1>中性脸皮纹线个性化</h1>
+            <p className="personalized-hint personalized-heading-hint">最新 v8.1.67 · 133 条皮纹线· 每个表情采集一次 · 采集中质量检查 · 采集后在线 YOLO 0.07 严格并集 + V6</p>
 <a className="personalized-nav" href="/app">← 返回研究工具入口</a>
           </div>
 
@@ -61,11 +61,11 @@ export function PersonalizedWorkbench() {
               <EvidenceCanvas title="严格并集二值 Mask" canvasId="wrinkleMaskCanvas" buttonId="wrinkleMaskDownloadBtn" buttonLabel="下载二值皱纹 Mask PNG" />
               <EvidenceCanvas title="V6 去重/骨架证据图" hint="V6 实际用于曲线匹配的单次骨架证据；原始严格并集仍单独保留。" canvasId="wrinkleEvidenceCanvas" buttonId="wrinkleEvidenceDownloadBtn" buttonLabel="下载 V6 证据图 PNG" />
             </div>
-            <button className="personalized-button primary" id="usePersonalizedBtn" type="button" disabled>进入切口设计（应用个性化 RSTL）</button>
+            <button className="personalized-button primary" id="usePersonalizedBtn" type="button" disabled>进入切口设计（应用个性化皮纹线）</button>
 <a className="personalized-button personalized-nav-button" href="/app">返回研究工具入口</a>
             <div className="personalized-exports" id="exports"><span className="personalized-hint">完成后可下载对比图</span></div>
           </div>
-          <p className="personalized-disclaimer">local YOLO strict-union + RSTL V6 refinement — experimental, not a surgical instruction</p>
+          <p className="personalized-disclaimer">本地 YOLO 严格并集与 V6 皮纹线微调仅用于研究实验，不构成手术指令。</p>
         </aside>
 
         <main className="personalized-stage">

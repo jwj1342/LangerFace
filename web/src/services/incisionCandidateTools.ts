@@ -829,7 +829,7 @@ function protectiveDirectionSummary(cfg: AnyRecord, names: unknown, fallbackRegi
     source,
     direction_hint: rule.direction_hint || "manual_sensitive_margin_axis",
     canonical_axis: rule.canonical_axis || null,
-    reason: rule.reason || "Protect sensitive free-margin anatomy before following local RSTL.",
+    reason: rule.reason || "应优先保护敏感游离缘，再参考局部皮纹线。",
     requires_clinician_override_reason: true,
     priority: "sensitive_margin_exception_before_rstl",
   };
@@ -910,7 +910,7 @@ function appendProtectiveDirectionOverride(
     source_warning: sourceWarning,
     direction_hint: rule.direction_hint || "manual_sensitive_margin_axis",
     canonical_axis: rule.canonical_axis || null,
-    reason: rule.reason || "Protect sensitive free-margin anatomy before following local RSTL.",
+    reason: rule.reason || "应优先保护敏感游离缘，再参考局部皮纹线。",
     requires_clinician_override_reason: true,
     priority: "sensitive_margin_exception_before_rstl",
   });
@@ -925,7 +925,7 @@ export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRec
     warnings.push({
       code: "low_rstl_confidence",
       severity: "medium",
-      message: `Local RSTL direction is low confidence; require manual confirmation${reasons.length ? ` (${reasons.join(", ")}).` : "."}`,
+      message: `局部皮纹线方向置信度较低，需人工确认${reasons.length ? ` (${reasons.join(", ")}).` : "."}`,
     });
   }
   if ((anatomy.confidence || 0) < cfg.low_region_confidence) {
@@ -1119,10 +1119,10 @@ export function evaluateGuardrails(candidate: IncisionCandidate, anatomy: AnyRec
       code: "rstl_deviation_override",
       severity: reason ? "medium" : "high",
       message: reason
-        ? `Long-axis direction deviates ${deviation.toFixed(1)} deg from local RSTL with clinician override reason recorded.`
-        : `Long-axis direction deviates ${deviation.toFixed(1)} deg from local RSTL; record an override reason before review.`,
+        ? `长轴偏离局部皮纹线 ${deviation.toFixed(1)}°，已记录医生说明。`
+        : `长轴偏离局部皮纹线 ${deviation.toFixed(1)}°，请在审阅前记录原因。`,
     });
-    if (!reason) suggested_overrides.push({ kind: "override_reason_required", reason: "Candidate long axis deviates from local RSTL." });
+    if (!reason) suggested_overrides.push({ kind: "override_reason_required", reason: "候选长轴偏离局部皮纹线。" });
   }
   return {
     passed: hardViolations.length === 0 && !warnings.some((w) => w.severity === "high"),

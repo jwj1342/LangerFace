@@ -340,7 +340,7 @@ function updateGuide() {
     }
   } else if (sess.stage === "done") {
     els.guideTitle.textContent = "采集完成 · 对比结果";
-    els.guideSub.textContent = "绿色=皱纹严格并集，灰色=初始 RSTL，洋红=V9 个性化 RSTL，青色=法向位移";
+    els.guideSub.textContent = "绿色=皱纹严格并集，灰色=初始皮纹线，洋红=V9 个性化皮纹线，青色=法向位移";
     els.coach.classList.add("hidden");
     setMeters(0, 1);
   }
@@ -637,7 +637,7 @@ function drawLegend(
   cctx.lineWidth = 3;
   cctx.beginPath(); cctx.moveTo(x, y - 3); cctx.lineTo(x + 14, y - 3); cctx.stroke();
   cctx.fillStyle = "#fce7f3";
-  cctx.fillText(`洋红：V9 个性化 RSTL（${lineCount} 条）`, x + 20, y);
+  cctx.fillText(`洋红：V9 个性化皮纹线（${lineCount} 条）`, x + 20, y);
   cctx.strokeStyle = "rgba(150,160,175,0.85)";
   cctx.beginPath(); cctx.moveTo(x, y + 15); cctx.lineTo(x + 14, y + 15); cctx.stroke();
   cctx.fillStyle = "#cbd5e1";
@@ -1416,7 +1416,7 @@ function renderFinalExports(): void {
       </div>`).join("");
     els.compareSummary.innerHTML =
       `<div style="font-size:13px;font-weight:700;margin-bottom:2px">最终曲线 ${curves.length}/${seeds.length} · 直接证据 ${refinedLines} 条 · 连续场移动 ${movedLines} 条</div>
-       <div class="hint" style="margin-bottom:6px">绿=皱纹并集 · 灰=初始 RSTL · 洋红=V6 结果 · 青=法向位移</div>
+       <div class="hint" style="margin-bottom:6px">绿=皱纹并集 · 灰=初始皮纹线· 洋红=V6 结果 · 青=法向位移</div>
        <div style="font-size:12px;font-weight:600;margin-bottom:2px">全线平均偏移 ${cmp.meanAll.toFixed(1)}px · 移动点 ${(coverage * 100).toFixed(0)}%</div>
        ${lines || "<span class='hint'>暂无对比数据</span>"}`;
   }
@@ -1548,7 +1548,7 @@ function renderFinalExports(): void {
   links.push(`<a download="curves_compare.json" href="${URL.createObjectURL(blob)}">下载对比 JSON</a>`);
   if (sess?.v6Result?.payload) {
     const v6Blob = new Blob([JSON.stringify(sess.v6Result.payload, null, 2)], { type: "application/json" });
-    links.push(`<a download="personalized_rstl.json" href="${URL.createObjectURL(v6Blob)}">下载 V9 个性化 RSTL JSON</a>`);
+    links.push(`<a download="personalized_rstl.json" href="${URL.createObjectURL(v6Blob)}">下载 V9 个性化皮纹线JSON</a>`);
   }
   if (sess?.v6Result?.activeAtlas) {
     const atlasBlob = new Blob([JSON.stringify(sess.v6Result.activeAtlas, null, 2)], { type: "application/json" });
@@ -1867,7 +1867,7 @@ async function runLocalYoloV6(session: RuntimeSession): Promise<RuntimeSession> 
   const confidenceMap = fused.confidence || null;
   const directionQ = fused.directionQ || null;
 
-  setLocalPipelineStatus("正在按皱纹位置与走势执行 RSTL V9 局部法向微调…", 76);
+  setLocalPipelineStatus("正在按皱纹位置与走势执行皮纹线V9 局部法向微调…", 76);
   const seeds = session.displaySeeds || session.seeds || [];
   const refined = await refineV6({
     seeds,
@@ -2708,7 +2708,7 @@ function runSession(lmPx: Point2[], bs: BlendshapeDict, now: number): void {
         }
         const loadedAtlas = atlasLines;
         const loadedTriangles = triangles;
-        if (!loadedAtlas || !loadedTriangles) throw new Error("面部拓扑或 RSTL atlas 尚未加载");
+        if (!loadedAtlas || !loadedTriangles) throw new Error("面部拓扑或皮纹线atlas 尚未加载");
         const mesh3 = (sess.refMesh || []).map((p: Point2): Point3 => [p[0], p[1], 0]);
         if (mesh3.length < 100) throw new Error("关键点不足");
         const masks = buildMasksFromMesh(sess.refMesh, SIZE);
@@ -2724,7 +2724,7 @@ function runSession(lmPx: Point2[], bs: BlendshapeDict, now: number): void {
         }));
         if (topologySeeds.length !== loadedAtlas.length
           || topologySeeds.some((line, id) => line.pts.length !== (loadedAtlas[id].points?.length || 0))) {
-          throw new Error("初始 RSTL 的曲线或点数未保持");
+          throw new Error("初始皮纹线的曲线或点数未保持");
         }
         sess.q0 = prior.q0;
         sess.seeds = topologySeeds;

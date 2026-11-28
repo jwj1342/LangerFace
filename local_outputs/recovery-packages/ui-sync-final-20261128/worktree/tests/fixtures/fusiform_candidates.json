@@ -1,0 +1,742 @@
+{
+  "schema": "fusiform-incision-parity/v0.2",
+  "controlled_case_derivation": "The fixtures retain stable center, axis, profile and normalization evidence. Long-axis coordinates are intentionally not golden values: the baseline now derives from the detected equal-area reference-circle diameter, while the candidate may still expand to preserve full boundary containment.",
+  "cases": [
+    {
+      "name": "rotated_default",
+      "tumor": {
+        "kind": "cutaneous",
+        "center": [1.0, 2.0, 3.0],
+        "diameter_mm": 4.0,
+        "margin_mm": 1.0
+      },
+      "direction": {
+        "vector": [0.0, 2.0, 0.0],
+        "confidence": 0.9,
+        "source": "fixture_rstl"
+      },
+      "normal": [0.0, 0.0, 1.0],
+      "units_per_mm": 0.5,
+      "rules": {
+        "length_to_width_ratio": 3.0,
+        "tip_angle_deg": 30.0,
+        "min_length_mm": 1.0,
+        "max_length_mm": 200.0,
+        "samples": 12,
+        "version": "fixture-v1"
+      },
+      "expected": {
+        "center": [1.0, 2.0, 3.0],
+        "axis": [0.0, 1.0, 0.0],
+        "width_axis": [-1.0, 0.0, 0.0],
+        "endpoints": [[1.0, -2.5, 3.0], [1.0, 6.5, 3.0]],
+        "upper_midpoint": [-0.5, 2.0, 3.0],
+        "lower_midpoint": [2.5, 2.0, 3.0],
+        "outline_points": 24,
+        "length_mm": 18.0,
+        "width_mm": 6.0,
+        "tip_angle_target_deg": 30.0,
+        "tip_angle_limited_by_ratio": false,
+        "boundary_used": false
+      }
+    },
+    {
+      "name": "ratio_limited_tip",
+      "tumor": {
+        "kind": "cutaneous",
+        "center": [0.0, 0.0, 0.0],
+        "diameter_mm": 4.0,
+        "margin_mm": 0.0
+      },
+      "direction": {
+        "vector": [1.0, 0.0, 0.0],
+        "confidence": 0.75
+      },
+      "normal": [0.0, 0.0, 1.0],
+      "units_per_mm": 1.0,
+      "rules": {
+        "length_to_width_ratio": 8.0,
+        "tip_angle_deg": 45.0,
+        "min_length_mm": 1.0,
+        "max_length_mm": 200.0,
+        "samples": 16,
+        "version": "fixture-v1"
+      },
+      "expected": {
+        "center": [0.0, 0.0, 0.0],
+        "axis": [1.0, 0.0, 0.0],
+        "width_axis": [0.0, 1.0, 0.0],
+        "endpoints": [[-16.0, 0.0, 0.0], [16.0, 0.0, 0.0]],
+        "upper_midpoint": [0.0, 2.0, 0.0],
+        "lower_midpoint": [0.0, -2.0, 0.0],
+        "outline_points": 32,
+        "length_mm": 32.0,
+        "width_mm": 4.0,
+        "tip_angle_target_deg": 45.0,
+        "tip_angle_limited_by_ratio": true,
+        "boundary_used": false
+      }
+    },
+    {
+      "name": "freehand_boundary_recenter",
+      "tumor": {
+        "kind": "cutaneous",
+        "center": [0.0, 0.0, 0.0],
+        "diameter_mm": 4.0,
+        "margin_mm": 1.0,
+        "boundary": [[0.0, 0.0, 0.0], [2.0, 1.0, 0.0], [4.0, 0.0, 0.0], [2.0, -1.0, 0.0]],
+        "boundary_mode": "freehand",
+        "boundary_source": "manual_freehand"
+      },
+      "direction": {
+        "vector": [1.0, 0.0, 0.0],
+        "confidence": 0.8
+      },
+      "normal": [0.0, 0.0, 1.0],
+      "units_per_mm": 1.0,
+      "rules": {
+        "length_to_width_ratio": 3.0,
+        "tip_angle_deg": 30.0,
+        "min_length_mm": 1.0,
+        "max_length_mm": 200.0,
+        "samples": 12,
+        "version": "fixture-v1"
+      },
+      "expected": {
+        "center": [0.0, 0.0, 0.0],
+        "axis": [1.0, 0.0, 0.0],
+        "width_axis": [0.0, 1.0, 0.0],
+        "endpoints": [[-6.0, 0.0, 0.0], [6.0, 0.0, 0.0]],
+        "upper_midpoint": [0.0, 2.0, 0.0],
+        "lower_midpoint": [0.0, -2.0, 0.0],
+        "outline_points": 24,
+        "length_mm": 12.0,
+        "width_mm": 4.0,
+        "tip_angle_target_deg": 30.0,
+        "tip_angle_limited_by_ratio": false,
+        "boundary_used": true,
+        "boundary_point_count": 4,
+        "boundary_area_mm2": 4.0,
+        "boundary_envelope_outside_count": 0
+      }
+    }
+    ,{
+  "name": "controlled_photo_asymmetric",
+  "tumor": {
+    "kind": "cutaneous",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "diameter_mm": 8,
+    "margin_mm": 1,
+    "boundary": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        1,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        2,
+        -1,
+        0
+      ]
+    ],
+    "boundary_mode": "controlled_marker",
+    "boundary_source": "controlled_marker_confirmed",
+    "photo_boundary_enclosing_diameter_mm": 2
+  },
+  "direction": {
+    "vector": [
+      1,
+      0,
+      0
+    ],
+    "confidence": 0.8
+  },
+  "normal": [
+    0,
+    0,
+    1
+  ],
+  "units_per_mm": 1,
+  "rules": {
+    "length_to_width_ratio": 3,
+    "tip_angle_deg": 30,
+    "min_length_mm": 1,
+    "max_length_mm": 200,
+    "samples": 12,
+    "version": "fixture-v1"
+  },
+  "expected": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "axis": [
+      1,
+      0,
+      0
+    ],
+    "width_axis": [
+      0,
+      1,
+      0
+    ],
+    "endpoints": [
+      [
+        -6,
+        0,
+        0
+      ],
+      [
+        6,
+        0,
+        0
+      ]
+    ],
+    "upper_midpoint": [
+      0,
+      2,
+      0
+    ],
+    "lower_midpoint": [
+      0,
+      -2,
+      0
+    ],
+    "outline_points": 24,
+    "length_mm": 12,
+    "width_mm": 4,
+    "tip_angle_target_deg": 30,
+    "tip_angle_limited_by_ratio": false,
+    "boundary_used": true,
+    "normalization": {
+      "planning_diameter_mm": 2,
+      "lesion_normalization_applied": true,
+      "clinical_scale_source": "controlled_marker_enclosing_circle",
+      "lesion_normalization_status": "normalized"
+    }
+  }
+},
+{
+  "name": "controlled_missing_photo",
+  "tumor": {
+    "kind": "cutaneous",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "diameter_mm": 8,
+    "margin_mm": 1,
+    "boundary": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        1,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        2,
+        -1,
+        0
+      ]
+    ],
+    "boundary_mode": "controlled_marker",
+    "boundary_source": "controlled_marker_confirmed"
+  },
+  "direction": {
+    "vector": [
+      1,
+      0,
+      0
+    ],
+    "confidence": 0.8
+  },
+  "normal": [
+    0,
+    0,
+    1
+  ],
+  "units_per_mm": 1,
+  "rules": {
+    "length_to_width_ratio": 3,
+    "tip_angle_deg": 30,
+    "min_length_mm": 1,
+    "max_length_mm": 200,
+    "samples": 12,
+    "version": "fixture-v1"
+  },
+  "expected": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "axis": [
+      1,
+      0,
+      0
+    ],
+    "width_axis": [
+      0,
+      1,
+      0
+    ],
+    "endpoints": [
+      [
+        -9,
+        0,
+        0
+      ],
+      [
+        9,
+        0,
+        0
+      ]
+    ],
+    "upper_midpoint": [
+      0,
+      3,
+      0
+    ],
+    "lower_midpoint": [
+      0,
+      -3,
+      0
+    ],
+    "outline_points": 24,
+    "length_mm": 18,
+    "width_mm": 6,
+    "tip_angle_target_deg": 30,
+    "tip_angle_limited_by_ratio": false,
+    "boundary_used": true,
+    "normalization": {
+      "planning_diameter_mm": 4,
+      "lesion_normalization_applied": true,
+      "clinical_scale_source": "controlled_marker_enclosing_circle",
+      "lesion_normalization_status": "normalized"
+    }
+  }
+},
+{
+  "name": "controlled_invalid_photo",
+  "tumor": {
+    "kind": "cutaneous",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "diameter_mm": 8,
+    "margin_mm": 1,
+    "boundary": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        1,
+        0
+      ],
+      [
+        4,
+        0,
+        0
+      ],
+      [
+        2,
+        -1,
+        0
+      ]
+    ],
+    "boundary_mode": "controlled_marker",
+    "boundary_source": "controlled_marker_confirmed",
+    "photo_boundary_enclosing_diameter_mm": 0
+  },
+  "direction": {
+    "vector": [
+      1,
+      0,
+      0
+    ],
+    "confidence": 0.8
+  },
+  "normal": [
+    0,
+    0,
+    1
+  ],
+  "units_per_mm": 1,
+  "rules": {
+    "length_to_width_ratio": 3,
+    "tip_angle_deg": 30,
+    "min_length_mm": 1,
+    "max_length_mm": 200,
+    "samples": 12,
+    "version": "fixture-v1"
+  },
+  "expected": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "axis": [
+      1,
+      0,
+      0
+    ],
+    "width_axis": [
+      0,
+      1,
+      0
+    ],
+    "endpoints": [
+      [
+        -9,
+        0,
+        0
+      ],
+      [
+        9,
+        0,
+        0
+      ]
+    ],
+    "upper_midpoint": [
+      0,
+      3,
+      0
+    ],
+    "lower_midpoint": [
+      0,
+      -3,
+      0
+    ],
+    "outline_points": 24,
+    "length_mm": 18,
+    "width_mm": 6,
+    "tip_angle_target_deg": 30,
+    "tip_angle_limited_by_ratio": false,
+    "boundary_used": true,
+    "normalization": {
+      "planning_diameter_mm": 4,
+      "lesion_normalization_applied": true,
+      "clinical_scale_source": "controlled_marker_enclosing_circle",
+      "lesion_normalization_status": "normalized"
+    }
+  }
+},
+{
+  "name": "controlled_degenerate",
+  "tumor": {
+    "kind": "cutaneous",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "diameter_mm": 8,
+    "margin_mm": 1,
+    "boundary": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0
+      ]
+    ],
+    "boundary_mode": "controlled_marker",
+    "boundary_source": "controlled_marker_confirmed",
+    "photo_boundary_enclosing_diameter_mm": -1
+  },
+  "direction": {
+    "vector": [
+      1,
+      0,
+      0
+    ],
+    "confidence": 0.8
+  },
+  "normal": [
+    0,
+    0,
+    1
+  ],
+  "units_per_mm": 1,
+  "rules": {
+    "length_to_width_ratio": 3,
+    "tip_angle_deg": 30,
+    "min_length_mm": 1,
+    "max_length_mm": 200,
+    "samples": 12,
+    "version": "fixture-v1"
+  },
+  "expected": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "axis": [
+      1,
+      0,
+      0
+    ],
+    "width_axis": [
+      0,
+      1,
+      0
+    ],
+    "endpoints": [
+      [
+        -15,
+        0,
+        0
+      ],
+      [
+        15,
+        0,
+        0
+      ]
+    ],
+    "upper_midpoint": [
+      0,
+      5,
+      0
+    ],
+    "lower_midpoint": [
+      0,
+      -5,
+      0
+    ],
+    "outline_points": 24,
+    "length_mm": 30,
+    "width_mm": 10,
+    "tip_angle_target_deg": 30,
+    "tip_angle_limited_by_ratio": false,
+    "boundary_used": true,
+    "normalization": {
+      "planning_diameter_mm": 8,
+      "lesion_normalization_applied": false,
+      "clinical_scale_source": "operator_input",
+      "lesion_normalization_status": "degenerate_boundary"
+    }
+  }
+},
+{
+  "name": "controlled_empty_photo",
+  "tumor": {
+    "kind": "cutaneous",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "diameter_mm": 8,
+    "margin_mm": 1,
+    "boundary": [],
+    "boundary_mode": "controlled_marker",
+    "boundary_source": "controlled_marker_confirmed",
+    "photo_boundary_enclosing_diameter_mm": 2
+  },
+  "direction": {
+    "vector": [
+      1,
+      0,
+      0
+    ],
+    "confidence": 0.8
+  },
+  "normal": [
+    0,
+    0,
+    1
+  ],
+  "units_per_mm": 1,
+  "rules": {
+    "length_to_width_ratio": 3,
+    "tip_angle_deg": 30,
+    "min_length_mm": 1,
+    "max_length_mm": 200,
+    "samples": 12,
+    "version": "fixture-v1"
+  },
+  "expected": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "axis": [
+      1,
+      0,
+      0
+    ],
+    "width_axis": [
+      0,
+      1,
+      0
+    ],
+    "endpoints": [
+      [
+        -6,
+        0,
+        0
+      ],
+      [
+        6,
+        0,
+        0
+      ]
+    ],
+    "upper_midpoint": [
+      0,
+      2,
+      0
+    ],
+    "lower_midpoint": [
+      0,
+      -2,
+      0
+    ],
+    "outline_points": 24,
+    "length_mm": 12,
+    "width_mm": 4,
+    "tip_angle_target_deg": 30,
+    "tip_angle_limited_by_ratio": false,
+    "boundary_used": true,
+    "normalization": {
+      "planning_diameter_mm": 2,
+      "lesion_normalization_applied": true,
+      "clinical_scale_source": "controlled_marker_enclosing_circle",
+      "lesion_normalization_status": "normalized"
+    }
+  }
+},
+{
+  "name": "controlled_empty_invalid",
+  "tumor": {
+    "kind": "cutaneous",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "diameter_mm": 8,
+    "margin_mm": 1,
+    "boundary": [],
+    "boundary_mode": "controlled_marker",
+    "boundary_source": "controlled_marker_confirmed",
+    "photo_boundary_enclosing_diameter_mm": "invalid"
+  },
+  "direction": {
+    "vector": [
+      1,
+      0,
+      0
+    ],
+    "confidence": 0.8
+  },
+  "normal": [
+    0,
+    0,
+    1
+  ],
+  "units_per_mm": 1,
+  "rules": {
+    "length_to_width_ratio": 3,
+    "tip_angle_deg": 30,
+    "min_length_mm": 1,
+    "max_length_mm": 200,
+    "samples": 12,
+    "version": "fixture-v1"
+  },
+  "expected": {
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "axis": [
+      1,
+      0,
+      0
+    ],
+    "width_axis": [
+      0,
+      1,
+      0
+    ],
+    "endpoints": [
+      [
+        -15,
+        0,
+        0
+      ],
+      [
+        15,
+        0,
+        0
+      ]
+    ],
+    "upper_midpoint": [
+      0,
+      5,
+      0
+    ],
+    "lower_midpoint": [
+      0,
+      -5,
+      0
+    ],
+    "outline_points": 24,
+    "length_mm": 30,
+    "width_mm": 10,
+    "tip_angle_target_deg": 30,
+    "tip_angle_limited_by_ratio": false,
+    "boundary_used": false,
+    "normalization": {
+      "planning_diameter_mm": 8,
+      "lesion_normalization_applied": false,
+      "clinical_scale_source": "operator_input",
+      "lesion_normalization_status": "insufficient_boundary"
+    }
+  }
+}
+  ]
+}

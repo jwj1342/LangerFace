@@ -44,7 +44,7 @@ for (const id of [
 assert.doesNotMatch(html, /id=["']fineLineInput["']/,
   "the bundled v10 centerlines must not require a second file picker");
 
-assert.match(html, /01 原始 v8\.1\.96 RSTL/);
+assert.match(html, /01 原始 v8\.1\.96 皮纹线/);
 assert.match(html, /02 最新 v10 皱纹中心线/);
 assert.doesNotMatch(html, /v8\.1\.70/,
   "the experiment page must not advertise the obsolete RSTL version");

@@ -7,8 +7,8 @@ import { Label } from "./ui/label";
 export function LiveRefinePanel() {
   return (
     <Card id="liveRefineCard">
-      <Label>医生 2D 微调</Label>
-      <Hint className="live-inline-top">单指拖动 RSTL，双指缩放和移动图片。</Hint>
+      <Label>医生微调</Label>
+      <Hint className="live-inline-top">单指拖动皮纹线，双指缩放和移动图片。</Hint>
       <ButtonRow className="live-refine-primary-actions">
         <Button variant="workbench" id="refine2dBtn" type="button" disabled aria-pressed="false">微调</Button>
         <Button variant="workbench" id="refineUndoBtn" type="button" disabled>撤销</Button>

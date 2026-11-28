@@ -5,7 +5,7 @@ export function AnnotateHelpPanel() {
     <HelpDisclosure title="标注帮助">
       <ol>
         <li>先加载标准三维面部模型；如果标注自定义头模，只能导出空间折线。</li>
-        <li>选择 RSTL 或 Langer，填写线名和面部分区。</li>
+        <li>选择皮纹线或 Langer，填写线名和面部分区。</li>
         <li>点击“开始一条线”，然后在 3D 脸表面逐点点击。</li>
         <li>每条线至少 2 个点；点够后点击“保存当前线”。</li>
         <li>相邻控制点会沿网格表面连接，不会直接穿过头模；跨区域时可多点控制走向。</li>

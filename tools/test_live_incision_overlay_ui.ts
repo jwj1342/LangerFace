@@ -55,7 +55,7 @@ assert.ok(liveSnapshots.includes("../lib/controllerSnapshotSchemas"), "shared li
 assert.ok(controllerSnapshotSchemas.includes("react-live-controller-snapshot/v0.2"), "shared snapshot schema module owns the 2D-only live React snapshot schema");
 assert.ok(liveSnapshots.includes("buildLiveControllerSnapshot"), "shared live snapshot service builds low-frequency live controller snapshots");
 assert.ok(main.includes("setIncisionOverlayQa"), "live page shows pending overlay QA feedback after loading a candidate");
-assert.ok(main.includes("上传照片或开启摄像头后，会随 RSTL 一起显示"), "live page gives explicit overlay feedback");
+assert.ok(main.includes("上传照片或开启摄像头后，会随皮纹线一起显示"), "live page gives explicit overlay feedback");
 assert.ok(main.includes("buildZoomCards(refreshStaticImage)"), "live page rebuilds zoom cards after loading incision overlay");
 assert.ok(main.includes("createLiveRecordingActions") && recordingActions.includes("createCanvasRecordingController"), "live page delegates to the tested canvas export controller");
 assert.ok(main.includes("canvas: () => els.canvas") && recordingActions.includes("canvas: options.canvas()"), "live page exports the current rendered main canvas, including incision overlay");

@@ -37,7 +37,7 @@ export function WorkflowLayout({ liveRail, mobileOperations, stage, incisionRail
       return host;
     };
     return {
-      live: rail("实时 RSTL 操作台", "workflow-live-rail live-workbench"),
+      live: rail("实时皮纹线操作台", "workflow-live-rail live-workbench"),
       incision: rail("切口规划操作台", "workflow-incision-rail incision-workbench"),
     };
   });

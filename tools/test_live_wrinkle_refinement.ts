@@ -161,9 +161,9 @@ const panel = fs.readFileSync(
   new URL("../web/src/components/LiveWrinklePanel.tsx", import.meta.url),
   "utf8",
 );
-assert.match(panel, /只显示 RSTL/);
+assert.match(panel, /只显示皮纹线/);
 assert.match(panel, /只显示皱纹/);
-assert.match(panel, /RSTL 与皱纹同时显示/);
+assert.match(panel, /皮纹线与皱纹同时显示/);
 assert.match(panel, /皱纹引导自动微调/);
 assert.match(panel, /<ButtonRow className="live-wrinkle-actions">/,
   "the two wrinkle actions use their dedicated equal-width row");

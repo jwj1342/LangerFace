@@ -1745,7 +1745,7 @@ assert.ok(runtimeSource.includes("enforceControlledMarkerTumorKind")
   && runtimeSource.includes("!state.photoView.active || !cutaneous")
   && runtimeSource.includes("syncTumorKindGuard(kind)")
   && runtimeSource.includes("resetControlledMarker({ restoreSelection: true, kind })")
-  && runtimeSource.includes("受控标记仅适用于皮表肿物；皮下肿物按术前测量直径与 RSTL 方向规划。")
+  && runtimeSource.includes("受控标记仅适用于皮表肿物；皮下肿物按术前测量直径与皮纹线方向规划。")
   && runtimeSource.includes("subcutaneous_controlled_marker_cancelled"),
 "subcutaneous tumors disable controlled marking, cancel an active mode, and retain a program-level hard gate");
 const repairPointerEntry = runtimeSource.indexOf("beginControlledMarkerRepairStroke(event) {");

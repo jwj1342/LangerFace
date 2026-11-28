@@ -309,7 +309,7 @@ export function buildIncisionPrivacyAuditSnapshot({
 
 export function buildIncisionAssetLoadingSnapshot({
   visible = false,
-  text = "准备下载标准脸、拓扑和 RSTL 图谱。",
+  text = "准备下载标准脸、拓扑和皮纹线图谱。",
 }: Partial<IncisionAssetLoadingState>): IncisionAssetLoadingState {
   return {
     visible: Boolean(visible),

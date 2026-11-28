@@ -39,6 +39,8 @@
 
 [MOBILE_WORKFLOW_UI_20261127.md](quality/MOBILE_WORKFLOW_UI_20261127.md) 记录手机工作台布局、原有控件对应位置和本次审核范围。
 
+[UI_SYNC_2026-11-28.md](quality/UI_SYNC_2026-11-28.md) 记录最新界面同步、微调与受控标记切换及验证边界。
+
 [LESION_CANDIDATE_REVIEW.md](quality/LESION_CANDIDATE_REVIEW.md) 说明照片肿物候选、切口显示的复现步骤、资源依赖和未通过范围。
 
 [OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md](quality/OVERLAY_EXPORT_PHOTO_SCALE_REVIEW.md) 说明叠加导出和照片标记缩放修复的来源、组合回归与未验范围。

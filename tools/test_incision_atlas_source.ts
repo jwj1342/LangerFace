@@ -29,7 +29,7 @@ const standardAtlas = atlas();
   const result = resolveIncisionAtlas({ personalizedAtlas, standardAtlas, triangleCount: 2 });
   assert.equal(result.atlas, personalizedAtlas);
   assert.equal(result.mode, "mediapipe_personalized");
-  assert.match(result.statusLabel, /个体化 RSTL/);
+  assert.match(result.statusLabel, /个体化皮纹线/);
   assert.equal(result.contract.provenance, "local-yolo-v8s-seg + browser-v6");
   assert.equal(result.contract.line_count, 1);
   assert.equal(result.contract.point_count, 2);
@@ -39,8 +39,8 @@ const standardAtlas = atlas();
   const result = resolveIncisionAtlas({ personalizedAtlas: null, standardAtlas, triangleCount: 2 });
   assert.equal(result.atlas, standardAtlas);
   assert.equal(result.mode, "mediapipe_standard");
-  assert.equal(result.statusLabel, "MediaPipe 标准 RSTL");
-  assert.match(result.warnings.join("；"), /当前使用 MediaPipe 标准 RSTL/);
+  assert.equal(result.statusLabel, "MediaPipe 标准皮纹线");
+  assert.match(result.warnings.join("；"), /当前使用 MediaPipe 标准皮纹线/);
 }
 
 {
@@ -59,7 +59,7 @@ const standardAtlas = atlas();
 
 assert.throws(
   () => resolveIncisionAtlas({ personalizedAtlas: null, standardAtlas: atlas({ lines: [] }), triangleCount: 2 }),
-  /标准 RSTL 图谱校验失败/,
+  /标准皮纹线图谱校验失败/,
 );
 
 {

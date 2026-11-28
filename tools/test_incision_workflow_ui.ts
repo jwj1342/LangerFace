@@ -95,7 +95,7 @@ assert.ok(html.includes("本地确定性 workflow"), "workbench explains candida
 assert.ok(html.includes('id="guardrailDetails"'), "workbench exposes guardrail detail feedback");
 assert.ok(html.includes('id="directionSource"'), "workbench exposes direction source explanation");
 assert.ok(
-  clinicalCopy.includes("RSTL 图谱记录无有效方向支持"),
+  clinicalCopy.includes("皮纹线图谱记录无有效方向支持"),
   "workbench explains a non-empty atlas with no valid direction samples",
 );
 assert.ok(html.includes('id="workflowGate"'), "workbench exposes agent trace gate feedback");
@@ -108,7 +108,7 @@ assert.ok(!html.includes('id="traceList"'), "workbench keeps workflow trace deta
 assert.ok(!html.includes("工具调用轨迹"), "workbench does not render a sidebar trace dump");
 assert.ok(html.includes('id="workflowComparison"'), "workbench exposes browser workflow candidate comparison");
 assert.ok(html.includes("snapshot?.headAsset.statusLabel"), "workbench stage shows the active head asset status");
-assert.ok(html.includes('label="RSTL 来源"'), "workbench state panel exposes the active RSTL source");
+assert.ok(html.includes('label="皮纹线来源"'), "workbench state panel exposes the active RSTL source");
 assert.ok(html.includes('label="模型版本"'), "workbench state panel exposes the active model version without topology jargon");
 assert.ok(!html.includes('id="approveCandidateBtn"'), "workbench removes duplicate candidate approval action");
 assert.ok(!html.includes('id="rejectCandidateBtn"'), "workbench removes duplicate candidate rejection action");
@@ -116,7 +116,7 @@ assert.ok(html.includes("保存所选审阅状态"), "workbench saves the select
 assert.ok(html.includes('id="candidateWidth"'), "workbench exposes fusiform width and ratio metric");
 assert.ok(html.includes('id="candidateTipAngle"'), "workbench exposes fusiform tip angle metric");
 assert.ok(html.includes('id="candidateRstlDeviation"'), "workbench exposes RSTL direction-deviation metric");
-assert.ok(html.includes('label="RSTL 角度偏差"'), "workbench labels RSTL direction deviation distinctly from tip-angle error");
+assert.ok(html.includes('label="皮纹线角度偏差"'), "workbench labels RSTL direction deviation distinctly from tip-angle error");
 assert.ok(html.includes('id="tipAngleDeg"'), "workbench exposes clinician-adjustable fusiform tip angle");
 assert.ok(html.includes('id="tipAngleWrap"'), "workbench scopes the tip-angle control to fusiform candidates");
 assert.ok(js.includes("exportTumorJson"), "workbench implements tumor JSON export");

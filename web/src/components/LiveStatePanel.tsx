@@ -17,7 +17,7 @@ export function LiveStatePanel() {
       <KeyValueGrid className="live-state-grid">
         <KeyValueItem label="来源" value={snapshot?.source.kind || (snapshot?.source.running ? "运行中" : "未开始")} />
         <KeyValueItem label="图谱" value={snapshot ? `${snapshot.render.system.toUpperCase()} · ${snapshot.render.densityPct}%` : "—"} />
-        <KeyValueItem label="模式" value="MediaPipe · RSTL" />
+        <KeyValueItem label="模式" value="MediaPipe · 皮纹线" />
         <KeyValueItem label="叠加" value={snapshot?.incisionOverlay.loaded ? snapshot.incisionOverlay.qaLabel || "已载入" : "无切口叠加"} />
       </KeyValueGrid>
       <Hint>{snapshot?.overlayMessage || snapshot?.modelBadge || "等待实时 controller 发布状态。"}</Hint>
