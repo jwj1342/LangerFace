@@ -12,7 +12,7 @@
       "可恢复"
     ],
     "status": "candidate",
-    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+    "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
     "algorithmDigest": "a0c304232c9a9bf9c679f89cdce6e1fa8e829a6cd94ce066e4690d78c7d4b1dc",
     "changeSlug": "public-static-refinement-runtime-recovery",
     "previous": {
@@ -306,31 +306,32 @@
   },
   "archive": {
     "status": "verified",
-    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
-    "manifestPath": "local_outputs/recovery-packages/pr249-small-phone-busy-20261127/manifest.json",
-    "manifestSha256": "43a6a485d4982268a2b30c176b1b6547155b43ebbe19b0ce5e460ce188fe31cc",
+    "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
+    "manifestPath": "local_outputs/recovery-packages/ui-sync-20261128/manifest.json",
+    "manifestSha256": "5ad254562be0b9f44a9522cccef9c4d65e97ab1e452f6ecccf26b67616f994cf",
     "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
-    "verifiedAt": "2026-11-27",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
-    "note": "Self-contained source-only recovery archive included for clean CI verification. No patient media, models or browser output included."
+    "verifiedAt": "2026-11-28T03:42:23.295837+00:00",
+    "evidence": "docs/quality/UI_SYNC_2026-11-28.md",
+    "note": "275 copied files verified byte-for-byte; media fixture fingerprinted only. Local archive retained, source commit published."
   },
   "scopeBoundaryReview": {
-    "status": "not_required",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
-    "note": "Only phone CSS and required tests; no algorithm changes."
+    "status": "confirmed",
+    "manifestSha256": "5ad254562be0b9f44a9522cccef9c4d65e97ab1e452f6ecccf26b67616f994cf",
+    "confirmedAt": "2026-11-28T03:42:23.295837+00:00",
+    "evidence": "docs/quality/UI_SYNC_2026-11-28.md",
+    "operatorStatement": "把最新ui更新到本地，GitHub，hf上，如已经更新，不必在意这条指令",
+    "confirmationKind": "explicit_ui_synchronization_request",
+    "scope": "UI simplification, skin-line labels and finish-refinement-on-marker-entry only."
   },
   "operatorEvaluation": {
-    "status": "accepted",
-    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
-    "confirmedAt": "2026-11-27",
-    "note": "用户在查看本轮 320px 等待状态截图后明确确认：已查看并接受，文件均已保存。"
+    "status": "pending",
+    "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
+    "evidence": "docs/quality/UI_SYNC_2026-11-28.md"
   },
   "editorSaveConfirmation": {
-    "status": "confirmed",
-    "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
-    "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
-    "confirmedAt": "2026-11-27"
+    "status": "pending",
+    "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
+    "evidence": "docs/quality/UI_SYNC_2026-11-28.md"
   },
   "history": [
     {
@@ -5087,6 +5088,36 @@
       "verifiedAt": "2026-11-23T07:31:38.699989+00:00",
       "evidence": "docs/quality/ALGORITHM_VERSIONING.md#rstl-wrinkle-performance-20261123",
       "note": "Existing scope retained. RSTL/wrinkle performance source snapshot separately preserved; no frozen archive modified."
+    }
+  },
+  "uiSyncPreviousRegistration20261128": {
+    "archive": {
+      "status": "verified",
+      "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+      "manifestPath": "local_outputs/recovery-packages/pr249-small-phone-busy-20261127/manifest.json",
+      "manifestSha256": "43a6a485d4982268a2b30c176b1b6547155b43ebbe19b0ce5e460ce188fe31cc",
+      "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
+      "verifiedAt": "2026-11-27",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
+      "note": "Self-contained source-only recovery archive included for clean CI verification. No patient media, models or browser output included."
+    },
+    "scopeBoundaryReview": {
+      "status": "not_required",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
+      "note": "Only phone CSS and required tests; no algorithm changes."
+    },
+    "operatorEvaluation": {
+      "status": "accepted",
+      "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
+      "confirmedAt": "2026-11-27",
+      "note": "用户在查看本轮 320px 等待状态截图后明确确认：已查看并接受，文件均已保存。"
+    },
+    "editorSaveConfirmation": {
+      "status": "confirmed",
+      "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
+      "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
+      "confirmedAt": "2026-11-27"
     }
   }
 }
