@@ -1,0 +1,580 @@
+import { INCISION_SNAPSHOT_SCHEMA_VERSION } from "../lib/controllerSnapshotSchemas";
+import type { RstlSourceContract } from "./rstlSourceContract";
+
+export { INCISION_SNAPSHOT_SCHEMA_VERSION };
+
+export interface IncisionTextLike {
+  textContent?: string | null;
+  title?: string | null;
+  value?: string | null;
+  checked?: boolean;
+  disabled?: boolean;
+  classList?: {
+    contains: (className: string) => boolean;
+  };
+  style?: {
+    color?: string | null;
+  };
+}
+
+export interface IncisionTumorState {
+  kind: "subcutaneous" | "cutaneous" | string;
+  author: string;
+  diameterMm: number | null;
+  depthMm: number | null;
+  marginMm: number | null;
+  ellipseRatio?: number | null;
+  boundaryMode: string;
+  boundaryActive: boolean;
+  boundaryPointCount: number;
+  boundaryStatus: string;
+  boundaryStatusWarn: boolean;
+  pickState: string;
+  anatomyPreview: string;
+  anatomyPreviewWarn: boolean;
+}
+
+export interface IncisionSecondaryCueState {
+  present: boolean;
+  stateLabel: string;
+  summary: string;
+  manualConfirmed: boolean;
+}
+
+export interface IncisionPrivacyAuditState {
+  stateLabel: string;
+  message: string;
+  blocked: boolean;
+}
+
+export interface IncisionAssetLoadingState {
+  visible: boolean;
+  text: string;
+}
+
+export interface IncisionHeadAssetState {
+  id: string;
+  label: string;
+  topologyId: string;
+  topologyVersion: string;
+  vertexCount: number;
+  triangleCount: number;
+  atlasTopologyId: string | null;
+  atlasLineCount: number;
+  mode: "mediapipe_personalized" | "mediapipe_standard" | "unknown";
+  atlasProvenance: string | null;
+  atlasContract: RstlSourceContract | null;
+  statusLabel: string;
+  warnings: string[];
+}
+
+export interface IncisionReviewState {
+  status: string;
+  reviewer: string;
+  notesPresent: boolean;
+  reviewerAttentionRequired: boolean;
+  decisionAttentionRequired: boolean;
+  notesAttentionRequired: boolean;
+}
+
+export interface IncisionEditState {
+  angleOffsetDeg: number;
+  lengthScalePct: number;
+  widthScalePct: number;
+  tipAngleDeg: number;
+  shiftAlongMm: number;
+  shiftPerpMm: number;
+  reason: string;
+  statusLabel: string;
+  active: boolean;
+  widthScaleVisible: boolean;
+  tipAngleVisible: boolean;
+  historyLabel: string;
+  undoDisabled: boolean;
+  redoDisabled: boolean;
+}
+
+export interface IncisionCandidateSummary {
+  id: string | null;
+  type: string | null;
+  lengthMm: number | null;
+  widthMm: number | null;
+  guardrailsPassed: boolean | null;
+  directionConfidence: number | null;
+  edited: boolean;
+}
+
+export interface IncisionResultViewState {
+  candidateType: string;
+  candidateLength: string;
+  candidateWidth: string;
+  candidateTipAngle: string;
+  rstlDeviation: string;
+  directionConfidence: string;
+  directionTitle: string;
+  region: string;
+  regionTitle: string;
+  guardrailLabel: string;
+  guardrailWarn: boolean;
+  workflowSummary: string;
+  directionSource: string;
+  directionSourceWarn: boolean;
+  workflowGate: string;
+  workflowGateWarn: boolean;
+  workflowGateTitle: string;
+  workflowComparison: string;
+  workflowComparisonWarn: boolean;
+  workflowComparisonTitle: string;
+  nextStep: string;
+  guardrailDetails: string;
+  guardrailDetailsWarn: boolean;
+  guardrailDetailsDanger: boolean;
+}
+
+export interface IncisionSavedCandidateSummary {
+  id: string;
+  title: string;
+  reviewStatus: string;
+  statusLabel: string;
+  statusDanger: boolean;
+  meta: string;
+  reviewerLabel: string;
+  reviewNotesLabel: string;
+  overlayStatusLabel: string;
+  overlayStatusWarning: boolean;
+  reviewTransitionLabel: string | null;
+  reviewTransitionDisabled: boolean;
+  reviewTransitionReason: string | null;
+}
+
+export interface IncisionWorkflowRuntime {
+  executor: string;
+  worker: boolean;
+  thread: string;
+  error: string | null;
+}
+
+export interface WorkflowIncisionToolState {
+  photoReady: boolean;
+  selectionMode: boolean;
+  controlledMarkerMode: boolean;
+  markerBusy: boolean;
+  mobileMarkerPlacementReady: boolean;
+  repairAvailable: boolean;
+  repairMode: boolean;
+  repairCount: number;
+  scanDiameterMm: number;
+  minimumScanDiameterMm?: number;
+}
+
+export interface IncisionControllerSnapshot {
+  schema_version: typeof INCISION_SNAPSHOT_SCHEMA_VERSION;
+  reason: string;
+  stageStatus: string;
+  stageStatusTone?: "normal" | "warning";
+  stageBusy?: boolean;
+  developerDetails?: readonly string[];
+  assetLoading: IncisionAssetLoadingState;
+  headAsset: IncisionHeadAssetState;
+  tumor: IncisionTumorState;
+  secondaryCue: IncisionSecondaryCueState;
+  privacyAudit: IncisionPrivacyAuditState;
+  review: IncisionReviewState;
+  edit: IncisionEditState;
+  candidate: IncisionCandidateSummary | null;
+  resultView: IncisionResultViewState;
+  savedCandidates: IncisionSavedCandidateSummary[];
+  workflowRuntime: IncisionWorkflowRuntime | null;
+  savedCount: number;
+  workflowTools?: WorkflowIncisionToolState;
+  updatedAt: string;
+}
+
+export interface IncisionEditLike {
+  angle_offset_deg?: number;
+  length_scale?: number;
+  width_scale?: number;
+  tip_angle_deg?: number | null;
+  shift_along_mm?: number;
+  shift_perp_mm?: number;
+  reason?: string;
+}
+
+export interface IncisionComparisonLike {
+  id?: string;
+  rank?: number;
+  score?: number;
+  reasons?: string[];
+}
+
+export interface IncisionCandidateLike {
+  id?: string | null;
+  type?: string | null;
+  length_mm?: unknown;
+  width_mm?: unknown;
+  edited?: boolean;
+}
+
+export interface IncisionPlanResultLike {
+  candidate?: IncisionCandidateLike | null;
+  guardrails?: {
+    passed?: boolean | null;
+  } | null;
+  direction?: {
+    confidence?: unknown;
+  } | null;
+}
+
+export interface IncisionSavedCandidateRecordLike {
+  id: string;
+  label: string;
+  candidate?: {
+    type?: string | null;
+    length_mm?: unknown;
+    metrics?: {
+      photo_visibility_limited_candidate?: boolean;
+      photo_reference_candidate?: boolean;
+    } | null;
+  } | null;
+  review?: {
+    reviewer?: string;
+    notes?: string;
+  } | null;
+  review_status?: string;
+  review_gate?: {
+    live_overlay_ready?: boolean;
+    live_overlay_blocked_reason?: string | null;
+    hard_violation_count?: number;
+    workflow_trace_gate_passed?: boolean;
+  } | null;
+  guardrails?: {
+    passed?: boolean | null;
+  } | null;
+  anatomy?: {
+    region?: string | null;
+  } | null;
+  created_at?: string;
+}
+
+export function incisionTextOf(el?: IncisionTextLike | null, fallback = "") {
+  return el?.textContent || fallback;
+}
+
+export function incisionTitleOf(el?: IncisionTextLike | null) {
+  return el?.title || "";
+}
+
+export function incisionHasClass(el: IncisionTextLike | null | undefined, className: string) {
+  return Boolean(el?.classList?.contains(className));
+}
+
+export function formatIncisionMetric(value: unknown, digits = 1) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "—";
+}
+
+function finiteOrNull(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function finiteOrFallback(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export function buildIncisionSecondaryCueSnapshot({
+  present = false,
+  stateLabel = "未导入",
+  summary = "仅展示自然皱襞、皱纹和皮表肿物边界的低置信度线索；不会自动改变肿物边界或候选切口。",
+  manualConfirmed = false,
+}: Partial<IncisionSecondaryCueState>): IncisionSecondaryCueState {
+  return {
+    present: Boolean(present),
+    stateLabel,
+    summary,
+    manualConfirmed: Boolean(manualConfirmed),
+  };
+}
+
+export function buildIncisionPrivacyAuditSnapshot({
+  stateLabel = "本地几何",
+  message = "所有切口 workflow 均在浏览器本地执行，不配置或调用远程模型。",
+}: Partial<IncisionPrivacyAuditState>): IncisionPrivacyAuditState {
+  return {
+    stateLabel,
+    message,
+    blocked: /阻断|警告/.test(`${stateLabel} ${message}`),
+  };
+}
+
+export function buildIncisionAssetLoadingSnapshot({
+  visible = false,
+  text = "准备下载标准脸、拓扑和皮纹线图谱。",
+}: Partial<IncisionAssetLoadingState>): IncisionAssetLoadingState {
+  return {
+    visible: Boolean(visible),
+    text,
+  };
+}
+
+export function buildIncisionHeadAssetSnapshot({
+  head,
+  atlas,
+  resolved,
+}: {
+  head: {
+    id: string;
+    label: string;
+    topologyId: string;
+    topologyVersion: string;
+    vertices: unknown[];
+    triangles: unknown[];
+  };
+  atlas?: { topologyId?: unknown; lines?: unknown } | null;
+  resolved: {
+    mode: IncisionHeadAssetState["mode"];
+    provenance: string | null;
+    contract: RstlSourceContract | null;
+    statusLabel: string;
+    warnings: string[];
+  };
+}): IncisionHeadAssetState {
+  return {
+    id: head.id,
+    label: head.label,
+    topologyId: head.topologyId,
+    topologyVersion: head.topologyVersion,
+    vertexCount: head.vertices.length,
+    triangleCount: head.triangles.length,
+    atlasTopologyId: typeof atlas?.topologyId === "string" ? atlas.topologyId : null,
+    atlasLineCount: Array.isArray(atlas?.lines) ? atlas.lines.length : 0,
+    mode: resolved.mode,
+    atlasProvenance: resolved.provenance,
+    atlasContract: resolved.contract,
+    statusLabel: resolved.statusLabel,
+    warnings: resolved.warnings,
+  };
+}
+
+export function buildIncisionReviewSnapshot({
+  status = "pending_clinician_confirmation",
+  reviewer = "",
+  notesPresent = false,
+  reviewerAttentionRequired = false,
+  decisionAttentionRequired = false,
+  notesAttentionRequired = false,
+}: Partial<IncisionReviewState>): IncisionReviewState {
+  return {
+    status,
+    reviewer: reviewer.trim(),
+    notesPresent: Boolean(notesPresent),
+    reviewerAttentionRequired: Boolean(reviewerAttentionRequired),
+    decisionAttentionRequired: Boolean(decisionAttentionRequired),
+    notesAttentionRequired: Boolean(notesAttentionRequired),
+  };
+}
+
+export function buildIncisionEditSnapshot({
+  edit = {},
+  statusLabel = "工具建议",
+  statusActive = false,
+  editActive = false,
+  widthScaleVisible = false,
+  tipAngleVisible = false,
+  tipAngleDeg = 30,
+  historyLabel = "编辑版本：v1 · 无已提交调整",
+  undoDisabled = false,
+  redoDisabled = false,
+}: {
+  edit?: IncisionEditLike;
+  statusLabel?: string;
+  statusActive?: boolean;
+  editActive?: boolean;
+  widthScaleVisible?: boolean;
+  tipAngleVisible?: boolean;
+  tipAngleDeg?: number;
+  historyLabel?: string;
+  undoDisabled?: boolean;
+  redoDisabled?: boolean;
+}): IncisionEditState {
+  return {
+    angleOffsetDeg: finiteOrFallback(edit.angle_offset_deg, 0),
+    lengthScalePct: Math.round(finiteOrFallback(edit.length_scale, 1) * 100),
+    widthScalePct: Math.round(finiteOrFallback(edit.width_scale, 1) * 100),
+    tipAngleDeg: Math.round(finiteOrFallback(tipAngleDeg, 30)),
+    shiftAlongMm: finiteOrFallback(edit.shift_along_mm, 0),
+    shiftPerpMm: finiteOrFallback(edit.shift_perp_mm, 0),
+    reason: edit.reason || "",
+    statusLabel,
+    active: Boolean(statusActive) || Boolean(editActive),
+    widthScaleVisible: Boolean(widthScaleVisible),
+    tipAngleVisible: Boolean(tipAngleVisible),
+    historyLabel,
+    undoDisabled: Boolean(undoDisabled),
+    redoDisabled: Boolean(redoDisabled),
+  };
+}
+
+export function buildIncisionCandidateSnapshot(result?: IncisionPlanResultLike | null): IncisionCandidateSummary | null {
+  const candidate = result?.candidate;
+  if (!candidate) return null;
+  return {
+    id: candidate.id || null,
+    type: candidate.type || null,
+    lengthMm: finiteOrNull(candidate.length_mm),
+    widthMm: finiteOrNull(candidate.width_mm),
+    guardrailsPassed: result?.guardrails?.passed == null ? null : Boolean(result.guardrails.passed),
+    directionConfidence: finiteOrNull(result?.direction?.confidence),
+    edited: Boolean(candidate.edited),
+  };
+}
+
+export function buildIncisionResultViewSnapshot(input: {
+  candidateType?: IncisionTextLike | null;
+  candidateLength?: IncisionTextLike | null;
+  candidateWidth?: IncisionTextLike | null;
+  candidateTipAngle?: IncisionTextLike | null;
+  rstlDeviation?: IncisionTextLike | null;
+  directionConfidence?: IncisionTextLike | null;
+  region?: IncisionTextLike | null;
+  guardrail?: IncisionTextLike | null;
+  workflowSummary?: IncisionTextLike | null;
+  directionSource?: IncisionTextLike | null;
+  workflowGate?: IncisionTextLike | null;
+  workflowComparison?: IncisionTextLike | null;
+  nextStep?: IncisionTextLike | null;
+  guardrailDetails?: IncisionTextLike | null;
+}): IncisionResultViewState {
+  return {
+    candidateType: incisionTextOf(input.candidateType, "—"),
+    candidateLength: incisionTextOf(input.candidateLength, "—"),
+    candidateWidth: incisionTextOf(input.candidateWidth, "—"),
+    candidateTipAngle: incisionTextOf(input.candidateTipAngle, "—"),
+    rstlDeviation: incisionTextOf(input.rstlDeviation, "—"),
+    directionConfidence: incisionTextOf(input.directionConfidence, "—"),
+    directionTitle: incisionTitleOf(input.directionConfidence),
+    region: incisionTextOf(input.region, "—"),
+    regionTitle: incisionTitleOf(input.region),
+    guardrailLabel: incisionTextOf(input.guardrail, "—"),
+    guardrailWarn: Boolean(input.guardrail?.style?.color),
+    workflowSummary: incisionTextOf(input.workflowSummary, "尚未生成。"),
+    directionSource: incisionTextOf(input.directionSource, "方向依据：尚未生成。"),
+    directionSourceWarn: incisionHasClass(input.directionSource, "warn"),
+    workflowGate: incisionTextOf(input.workflowGate, "工作流工具门控：尚未生成。"),
+    workflowGateWarn: incisionHasClass(input.workflowGate, "warn"),
+    workflowGateTitle: incisionTitleOf(input.workflowGate),
+    workflowComparison: incisionTextOf(input.workflowComparison, "工作流候选比较：尚未生成。"),
+    workflowComparisonWarn: incisionHasClass(input.workflowComparison, "warn"),
+    workflowComparisonTitle: incisionTitleOf(input.workflowComparison),
+    nextStep: incisionTextOf(input.nextStep, ""),
+    guardrailDetails: incisionTextOf(input.guardrailDetails, "Guardrails 尚未运行。"),
+    guardrailDetailsWarn: incisionHasClass(input.guardrailDetails, "warn"),
+    guardrailDetailsDanger: incisionHasClass(input.guardrailDetails, "danger"),
+  };
+}
+
+export function buildIncisionSavedCandidateSummaries({
+  records = [],
+  comparisons = [],
+  reviewStatusLabel,
+  allowReferenceCandidates = false,
+}: {
+  records?: IncisionSavedCandidateRecordLike[];
+  comparisons?: IncisionComparisonLike[];
+  reviewStatusLabel: (status?: string) => string;
+  allowReferenceCandidates?: boolean;
+}): IncisionSavedCandidateSummary[] {
+  const comparisonById = new Map(comparisons.map((comparison) => [comparison.id, comparison]));
+  return records.map((rec) => {
+    const comparison = comparisonById.get(rec.id);
+    const guardrails = rec.guardrails?.passed ? "guardrails 通过" : "guardrails 需复核";
+    const pendingApproval = (rec.review_status || "pending_clinician_confirmation") === "pending_clinician_confirmation";
+    const blockedReason = rec.review_gate?.live_overlay_blocked_reason;
+    const reviewTransitionReason = !pendingApproval
+      ? null
+      : !allowReferenceCandidates && (rec.candidate?.metrics?.photo_visibility_limited_candidate === true
+          || blockedReason === "visibility_limited_reference_candidate"
+        )
+        ? "暂不能确认：当前候选只覆盖照片可见区域；请补充另一视角并复核隐藏区域。"
+        : !allowReferenceCandidates && (rec.candidate?.metrics?.photo_reference_candidate === true
+            || blockedReason === "nonstandard_reference_candidate"
+          )
+          ? "暂不能确认：当前候选未达到标准梭形要求；请调整参数或重新计算。"
+          : blockedReason === "engineering_hard_violation" || Number(rec.review_gate?.hard_violation_count || 0) > 0
+            ? "暂不能确认：候选存在不可覆盖的工程几何错误；请修复后重新计算。"
+            : rec.review_gate?.workflow_trace_gate_passed === false
+              ? "暂不能确认：候选生成记录不完整；请重新计算后再审阅。"
+              : null;
+    const rank = comparison
+      ? `工程排序 #${comparison.rank} · 分 ${formatIncisionMetric(comparison.score, 1)} · ${(comparison.reasons || []).slice(0, 2).join("；")} · `
+      : "";
+    return {
+      id: rec.id,
+      title: `${rec.label} · ${rec.candidate?.type === "linear" ? "线性" : "梭形"}`,
+      reviewStatus: rec.review_status || "pending_clinician_confirmation",
+      statusLabel: reviewStatusLabel(rec.review_status),
+      statusDanger: rec.review_status === "rejected_by_clinician" || !rec.guardrails?.passed,
+      meta: `${rank}长度 ${formatIncisionMetric(rec.candidate?.length_mm)} mm · 区域 ${rec.anatomy?.region || "—"} · ${guardrails} · ${rec.created_at}`,
+      reviewerLabel: `审阅人：${rec.review?.reviewer || "未填写"}`,
+      reviewNotesLabel: `审阅备注：${rec.review?.notes || "无"}`,
+      overlayStatusLabel: rec.review_status === "pending_clinician_confirmation"
+        ? "未进入实时叠加：该候选仍为“待医生确认”。完成确认后才能显示在摄像头中。"
+        : rec.review_status === "approved_for_discussion" && rec.review_gate?.live_overlay_ready === true
+          ? "实时叠加已就绪：该候选已通过审阅与显示检查。"
+          : "未进入实时叠加：该候选尚未通过全部显示检查。",
+      overlayStatusWarning: rec.review_gate?.live_overlay_ready !== true,
+      reviewTransitionLabel: rec.review_status === "pending_clinician_confirmation"
+        ? "转为已确认"
+        : rec.review_status === "approved_for_discussion"
+          ? "转为待确认"
+          : null,
+      reviewTransitionDisabled: Boolean(reviewTransitionReason),
+      reviewTransitionReason,
+    };
+  });
+}
+
+export function buildIncisionControllerSnapshot({
+  reason = "state_update",
+  stageStatus = "",
+  stageStatusTone = "normal",
+  stageBusy = false,
+  developerDetails,
+  assetLoading,
+  headAsset,
+  tumor,
+  secondaryCue,
+  privacyAudit,
+  review,
+  edit,
+  candidate,
+  resultView,
+  savedCandidates = [],
+  workflowRuntime = null,
+  savedCount = 0,
+  workflowTools,
+  updatedAt = new Date().toISOString(),
+}: Omit<IncisionControllerSnapshot, "schema_version" | "updatedAt"> & { updatedAt?: string }): IncisionControllerSnapshot {
+  return {
+    schema_version: INCISION_SNAPSHOT_SCHEMA_VERSION,
+    reason,
+    stageStatus,
+    stageStatusTone,
+    stageBusy,
+    ...(developerDetails?.length ? { developerDetails: [...developerDetails] } : {}),
+    assetLoading,
+    headAsset,
+    tumor,
+    secondaryCue,
+    privacyAudit,
+    review,
+    edit,
+    candidate,
+    resultView,
+    savedCandidates,
+    workflowRuntime,
+    savedCount,
+    ...(workflowTools ? { workflowTools } : {}),
+    updatedAt,
+  };
+}
