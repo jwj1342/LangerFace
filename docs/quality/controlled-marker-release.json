@@ -307,17 +307,17 @@
   "archive": {
     "status": "verified",
     "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
-    "manifestPath": "local_outputs/recovery-packages/ui-sync-20261128/manifest.json",
-    "manifestSha256": "5ad254562be0b9f44a9522cccef9c4d65e97ab1e452f6ecccf26b67616f994cf",
+    "manifestPath": "local_outputs/recovery-packages/ui-sync-final-20261128/manifest.json",
+    "manifestSha256": "d92c718d37585af003b6322bff86a7e568a72aa11b5f205b02f47e4db2a0b819",
     "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
-    "verifiedAt": "2026-11-28T03:42:23.295837+00:00",
+    "verifiedAt": "2026-11-28T03:53:58.160509+00:00",
     "evidence": "docs/quality/UI_SYNC_2026-11-28.md",
     "note": "275 copied files verified byte-for-byte; media fixture fingerprinted only. Local archive retained, source commit published."
   },
   "scopeBoundaryReview": {
     "status": "confirmed",
-    "manifestSha256": "5ad254562be0b9f44a9522cccef9c4d65e97ab1e452f6ecccf26b67616f994cf",
-    "confirmedAt": "2026-11-28T03:42:23.295837+00:00",
+    "manifestSha256": "d92c718d37585af003b6322bff86a7e568a72aa11b5f205b02f47e4db2a0b819",
+    "confirmedAt": "2026-11-28T03:53:58.160509+00:00",
     "evidence": "docs/quality/UI_SYNC_2026-11-28.md",
     "operatorStatement": "把最新ui更新到本地，GitHub，hf上，如已经更新，不必在意这条指令",
     "confirmationKind": "explicit_ui_synchronization_request",
@@ -5118,6 +5118,37 @@
       "sourceDigest": "cb28b37e5542a32463a2c3ab80fe7f2ea679db4ff56153f87b0ef7616696f68c",
       "evidence": "docs/quality/ALGORITHM_VERSIONING.md#pr249-small-phone-busy-20261127",
       "confirmedAt": "2026-11-27"
+    }
+  },
+  "uiSyncInitialRegistration20261128": {
+    "archive": {
+      "status": "verified",
+      "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
+      "manifestPath": "local_outputs/recovery-packages/ui-sync-20261128/manifest.json",
+      "manifestSha256": "5ad254562be0b9f44a9522cccef9c4d65e97ab1e452f6ecccf26b67616f994cf",
+      "scopeConfigSha256": "434b998827947c11e79ffda8b62a27fc451041c2eea5d837cc1f390d7ca0bada",
+      "verifiedAt": "2026-11-28T03:42:23.295837+00:00",
+      "evidence": "docs/quality/UI_SYNC_2026-11-28.md",
+      "note": "275 copied files verified byte-for-byte; media fixture fingerprinted only. Local archive retained, source commit published."
+    },
+    "scopeBoundaryReview": {
+      "status": "confirmed",
+      "manifestSha256": "5ad254562be0b9f44a9522cccef9c4d65e97ab1e452f6ecccf26b67616f994cf",
+      "confirmedAt": "2026-11-28T03:42:23.295837+00:00",
+      "evidence": "docs/quality/UI_SYNC_2026-11-28.md",
+      "operatorStatement": "把最新ui更新到本地，GitHub，hf上，如已经更新，不必在意这条指令",
+      "confirmationKind": "explicit_ui_synchronization_request",
+      "scope": "UI simplification, skin-line labels and finish-refinement-on-marker-entry only."
+    },
+    "operatorEvaluation": {
+      "status": "pending",
+      "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
+      "evidence": "docs/quality/UI_SYNC_2026-11-28.md"
+    },
+    "editorSaveConfirmation": {
+      "status": "pending",
+      "sourceDigest": "9837ab5fefb7f1b5cd01a29dca2c509af89ed170281e402e41eb43df9255899a",
+      "evidence": "docs/quality/UI_SYNC_2026-11-28.md"
     }
   }
 }
