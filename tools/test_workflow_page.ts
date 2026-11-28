@@ -596,7 +596,7 @@ for (const phone of [false, true]) {
               ...["texture", "incision", "more"].map(name => h("div", { "data-mobile-panel-slot": name, hidden: true })))),
           h("div", { className: "workflow-mobile-marker-tools", "aria-label": "标记操作" }),
           phone ? operations : null),
-        h("aside", { "aria-label": "实时 RSTL 操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
+        h("aside", { "aria-label": "实时皮纹线操作台", className: "sidebar workflow-live-rail live-workbench" }, liveFixture),
         h("aside", { "aria-label": "切口规划操作台", className: "sidebar workflow-incision-rail incision-workbench" }, incisionFixture));
     assert.equal(canonicalMarkup(actual), canonicalMarkup(expected), `phone=${phone}: stable workflow shell and portal payloads`);
   }
